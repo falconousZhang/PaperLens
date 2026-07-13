@@ -8,6 +8,7 @@ AI 驱动的学术论文审阅助手。
 - 章节结构识别与表格提取
 - 文本分块与 page-local Evidence 提取（PyMuPDF block + real bbox）
 - 论文列表、详情、页面、章节和 Evidence API
+- 基于 MockLLM 的结构化审阅后端闭环：任务创建/轮询、严格 JSON 解析、Finding-Evidence 绑定与结果查询
 - Vue 论文上传、列表和详情页面
 - 基于 `normalized_text_content` 字符区间的 Evidence 高亮与跨页导航
 - PostgreSQL 测试库隔离、Docker Compose 运行环境
@@ -15,7 +16,7 @@ AI 驱动的学术论文审阅助手。
 ## 规划中（尚未实现）
 
 - FAISS 向量索引和语义 Evidence 检索
-- LLM 结构化论文审阅与 ReviewFinding 绑定
+- 真实华为云 MaaS/ModelArts 模型接入与高质量审阅生成
 - 实验指标提取、checkpoint 口径判断和 CSV/Excel 分析
 - Markdown/PDF/DOCX 审稿报告导出
 
@@ -120,6 +121,6 @@ PaperLens/
 - 后台任务使用 FastAPI BackgroundTasks（仅 MVP，非生产级），暂不引入 Celery + Redis
 - LLM 默认使用 MockLLMClient，无需云端密钥即可运行
 - 存储使用 LocalStorage（OBSStorage 为后续云端部署方案，未实现）
-- FAISS、语义检索和 LLM 审阅尚未实现
+- FAISS/语义检索和真实云端 LLM 尚未实现；当前审阅链路使用确定性 Evidence 候选与 MockLLM
 - 当前 Evidence 高亮基于 normalized 页面文本字符区间，不是 PDF.js/bbox 覆盖层
 - 所有数值统计由确定性 Python 代码完成，大模型不直接计算

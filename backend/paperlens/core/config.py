@@ -1,3 +1,4 @@
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -21,6 +22,15 @@ class Settings(BaseSettings):
 
     chunk_max_chars: int = 1500
     chunk_overlap_chars: int = 200
+
+    review_evidence_top_k: int = Field(default=8, ge=1, le=50)
+
+    embedding_provider: str = Field(default="mock", pattern=r"^(mock|huawei_maas)$")
+    embedding_base_url: str = "https://api.modelarts-maas.com/v1"
+    embedding_model: str = "bge-m3"
+    embedding_api_key: SecretStr | None = None
+    embedding_timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    embedding_batch_size: int = Field(default=32, ge=1, le=256)
 
     model_config = {"env_prefix": "PAPERLENS_", "env_file": ".env", "extra": "ignore"}
 

@@ -21,6 +21,35 @@
 - **数据模型引用**: 具体的数据表名称
 - **前端页面引用**: 前端设计文档中的页面章节
 
+## API 实现状态总览
+
+| 状态 | 接口 |
+|------|------|
+| ✅ CURRENT | GET /api/v1/health |
+| ✅ CURRENT | POST /api/v1/papers/upload（仅 file 字段，title=文件名stem，status=PROCESSING） |
+| ✅ CURRENT | GET /api/v1/papers |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/pages/{page_number} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/sections |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤） |
+| ✅ CURRENT | GET /api/v1/evidences/{evidence_id} |
+| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（仅 REVIEW） |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/tasks |
+| ✅ CURRENT | GET /api/v1/tasks/{task_id} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/reviews（仅 VERIFIED Finding） |
+| 📋 PLANNED | DELETE /api/v1/papers/{paper_id} |
+| 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
+| 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
+| 📋 PLANNED | GET /api/v1/papers/{paper_id}/metrics |
+| 📋 PLANNED | POST/GET/DELETE /api/v1/papers/{paper_id}/experiment-files/* |
+| 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
+| 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
+
+**关键实现细节:**
+- SHA-256 哈希已计算并存储，去重/复用逻辑 📋 PLANNED
+- 认证: `_get_user_id()` 返回 `settings.demo_user_id`，Bearer/JWT 📋 PLANNED
+- Swagger: `/api/docs`，OpenAPI: `/api/openapi.json`
+
 ---
 
 ## 1. 论文上传与解析
@@ -32,12 +61,12 @@
 - FR-01.1.2: 文件类型校验（仅接受包含可提取文本的 PDF）
 - FR-01.1.3: 文件大小限制 50MB
 - FR-01.1.4: 路径穿越防护
-- FR-01.1.5: SHA-256 文件哈希去重
+- FR-01.1.5: SHA-256 文件哈希计算与存储（去重/复用逻辑 📋 PLANNED）
 - FR-01.1.6: 上传后自动触发后台解析任务
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.1-论文上传服务](01-论文上传与解析.md#2.1-论文上传服务)
-- [design/09-API接口详细设计.md#2-论文管理API](09-API接口详细设计.md#2-论文管理API)
+- [design/01-论文上传与解析.md#21-论文上传服务](design/01-论文上传与解析.md#21-论文上传服务)
+- [design/09-API接口详细设计.md#2-论文管理-api](design/09-API接口详细设计.md#2-论文管理-api)
 
 **前端页面引用:**
 - P02 论文上传 (10-前端详细设计.md#4.2-P02-论文上传)
@@ -52,24 +81,24 @@
 - PDF 文件可成功上传
 - 非 PDF 文件返回 415 错误
 - 超过 50MB 返回 413 错误
-- 上传后状态为 UPLOADING，自动触发解析
+- 上传后状态为 PROCESSING，并注册后台解析任务
 
-#### 任务 1.1.1: PDF 文件上传接口
+#### 任务 1.1.1: PDF 文件上传接口 ✅ DONE
 
-**任务描述**: 实现 POST /api/v1/papers/upload 接口，支持 multipart/form-data 上传 PDF 文件，包含文件类型校验、大小限制、路径穿越防护、SHA-256 哈希去重。
+**任务描述**: 实现 POST /api/v1/papers/upload 接口，支持 multipart/form-data 上传 PDF 文件，包含文件类型校验、大小限制、路径穿越防护、SHA-256 哈希存储。
 
 **需求引用:**
 - FR-01.1.1: 支持单文件 PDF 上传
 - FR-01.1.2: 文件类型校验
 - FR-01.1.3: 文件大小限制 50MB
 - FR-01.1.4: 路径穿越防护
-- FR-01.1.5: SHA-256 文件哈希去重
+- FR-01.1.5: SHA-256 哈希计算与存储（去重/复用逻辑 📋 PLANNED）
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.1-论文上传服务](01-论文上传与解析.md#2.1-论文上传服务)
+- [design/01-论文上传与解析.md#21-论文上传服务](design/01-论文上传与解析.md#21-论文上传服务)
 
 **API 引用:**
-- POST /api/v1/papers/upload
+- ✅ CURRENT: POST /api/v1/papers/upload（仅 file 字段，title=文件名stem，status=PROCESSING）
 
 **数据模型引用:**
 - papers
@@ -79,7 +108,7 @@
 - 检查扩展名 + PDF magic bytes
 - 文件大小限制 50MB
 - sanitize_filename() 清洗文件名
-- SHA-256 哈希计算和去重
+- SHA-256 哈希计算和存储（去重逻辑 📋 PLANNED）
 - StorageBackend.save() 存储文件
 - 上传失败时回滚存储和临时文件
 
@@ -89,7 +118,7 @@
 - 超过 50MB 返回 413
 - 路径穿越文件名被清洗为 basename
 
-#### 任务 1.1.2: 论文列表与详情接口
+#### 任务 1.1.2: 论文列表与详情接口 ✅ DONE（部分）
 
 **任务描述**: 实现论文列表查询（分页、状态过滤）和论文详情查询接口。
 
@@ -97,12 +126,12 @@
 - FR-01.1.1: 支持单文件 PDF 上传
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.1-论文上传服务](01-论文上传与解析.md#2.1-论文上传服务)
+- [design/01-论文上传与解析.md#21-论文上传服务](design/01-论文上传与解析.md#21-论文上传服务)
 
 **API 引用:**
-- GET /api/v1/papers
-- GET /api/v1/papers/{paper_id}
-- DELETE /api/v1/papers/{paper_id}
+- ✅ CURRENT: GET /api/v1/papers
+- ✅ CURRENT: GET /api/v1/papers/{paper_id}
+- 📋 PLANNED: DELETE /api/v1/papers/{paper_id}
 
 **数据模型引用:**
 - papers
@@ -110,15 +139,15 @@
 **实现要点:**
 - 分页查询: ?page=1&page_size=20
 - 状态过滤: ?status=PARSED
-- 级联删除: 删除论文及所有关联数据
+- 📋 PLANNED: 级联删除: 删除论文及所有关联数据
 - UUID 路径参数校验
 
 **验收标准:**
 - 论文列表可分页查询
 - 论文详情含 error_message 字段
-- 删除论文级联删除关联数据
+- 📋 PLANNED: 删除论文级联删除关联数据
 
-#### 任务 1.1.3: 论文上传前端页面
+#### 任务 1.1.3: 论文上传前端页面 ✅ DONE
 
 **任务描述**: 实现论文上传页面（P02），支持拖拽/选择 PDF 上传，文件校验，进度显示。
 
@@ -128,8 +157,8 @@
 - FR-01.1.3: 文件大小限制 50MB
 
 **设计引用:**
-- [design/07-前端展示.md#3.2-P02-论文上传](07-前端展示.md#3.2-P02-论文上传)
-- [design/10-前端详细设计.md#4.2-P02-论文上传](10-前端详细设计.md#4.2-P02-论文上传)
+- [design/07-前端展示.md#32-p02-论文上传-uploadview--已实现](design/07-前端展示.md#32-p02-论文上传-uploadview--已实现)
+- [design/10-前端详细设计.md#42-p02-论文上传-uploadview](design/10-前端详细设计.md#42-p02-论文上传-uploadview)
 
 **前端页面引用:**
 - P02 论文上传 (10-前端详细设计.md#4.2-P02-论文上传)
@@ -148,7 +177,7 @@
 - 非 PDF / 超过 50MB 显示错误
 - 上传成功跳转到 /papers/:id
 
-#### 任务 1.1.4: 论文列表前端页面
+#### 任务 1.1.4: 论文列表前端页面 ✅ DONE
 
 **任务描述**: 实现论文列表页面（P03），表格展示论文列表，状态标签，PROCESSING 轮询。
 
@@ -156,8 +185,8 @@
 - FR-01.1.1: 支持单文件 PDF 上传
 
 **设计引用:**
-- [design/07-前端展示.md#3.3-P03-论文列表](07-前端展示.md#3.3-P03-论文列表)
-- [design/10-前端详细设计.md#4.3-P03-论文列表](10-前端详细设计.md#4.3-P03-论文列表)
+- [design/07-前端展示.md#33-p03-论文列表-paperlistview--已实现](design/07-前端展示.md#33-p03-论文列表-paperlistview--已实现)
+- [design/10-前端详细设计.md#43-p03-论文列表-paperlistview](design/10-前端详细设计.md#43-p03-论文列表-paperlistview)
 
 **前端页面引用:**
 - P03 论文列表 (10-前端详细设计.md#4.3-P03-论文列表)
@@ -186,7 +215,7 @@
 - FR-01.2.5: 仅支持包含可提取文本的 PDF
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - papers, paper_pages, paper_sections
@@ -196,7 +225,7 @@
 - 页面文本和章节结构可查询
 - 解析失败状态变为 FAILED
 
-#### 任务 1.2.1: PDF 页面文本提取
+#### 任务 1.2.1: PDF 页面文本提取 ✅ DONE
 
 **任务描述**: 使用 PyMuPDF 提取页面文本和尺寸，生成 normalized_text_content。
 
@@ -207,7 +236,7 @@
 - FR-01.2.5: 仅支持包含可提取文本的 PDF
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - paper_pages
@@ -223,7 +252,7 @@
 - normalized_text_content 空白字符合并
 - 扫描型 PDF 抛出异常
 
-#### 任务 1.2.2: 章节结构识别
+#### 任务 1.2.2: 章节结构识别 ✅ DONE
 
 **任务描述**: 识别论文章节结构（ABSTRACT / INTRODUCTION / METHOD 等）。
 
@@ -231,7 +260,7 @@
 - FR-01.2.3: 识别章节结构
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - paper_sections
@@ -254,10 +283,10 @@
 - FR-01.3.4: 非法表格使用 SAVEPOINT 降级跳过
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **API 引用:**
-- GET /api/v1/papers/{paper_id}/tables
+- 📋 PLANNED: GET /api/v1/papers/{paper_id}/tables
 
 **数据模型引用:**
 - paper_tables
@@ -266,7 +295,7 @@
 - 表格可提取并结构化存储
 - 非法表格不影响论文整体解析状态
 
-#### 任务 1.3.1: PDF 表格提取与存储
+#### 任务 1.3.1: PDF 表格提取与存储 ✅ DONE（后端存储，API 📋 PLANNED）
 
 **任务描述**: 使用 pdfplumber 提取表格，存储为 structured_data 和 raw_text，处理非法表格降级。
 
@@ -277,7 +306,7 @@
 - FR-01.3.4: 非法表格使用 SAVEPOINT 降级跳过
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - paper_tables
@@ -300,7 +329,7 @@
 - FR-01.4.3: 预留 embedding_id 字段
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - paper_chunks
@@ -309,7 +338,7 @@
 - 文本分块可查询
 - 每个块关联所属章节
 
-#### 任务 1.4.1: 文本分块实现
+#### 任务 1.4.1: 文本分块实现 ✅ DONE
 
 **任务描述**: 按章节/段落对论文文本进行分块，生成 PaperChunk 记录。
 
@@ -319,7 +348,7 @@
 - FR-01.4.3: 预留 embedding_id 字段
 
 **设计引用:**
-- [design/01-论文上传与解析.md#2.2-PDF-解析服务](01-论文上传与解析.md#2.2-PDF-解析服务)
+- [design/01-论文上传与解析.md#22-pdf-解析服务](design/01-论文上传与解析.md#22-pdf-解析服务)
 
 **数据模型引用:**
 - paper_chunks
@@ -347,11 +376,11 @@
 - FR-02.2.3: 支持 TEXT / TABLE / FIGURE_CAPTION / EQUATION 类型
 
 **设计引用:**
-- [design/02-证据提取与检索.md#2.1-Evidence-提取服务](02-证据提取与检索.md#2.1-Evidence-提取服务)
+- [design/02-证据提取与检索.md#21-evidence-提取服务已实现](design/02-证据提取与检索.md#21-evidence-提取服务已实现)
 
 **API 引用:**
-- GET /api/v1/papers/{paper_id}/evidences
-- GET /api/v1/evidences/{evidence_id}
+- ✅ CURRENT: GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤）
+- ✅ CURRENT: GET /api/v1/evidences/{evidence_id}
 
 **数据模型引用:**
 - evidences
@@ -360,7 +389,7 @@
 - Evidence 可提取并查询（page-local, real bbox）
 - 前端可高亮跳转到 Evidence 位置
 
-#### 任务 2.1.1: Evidence 提取与存储
+#### 任务 2.1.1: Evidence 提取与存储 ✅ DONE
 
 **任务描述**: 基于 PyMuPDF block 提取页内 Evidence，计算真实 bbox 坐标和 char 偏移。
 
@@ -370,7 +399,7 @@
 - FR-02.2.3: 支持 TEXT / TABLE / FIGURE_CAPTION / EQUATION 类型
 
 **设计引用:**
-- [design/02-证据提取与检索.md#2.1-Evidence-提取服务](02-证据提取与检索.md#2.1-Evidence-提取服务)
+- [design/02-证据提取与检索.md#21-evidence-提取服务已实现](design/02-证据提取与检索.md#21-evidence-提取服务已实现)
 
 **数据模型引用:**
 - evidences
@@ -387,7 +416,7 @@
 - page-local 定位，不跨页
 - char 区间不匹配时降级
 
-#### 任务 2.1.2: Evidence 查询接口
+#### 任务 2.1.2: Evidence 查询接口 ✅ DONE（无过滤参数）
 
 **任务描述**: 实现 Evidence 列表查询和详情查询接口。
 
@@ -395,23 +424,23 @@
 - FR-02.2.1: Evidence 为 page-local 定位
 
 **设计引用:**
-- [design/02-证据提取与检索.md#2.1-Evidence-提取服务](02-证据提取与检索.md#2.1-Evidence-提取服务)
-- [design/09-API接口详细设计.md#6-证据API](09-API接口详细设计.md#6-证据API)
+- [design/02-证据提取与检索.md#21-evidence-提取服务已实现](design/02-证据提取与检索.md#21-evidence-提取服务已实现)
+- [design/09-API接口详细设计.md#6-证据-api](design/09-API接口详细设计.md#6-证据-api)
 
 **API 引用:**
-- GET /api/v1/papers/{paper_id}/evidences
-- GET /api/v1/evidences/{evidence_id}
+- ✅ CURRENT: GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤）
+- ✅ CURRENT: GET /api/v1/evidences/{evidence_id}
 
 **数据模型引用:**
 - evidences
 
 **实现要点:**
-- 支持 page_number / evidence_type 过滤
+- 📋 PLANNED: 支持 page_number / evidence_type 过滤
 - 详情含页面内定位信息
 - nullable 字段返回 null
 
 **验收标准:**
-- Evidence 列表可按页码和类型过滤
+- 📋 PLANNED: Evidence 列表可按页码和类型过滤
 - 详情含完整定位信息
 
 ### 2.2 论文详情前端页面
@@ -420,8 +449,8 @@
 - FR-02.2.4: 前端基于 normalized_text_content 字符区间高亮
 
 **设计引用:**
-- [design/07-前端展示.md#3.4-P04-论文详情](07-前端展示.md#3.4-P04-论文详情)
-- [design/10-前端详细设计.md#4.4-P04-论文详情](10-前端详细设计.md#4.4-P04-论文详情)
+- [design/07-前端展示.md#34-p04-论文详情-paperdetailview--已实现](design/07-前端展示.md#34-p04-论文详情-paperdetailview--已实现)
+- [design/10-前端详细设计.md#44-p04-论文详情-paperdetailview](design/10-前端详细设计.md#44-p04-论文详情-paperdetailview)
 
 **前端页面引用:**
 - P04 论文详情 (10-前端详细设计.md#4.4-P04-论文详情)
@@ -437,7 +466,7 @@
 - Evidence 高亮跳转正常
 - 降级提示正常
 
-#### 任务 2.2.1: 论文详情页面实现
+#### 任务 2.2.1: 论文详情页面实现 ✅ DONE
 
 **任务描述**: 实现论文详情页面（P04），含章节/页面/证据三 Tab，Evidence 高亮跳转。
 
@@ -445,8 +474,8 @@
 - FR-02.2.4: 前端基于 normalized_text_content 字符区间高亮
 
 **设计引用:**
-- [design/07-前端展示.md#3.4-P04-论文详情](07-前端展示.md#3.4-P04-论文详情)
-- [design/10-前端详细设计.md#4.4-P04-论文详情](10-前端详细设计.md#4.4-P04-论文详情)
+- [design/07-前端展示.md#34-p04-论文详情-paperdetailview--已实现](design/07-前端展示.md#34-p04-论文详情-paperdetailview--已实现)
+- [design/10-前端详细设计.md#44-p04-论文详情-paperdetailview](design/10-前端详细设计.md#44-p04-论文详情-paperdetailview)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}
@@ -475,7 +504,7 @@
 - FR-02.1.3: 索引可序列化持久化
 
 **设计引用:**
-- [design/02-证据提取与检索.md#2.2-向量索引服务](02-证据提取与检索.md#2.2-向量索引服务)
+- [design/02-证据提取与检索.md#22-向量索引服务未实现](design/02-证据提取与检索.md#22-向量索引服务未实现)
 
 **数据模型引用:**
 - paper_chunks (embedding_id)
@@ -494,7 +523,7 @@
 - FR-02.1.3: 索引可序列化持久化
 
 **设计引用:**
-- [design/02-证据提取与检索.md#2.2-向量索引服务](02-证据提取与检索.md#2.2-向量索引服务)
+- [design/02-证据提取与检索.md#22-向量索引服务未实现](design/02-证据提取与检索.md#22-向量索引服务未实现)
 
 **数据模型引用:**
 - paper_chunks (embedding_id)
@@ -511,7 +540,7 @@
 
 ---
 
-## 3. 审阅生成（规划）
+## 3. 审阅生成（P3.1 后端已实现）
 
 ### 3.1 结构化论文审阅
 
@@ -523,20 +552,22 @@
 - FR-03.1.5: 评分 1-5，含 overall_verdict
 
 **设计引用:**
-- [design/03-审阅生成.md#2.1-审阅生成服务](03-审阅生成.md#2.1-审阅生成服务)
+- [design/03-审阅生成.md#21-审阅生成服务](design/03-审阅生成.md#21-审阅生成服务)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/tasks (task_type=REVIEW)
+- GET /api/v1/papers/{paper_id}/tasks
+- GET /api/v1/tasks/{task_id}
 - GET /api/v1/papers/{paper_id}/reviews
 
 **数据模型引用:**
-- analysis_tasks, review_results, review_findings, finding_evidence
+- analysis_tasks, review_results, review_findings, finding_evidences
 
 **验收标准:**
 - 审阅结果 API 返回含 Evidence 的结构化结果
 - UNVERIFIED Finding 不展示
 
-#### 任务 3.1.1: 审阅生成后端服务（规划）
+#### 任务 3.1.1: 审阅生成后端服务 ✅ DONE（P3.1 MockLLM）
 
 **任务描述**: 实现审阅生成服务，基于 Evidence 和 LLM 生成结构化审阅结果。
 
@@ -546,20 +577,22 @@
 - FR-03.1.3: 未关联 Evidence 的 Finding 标记为 UNVERIFIED
 
 **设计引用:**
-- [design/03-审阅生成.md#2.1-审阅生成服务](03-审阅生成.md#2.1-审阅生成服务)
+- [design/03-审阅生成.md#21-审阅生成服务](design/03-审阅生成.md#21-审阅生成服务)
 
 **数据模型引用:**
-- analysis_tasks, review_results, review_findings, finding_evidence
+- analysis_tasks, review_results, review_findings, finding_evidences
 
 **实现要点:**
-- 构造检索 query → FAISS 检索 Top-K → LLM 生成 → 后处理验证
-- Evidence 强制绑定
-- UNVERIFIED Finding 过滤
-- MockLLMClient 开发测试
+- 同论文 Evidence 按 page_number/created_at/id 稳定排序，Top-K=8；FAISS 仍为 P3.2 PLANNED
+- E1/E2 alias、安全 Prompt、严格 JSON 类型和维度校验
+- Evidence 全有或全无绑定；UNVERIFIED Finding 公开过滤
+- 多维度结果批次与 SUCCEEDED 状态原子提交，任一失败全部回滚
+- MockLLMClient 开发测试；HuaweiMaaSLLMClient 为 P3.3 PLANNED
 
 **验收标准:**
 - 审阅结果含 Evidence 绑定
 - UNVERIFIED Finding 不返回
+- 无效 UUID、非法 options、跨用户资源与第二维失败路径均有 PostgreSQL API 测试
 
 #### 任务 3.1.2: 审阅结果前端页面（规划）
 
@@ -570,8 +603,8 @@
 - FR-03.1.5: 评分 1-5，含 overall_verdict
 
 **设计引用:**
-- [design/07-前端展示.md#3.5-P05-审阅结果](07-前端展示.md#3.5-P05-审阅结果)
-- [design/10-前端详细设计.md#4.5-P05-审阅结果](10-前端详细设计.md#4.5-P05-审阅结果)
+- [design/07-前端展示.md#35-p05-审阅结果-reviewresultview--规划](design/07-前端展示.md#35-p05-审阅结果-reviewresultview--规划)
+- [design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--规划](design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--规划)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/reviews
@@ -600,7 +633,7 @@
 - FR-04.1.3: 关联来源 Evidence 和表格行号
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#2.1-指标提取服务](04-指标提取与口径判断.md#2.1-指标提取服务)
+- [design/04-指标提取与口径判断.md#21-指标提取服务](design/04-指标提取与口径判断.md#21-指标提取服务)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/metrics
@@ -621,7 +654,7 @@
 - FR-04.1.3: 关联来源 Evidence 和表格行号
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#2.1-指标提取服务](04-指标提取与口径判断.md#2.1-指标提取服务)
+- [design/04-指标提取与口径判断.md#21-指标提取服务](design/04-指标提取与口径判断.md#21-指标提取服务)
 
 **数据模型引用:**
 - metric_records
@@ -645,7 +678,7 @@
 - FR-04.2.3: LLM 仅辅助歧义消解
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#2.2-Checkpoint-口径判断服务](04-指标提取与口径判断.md#2.2-Checkpoint-口径判断服务)
+- [design/04-指标提取与口径判断.md#22-checkpoint-口径判断服务](design/04-指标提取与口径判断.md#22-checkpoint-口径判断服务)
 
 **数据模型引用:**
 - metric_records (checkpoint_type, checkpoint_source)
@@ -667,8 +700,8 @@
 - FR-04.1.2: 记录模型名、数据集名、指标名、指标值
 
 **设计引用:**
-- [design/07-前端展示.md#3.6-P06-指标分析](07-前端展示.md#3.6-P06-指标分析)
-- [design/10-前端详细设计.md#4.6-P06-指标分析](10-前端详细设计.md#4.6-P06-指标分析)
+- [design/07-前端展示.md#36-p06-指标分析-metricanalysisview--规划](design/07-前端展示.md#36-p06-指标分析-metricanalysisview--规划)
+- [design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--规划](design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--规划)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/metrics
@@ -698,8 +731,8 @@
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **设计引用:**
-- [design/05-实验数据分析.md#2.1-实验数据上传服务](05-实验数据分析.md#2.1-实验数据上传服务)
-- [design/05-实验数据分析.md#2.2-统计摘要计算服务](05-实验数据分析.md#2.2-统计摘要计算服务)
+- [design/05-实验数据分析.md#21-实验数据上传服务](design/05-实验数据分析.md#21-实验数据上传服务)
+- [design/05-实验数据分析.md#22-统计摘要计算服务](design/05-实验数据分析.md#22-统计摘要计算服务)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/experiment-files/upload
@@ -723,7 +756,7 @@
 - FR-05.1.2: 使用 pandas 解析数据列
 
 **设计引用:**
-- [design/05-实验数据分析.md#2.1-实验数据上传服务](05-实验数据分析.md#2.1-实验数据上传服务)
+- [design/05-实验数据分析.md#21-实验数据上传服务](design/05-实验数据分析.md#21-实验数据上传服务)
 
 **数据模型引用:**
 - experiment_files
@@ -745,7 +778,7 @@
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **设计引用:**
-- [design/05-实验数据分析.md#2.2-统计摘要计算服务](05-实验数据分析.md#2.2-统计摘要计算服务)
+- [design/05-实验数据分析.md#22-统计摘要计算服务](design/05-实验数据分析.md#22-统计摘要计算服务)
 
 **数据模型引用:**
 - experiment_results (summary_stats)
@@ -767,7 +800,7 @@
 - FR-05.2.3: 标记验证状态（MATCH / MISMATCH）
 
 **设计引用:**
-- [design/05-实验数据分析.md#2.3-指标交叉验证服务](05-实验数据分析.md#2.3-指标交叉验证服务)
+- [design/05-实验数据分析.md#23-指标交叉验证服务](design/05-实验数据分析.md#23-指标交叉验证服务)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
@@ -785,7 +818,7 @@
 - FR-05.2.3: 标记验证状态
 
 **设计引用:**
-- [design/05-实验数据分析.md#2.3-指标交叉验证服务](05-实验数据分析.md#2.3-指标交叉验证服务)
+- [design/05-实验数据分析.md#23-指标交叉验证服务](design/05-实验数据分析.md#23-指标交叉验证服务)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
@@ -806,8 +839,8 @@
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传
 
 **设计引用:**
-- [design/07-前端展示.md#3.7-P07-实验数据](07-前端展示.md#3.7-P07-实验数据)
-- [design/10-前端详细设计.md#4.7-P07-实验数据](10-前端详细设计.md#4.7-P07-实验数据)
+- [design/07-前端展示.md#37-p07-实验数据-experimentdataview--规划](design/07-前端展示.md#37-p07-实验数据-experimentdataview--规划)
+- [design/10-前端详细设计.md#47-p07-实验数据-experimentdataview--规划](design/10-前端详细设计.md#47-p07-实验数据-experimentdataview--规划)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/experiment-files/upload
@@ -837,7 +870,7 @@
 - FR-06.1.3: 支持中英文语言选择
 
 **设计引用:**
-- [design/06-报告导出.md#2.1-报告生成服务](06-报告导出.md#2.1-报告生成服务)
+- [design/06-报告导出.md#21-报告生成服务](design/06-报告导出.md#21-报告生成服务)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/exports
@@ -860,8 +893,8 @@
 - FR-06.1.3: 支持中英文语言选择
 
 **设计引用:**
-- [design/06-报告导出.md#2.1-报告生成服务](06-报告导出.md#2.1-报告生成服务)
-- [design/06-报告导出.md#2.2-Markdown-报告模板](06-报告导出.md#2.2-Markdown-报告模板)
+- [design/06-报告导出.md#21-报告生成服务](design/06-报告导出.md#21-报告生成服务)
+- [design/06-报告导出.md#22-markdown-报告模板](design/06-报告导出.md#22-markdown-报告模板)
 
 **数据模型引用:**
 - export_reports
@@ -884,7 +917,7 @@
 - FR-06.2.2: 支持 DOCX 格式导出
 
 **设计引用:**
-- [design/06-报告导出.md#2.1-报告生成服务](06-报告导出.md#2.1-报告生成服务)
+- [design/06-报告导出.md#21-报告生成服务](design/06-报告导出.md#21-报告生成服务)
 
 **数据模型引用:**
 - export_reports
@@ -905,8 +938,8 @@
 - FR-06.1.1: 生成包含审阅结果、指标记录的报告
 
 **设计引用:**
-- [design/07-前端展示.md#3.8-P08-报告导出](07-前端展示.md#3.8-P08-报告导出)
-- [design/10-前端详细设计.md#4.8-P08-报告导出](10-前端详细设计.md#4.8-P08-报告导出)
+- [design/07-前端展示.md#38-p08-报告导出-reportexportview--规划](design/07-前端展示.md#38-p08-报告导出-reportexportview--规划)
+- [design/10-前端详细设计.md#48-p08-报告导出-reportexportview--规划](design/10-前端详细设计.md#48-p08-报告导出-reportexportview--规划)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/exports

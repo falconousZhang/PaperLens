@@ -6,8 +6,8 @@
 |------|------|------|------|
 | P0 | 需求分析与架构设计 | 完成需求文档、架构设计、数据模型、API 契约、安全设计 | ✅ 已完成 |
 | P1 | 工程骨架搭建 | 可运行的项目骨架、ORM 模型、数据库迁移、健康检查 | ✅ 已完成 |
-| P2 | 核心解析流程 | PDF 上传、解析、分块、向量索引 | 🔄 进行中 |
-| P3 | 审阅生成 | 证据检索、LLM 审阅、Evidence 绑定 | ⬜ 未开始 |
+| P2 | 核心解析流程 | PDF 上传、解析、分块、向量索引 | ✅ 已完成 |
+| P3 | 审阅生成 | 证据检索、LLM 审阅、Evidence 绑定 | 🔄 进行中 |
 | P4 | 指标提取 | 表格提取、指标识别、口径判断 | ⬜ 未开始 |
 | P5 | 实验数据分析 | CSV/Excel 上传、统计计算、交叉验证 | ⬜ 未开始 |
 | P6 | 报告导出 | Markdown/PDF/DOCX 导出 | ⬜ 未开始 |
@@ -119,15 +119,62 @@
 | P2.5-11 | Alembic 与双页 HTTP E2E | ✅ head/无差异；2 页、2 Evidence、char range 全匹配 |
 | P2.5-12 | 码道提示词统一归档 | ✅ 从 Codex rollout 恢复 8 个原文版本到 `docs/CODEARTS_PROMPT_ARCHIVE.md` |
 
-## P3 阶段清单（待细化）
+## P2.6 阶段清单（ProjectDocs 实现态校准）
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P3-01 | Evidence 检索服务 | ⬜ 未开始 |
-| P3-02 | Prompt 模板设计 | ⬜ 未开始 |
+| P2.6-01 | SDD 本地链接修复 | ⚠️ 文件路径 48→0，但独立复核仍有 17 个失效锚点 |
+| P2.6-02 | API 实现态校准（8 CURRENT + PLANNED 标记） | ✅ 04/09/模块设计/spec/tasks |
+| P2.6-03 | 数据模型校准（14 表实现状态 + CheckConstraint 对齐） | ✅ 03/08 |
+| P2.6-04 | 前端校准（依赖版本/路由/测试数量/Element Plus PLANNED） | ✅ 07/10/sprint |
+| P2.6-05 | project-config.yaml 状态修复 | ✅ |
+| P2.6-06 | 跨文档一致性检查 | ✅ SHA-256/Auth/Element Plus/Pinia 等修正 |
+| P2.6-07 | 验证（git diff --check + 允许范围 + 链接检查） | ⚠️ diff/范围通过，原锚点检查未按 GFM slug 验证 |
+| P2.6-08 | 本轮未运行测试 | 沿用 P2.5 历史验收结果 |
+
+## P2.7 阶段清单（ProjectDocs 验收去伪与文档收口）
+
+| 编号 | 交付物 | 状态 |
+|------|--------|------|
+| P2.7-01 | 可复现的 Markdown 路径与 GFM 标题锚点检查器 | ✅ 修正前 75/0/17，修正后 75/0/0 |
+| P2.7-02 | tasks.md 17 个失效标题锚点修复 | ✅ 已完成 |
+| P2.7-03 | 上传 title/PROCESSING 状态及 Swagger 地址校准 | ✅ 已完成 |
+| P2.7-04 | Evidence 过滤、DELETE paper、Element Plus 实现态校准 | ✅ 已完成 |
+| P2.7-05 | finding_evidences 表名与物理约束/显式索引分层 | ✅ 已完成 |
+| P2.7-06 | project-config、Sprint 与 bugfix 报告收口 | ✅ 已完成 |
+| P2.7-07 | 独立静态验收 | ✅ 8 API、14 表、4 路由、15 测试定义；diff check 与禁止范围通过 |
+| P2.7-08 | 业务代码和产品测试 | ✅ 无业务代码变更；本轮未运行产品测试 |
+
+## P3 阶段清单
+
+### P3.1 — 基于 MockLLM 的结构化审阅后端闭环
+
+| 编号 | 交付物 | 状态 |
+|------|--------|------|
+| P3.1-01 | ReviewDimension 枚举（7 维度：OVERALL/SOUNDNESS/NOVELTY/CLARITY/SIGNIFICANCE/REPRODUCIBILITY/COMPLETENESS） | ✅ 已完成 |
+| P3.1-02 | Evidence 候选选择（确定性排序 page_number/created_at/id ASC，Top-K=8） | ✅ 已完成 |
+| P3.1-03 | Prompt 构造（临时别名 E1/E2…、安全边界、语言指令） | ✅ 已完成 |
+| P3.1-04 | MockLLMClient 重写（按 dimension/evidence_aliases 返回确定性 JSON） | ✅ 已完成 |
+| P3.1-05 | Pydantic 严格输出解析（extra=forbid、代码围栏拒绝、dimension 匹配、rating 1-5、confidence 0-1、OVERALL verdict 规则） | ✅ 已完成 |
+| P3.1-06 | Evidence 绑定（VERIFIED/UNVERIFIED 规则、全有或全无原子写入、失败回滚） | ✅ 已完成 |
+| P3.1-07 | 4 个后端 API（POST/GET /papers/{id}/tasks、GET /tasks/{id}、GET /papers/{id}/reviews） | ✅ 已完成 |
+| P3.1-08 | P3.1 定向测试（1 项 LLM Client + 30 项 Review Service + 22 项 API） | ✅ 53 passed |
+| P3.1-09 | Docker 后端全量回归 | ✅ 115 passed, 0 skipped |
+| P3.1-10 | 前端测试 15 passed，构建成功 | ✅ 已完成 |
+| P3.1-11 | alembic check 无差异 | ✅ 已完成 |
+| P3.1-12 | Markdown 链接检查 75/0/0 | ✅ 已完成 |
+| P3.1-13 | 开发库隔离验证 | ✅ 已完成 |
+| P3.1-14 | Codex 独立审查与直接修复（事务原子性、UUID4、依赖注入、越权查询、严格 schema、Prompt 边界、统一 422） | ✅ 已完成 |
+
+### P3 后续（待细化）
+
+| 编号 | 交付物 | 状态 |
+|------|--------|------|
+| P3-01 | Evidence 检索服务 | 🟡 确定性 Top-K 已完成；P3.2 语义检索待实现 |
+| P3-02 | Prompt 模板设计 | ✅ 已完成（P3.1 基础版） |
 | P3-03 | MaaSLLMClient 实现 | ⬜ 未开始 |
-| P3-04 | 审阅结果解析与 Evidence 绑定验证 | ⬜ 未开始 |
-| P3-05 | 审阅结果 API | ⬜ 未开始 |
+| P3-04 | 审阅结果解析与 Evidence 绑定验证 | ✅ 已完成（P3.1 MockLLM 版） |
+| P3-05 | 审阅结果 API | ✅ 已完成（P3.1 基础版） |
 
 ## P4 阶段清单（待细化）
 

@@ -4,6 +4,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from paperlens.api.health import router as health_router
 from paperlens.api.papers import router as papers_router
+from paperlens.api.tasks import router as tasks_router
 from paperlens.core.errors import (
     AppError,
     app_error_handler,
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(papers_router, prefix="/api/v1")
+    app.include_router(tasks_router, prefix="/api/v1")
 
     return app
 

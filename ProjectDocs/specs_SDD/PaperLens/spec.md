@@ -135,14 +135,14 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - FR-01.1.2: 文件类型校验（仅接受包含可提取文本的 PDF）
 - FR-01.1.3: 文件大小限制 50MB
 - FR-01.1.4: 路径穿越防护
-- FR-01.1.5: SHA-256 文件哈希去重
+- FR-01.1.5: SHA-256 文件哈希计算与存储（去重/复用逻辑 📋 PLANNED）
 - FR-01.1.6: 上传后自动触发后台解析任务
 
 **验收标准:**
 - PDF 文件可成功上传
 - 非 PDF 文件返回 415 错误
 - 超过 50MB 返回 413 错误
-- 上传后状态为 UPLOADING，自动触发解析
+- 上传后状态为 PROCESSING，并注册后台解析任务
 
 #### 3.1.2 PDF 解析 (F02)
 
@@ -216,7 +216,7 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - 前端可高亮跳转到 Evidence 位置
 - 语义检索功能
 
-### 3.3 审阅生成 (P1, 规划)
+### 3.3 审阅生成（P1，P3.1 后端基础闭环已实现）
 
 #### 3.3.1 结构化论文审阅 (F07)
 
@@ -230,7 +230,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - FR-03.1.5: 评分 1-5，含 overall_verdict
 
 **验收标准:**
-- 审阅结果 API 返回含 Evidence 的结构化结果
+- P3.1 已实现 REVIEW 任务创建/查询、MockLLM 结构化结果和 VERIFIED Evidence 绑定
+- UNVERIFIED Finding 保留审计但不通过公开 API 返回
+- P3.2 语义检索和 P3.3 华为云真实模型仍为规划
 
 ### 3.4 指标提取与口径判断 (P1, 规划)
 
@@ -336,7 +338,7 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - 错误信息不泄露内部异常（_safe_error_message()）
 
 **认证安全:**
-- Bearer Token（JWT）认证
+- Bearer Token（JWT）认证（📋 PLANNED: 当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权）
 - MVP 阶段使用简单 Token，后续集成 IAM
 
 ### 4.3 可用性需求
@@ -373,28 +375,29 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 ### 5.2 流程规则
 
-- 论文上传后自动触发解析，状态流转: UPLOADING → PROCESSING → PARSED / FAILED
-- 审阅生成流程: 构造检索 query → 检索 Top-K PaperChunk → LLM 生成 → 后处理验证 → 存储结果
+- 当前上传接口创建 Paper 时直接进入 PROCESSING，随后状态流转为 PROCESSING → PARSED / FAILED；UPLOADING 是允许的枚举值，但当前上传路径未使用
+- P3.1 审阅生成流程: 同论文 Evidence 稳定排序取 Top-K → E1/E2 alias → MockLLM → 严格 JSON 解析 → 全有或全无 Evidence 绑定 → 原子存储结果与任务成功状态
+- P3.2/P3.3 规划: 华为云优先的 Embedding 语义检索 → HuaweiMaaSLLMClient
 - 指标提取流程: 从 structured_data 提取 → 规则引擎判断口径 → LLM 辅助歧义消解 → 存储记录
 
 ### 5.3 权限规则
 
 - 不同用户的论文和审阅结果严格隔离（user_id 过滤）
-- MVP 阶段使用简单 Token 认证
+- MVP 阶段使用配置项 `demo_user_id` 做数据隔离；Token/JWT 认证尚未实现
 
 ## 6. 约束条件
 
 ### 6.1 技术约束
 
 - 后端: Python 3.10+ / FastAPI / SQLAlchemy 2.x / Alembic
-- 前端: Vue3 / TypeScript / Element Plus / Pinia / Axios
+- 前端: Vue3 / TypeScript / Element Plus（📋 PLANNED） / Pinia / Axios
 - 数据库: PostgreSQL 15+
 - 向量索引: FAISS（后续可迁移至 Milvus）
 - 任务队列: FastAPI BackgroundTasks（后续迁移至 Celery + Redis）
 
 ### 6.2 业务约束
 
-- 所有审阅结论必须绑定 Evidence
+- 所有公开审阅结论必须完整绑定 Evidence；无法绑定的记录为 UNVERIFIED 且不展示
 - 大模型不直接计算统计数据
 - 仅支持包含可提取文本的 PDF
 - 文件上传使用普通 multipart 流式上传
@@ -402,8 +405,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 ### 6.3 时间约束
 
-- P2.5（当前）: 论文上传与解析、Evidence 提取已实现
-- P3.0（规划）: 审阅生成、指标提取、向量索引
+- P2.5（历史）: 论文上传与解析、Evidence 提取已实现
+- P3.1（当前）: MockLLM 结构化审阅后端闭环已实现
+- P3.2/P3.3（规划）: 华为云优先的语义检索和真实模型接入
 - P4.0（规划）: 实验数据分析、报告导出
 
 ## 7. 验收标准
@@ -417,9 +421,41 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - [x] F04 文本分块
 - [x] F06 Evidence 提取（page-local）
 
+**API 实现状态:**
+
+| 状态 | 接口 |
+|------|------|
+| ✅ CURRENT | GET /api/v1/health |
+| ✅ CURRENT | POST /api/v1/papers/upload（仅 file 字段，title=文件名stem，status=PROCESSING） |
+| ✅ CURRENT | GET /api/v1/papers |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/pages/{page_number} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/sections |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤） |
+| ✅ CURRENT | GET /api/v1/evidences/{evidence_id} |
+| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（仅 REVIEW） |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/tasks |
+| ✅ CURRENT | GET /api/v1/tasks/{task_id} |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/reviews（仅 VERIFIED Finding） |
+| 📋 PLANNED | DELETE /api/v1/papers/{paper_id} |
+| 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
+| 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
+| 📋 PLANNED | GET /api/v1/papers/{paper_id}/metrics |
+| 📋 PLANNED | POST/GET/DELETE /api/v1/papers/{paper_id}/experiment-files/* |
+| 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
+| 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
+
+**关键实现细节:**
+- SHA-256 哈希已计算并存储，去重/复用逻辑 📋 PLANNED
+- 认证: `_get_user_id()` 返回 `settings.demo_user_id`，Bearer/JWT 📋 PLANNED
+- Swagger: `/api/docs`，OpenAPI: `/api/openapi.json`
+
+**已实现（P3.1）:**
+- [x] F07 结构化论文审阅后端基础闭环
+
 **待实现:**
 - [ ] F05 向量索引（FAISS）
-- [ ] F07 结构化论文审阅
+- [ ] F07 真实华为云模型、语义检索和审阅前端
 - [ ] F08 实验指标提取
 - [ ] F09 Checkpoint 口径判断
 - [ ] F10 审稿报告导出

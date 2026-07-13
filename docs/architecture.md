@@ -118,11 +118,11 @@ class MaaSLLMClient(LLMClient):
     """华为云 MaaS / ModelArts 推理端点实现（后续版本）"""
 ```
 
-通过环境变量 `LLM_BACKEND=mock|maas` 切换。
+当前仅支持 `PAPERLENS_LLM_BACKEND=mock`；华为云 MaaS/ModelArts 适配器将在 P3.3 开放。
 
 ## 3. 后台任务处理流程
 
-> 以下为目标流程。当前实现完成步骤 1～4 及 page-local Evidence 提取；步骤 5 之后的 FAISS、LLM 审阅、指标分析和报告导出尚未实现。
+> 当前已完成 PDF 解析、page-local Evidence 提取，以及基于确定性 Evidence Top-K + MockLLM 的结构化审阅后端闭环。FAISS/Embedding 语义检索、真实华为云模型、指标分析和报告导出尚未实现。
 
 ```
 用户上传 PDF

@@ -7,10 +7,11 @@
 
 1. 按生成时间顺序保存不同版本；相同内容在聊天展示并写入文件时只归档一次。
 2. 后续每个开发任务都在本文件末尾追加对应提示词，并同步更新 `docs/CODEARTS_NEXT_PROMPT.md` 供用户提交给码道。
-3. 码道负责按提示词实施；Codex 在码道完成后审查真实代码、独立复测并生成下一步提示词。
+3. 码道负责按提示词实施；Codex 在码道完成后审查真实代码并独立复测。若发现问题，依据用户的持续授权由 Codex 直接修正并验证，不再让码道反复返修；当前阶段确认通过后，再生成下一步提示词。
 4. 不以 `docs/PROGRESS.md` 的汇报代替代码、数据库、Docker 和测试结果核验。
 5. 本文 01～08 均从本机 Codex rollout JSONL 的原始消息或 `apply_patch` 参数逐字恢复；仅统一换行为 LF，没有根据阶段汇报改写正文。
-6. P2.5 之前实际交给码道的版本为 01～07；P2.5 已生成提示词，但该轮由 Codex 直接实施。从下一阶段起恢复码道实施、Codex 审查的协作方式。
+6. P2.5 之前实际交给码道的版本为 01～07；P2.5 已生成提示词，但该轮由 Codex 直接实施。从 P2.6 起恢复码道实施、Codex 审查的协作方式。
+7. 未实际提交给码道的提示词仍保留归档并明确标注；它们记录了当时的审查结论和任务边界，但不得记作码道执行记录。
 
 ## 索引
 
@@ -24,7 +25,10 @@
 | 06 | P2.3 测试隔离与验收真实性修复 | ✅ rollout 原文 |
 | 07 | P2.4 事务边界与验收收口 | ✅ rollout 原文 |
 | 08 | P2.5 验收去伪与并发翻页修复 | ✅ rollout 原文 |
-| 09 | P2.6 ProjectDocs 实现态校准 | ✅ 本轮生成 |
+| 09 | P2.6 ProjectDocs 实现态校准 | ✅ 已提交并完成 |
+| 10 | P2.7 ProjectDocs 验收去伪与文档收口 | ⚠️ 未提交，改由 Codex 直接修正 |
+| 11 | P3.1 基于 MockLLM 的结构化审阅后端闭环 | ✅ 已提交并完成；Codex 审查通过 |
+| 12 | P3.2 华为云优先的 Embedding 抽象与语义 Evidence 检索 | ✅ 本轮生成，待提交 |
 
 ---
 
@@ -2586,4 +2590,897 @@ P2.6 — ProjectDocs 实现态校准与可追溯性修复
 6. 是否运行测试；若未运行，不得声称本轮测试通过。
 
 不要 git commit，不要删除数据库 volume，不写入密钥，不自动清理开发库数据。
+~~~~
+
+---
+
+## 10 — P2.7 ProjectDocs 验收去伪与文档收口
+
+> 来源：Codex 对 P2.6 码道结果独立复核后生成（2026-07-13）
+> 状态：未提交给码道；用户调整协作流程后，由 Codex 直接完成同等修正并独立验证。
+
+~~~~text
+继续维护 D:\shixi\PaperLens 项目。
+
+本轮定义为 P2.7：ProjectDocs 验收去伪与文档收口。P2.6 的主要方向正确，但外部独立复核没有复现“0 个失效锚点”，并发现多处实现态矛盾。因此禁止进入 P3，先把文档基线真正收口。
+
+外部独立复核结果：
+
+- Markdown 本地链接总数：75
+- 失效文件路径：0
+- 失效标题锚点：17
+- 真实后端 route decorator：8
+- 两份 API 设计中的 CURRENT 标记：各 8
+- ORM 业务表：14
+- 前端实际路由：4
+- PaperDetailView 测试：15
+- git diff --check：通过
+- P2.6 工作区未修改 backend、frontend、alembic 或 Docker 配置
+- ProjectDocs/bugfix-report/ 为空，没有生成提示词要求的实际 bugfix 报告
+
+P2.6 的 8 API、14 表分层、前端版本和大部分 CURRENT/PLANNED 校准可以保留。本轮只修复独立复核确认的残留问题，不无差别重写文档，不开发任何业务功能。
+
+开始前完整阅读：
+
+- AGENTS.md
+- docs/PROGRESS.md 中 P2.6 记录
+- docs/IMPLEMENTATION_STATUS.md 中 P2.6 清单
+- ProjectDocs/project-config.yaml
+- ProjectDocs/specs_SDD/PaperLens/tasks.md
+- ProjectDocs/specs_SDD/PaperLens/spec.md
+- ProjectDocs/specs_SDD/PaperLens/design/01-论文上传与解析.md
+- ProjectDocs/specs_SDD/PaperLens/design/02-证据提取与检索.md
+- ProjectDocs/specs_SDD/PaperLens/design/03-审阅生成.md
+- ProjectDocs/specs_SDD/PaperLens/design/07-前端展示.md
+- ProjectDocs/specs_SDD/PaperLens/design/08-数据模型详细设计.md
+- ProjectDocs/specs_SDD/PaperLens/design/09-API接口详细设计.md
+- ProjectDocs/specs_SDD/PaperLens/design/10-前端详细设计.md
+- ProjectDocs/systemDesign/03-数据模型设计.md
+- ProjectDocs/systemDesign/04-API接口设计.md
+- ProjectDocs/systemDesign/06-需求规格说明.md
+- ProjectDocs/sprint/论文上传与解析.md
+- ProjectDocs/sprint/证据提取与检索.md
+- ProjectDocs/sprint/前端展示.md
+- backend/paperlens/main.py
+- backend/paperlens/api/papers.py
+- backend/paperlens/models/models.py
+- backend/alembic/versions/001_initial.py
+- frontend/package.json
+- frontend/src/router/index.ts
+- frontend/src/tests/PaperDetailView.test.ts
+
+先给出简短计划，然后实施。按 AGENTS.md 调用相关 skill：
+
+1. dev-process-framework：修正 systemDesign 中残留的当前事实。
+2. page-mockup：只修正前端设计文档的实现态描述，不重做线框图。
+3. fullstack-testing：校准可复现的静态验收方法。
+4. function-detail：修正 SDD spec/design/tasks。
+5. sdd-workflow：更新 sprint 与阶段追踪。
+6. bug-fix-reporter：必须生成一个非空、可追踪的 P2.7 报告文件。
+
+不得运行 dev-eco-setup，不得修改或安装 skill。
+
+一、先实现可靠的 Markdown 文件路径与 GFM 标题锚点检查
+
+在 ProjectDocs/tools/check_markdown_links.ps1 新增可复现的只读检查器。该工具不是业务代码，只用于验证 ProjectDocs。
+
+检查器必须：
+
+1. 递归读取 ProjectDocs 下所有 Markdown。
+2. 忽略 http、https、mailto 等外部链接。
+3. 从链接所在文件目录解析相对路径，并 URL decode。
+4. 同时验证目标文件和 #anchor。
+5. 按 GitHub 风格 slug 处理标题：
+   - 转为小写；
+   - 删除点号、圆括号、全角括号、破折号等标点；
+   - 空格逐个替换为连字符；
+   - 保留中文、英文字母、数字、下划线和已有连字符；
+   - 重复标题按 -1、-2 后缀处理。
+6. 输出总本地链接数、失效文件路径数、失效锚点数和每个失败目标。
+7. 任一失效时退出码非 0；全部有效时退出码 0。
+
+先在修改链接前运行检查器。它必须复现：
+
+- 总本地链接 75
+- 失效文件路径 0
+- 失效锚点 17
+
+如果不能复现 17，说明检查器仍然错误，不得把结果写成通过。
+
+当前 17 个坏锚点均在 tasks.md，至少包括：
+
+1. design/02 中带全角括号的目标：
+   - #21-evidence-提取服务（已实现） 应为 #21-evidence-提取服务已实现，共 3 处。
+   - #22-向量索引服务（未实现） 应为 #22-向量索引服务未实现，共 2 处。
+2. design/07 的 P02～P08 目标保留了 “—”：
+   - 例如 #32-p02-论文上传-uploadview-—-已实现 应为 #32-p02-论文上传-uploadview--已实现。
+   - P03、P04 以及 P05～P08 同理，共 8 处。
+3. design/10 的 P05～P08 目标：
+   - 例如 #45-p05-审阅结果-reviewresultview-—-规划 应为 #45-p05-审阅结果-reviewresultview--规划。
+   - 共 4 处。
+
+修复后再次运行同一个检查器，必须得到：
+
+- 总本地链接 75
+- 失效文件路径 0
+- 失效锚点 0
+- 退出码 0
+
+不得用“目标文件存在”代替锚点验证，不得手工宣称 0。
+
+二、纠正上传接口当前契约和状态流转
+
+当前 upload_paper()：
+
+- multipart 只接收 file；
+- 不接收可选 title；
+- title 由清洗后文件名去扩展名生成，不从 PDF 元数据提取；
+- Paper 创建时直接设为 PROCESSING；
+- 201 响应状态也是 PROCESSING；
+- UPLOADING 虽然是允许枚举值，但当前上传路径没有写入该状态。
+
+统一修正以下残留：
+
+1. systemDesign/06：
+   - “论文标题选填，默认从 PDF 提取”不能写成当前输入；如保留必须标 PLANNED。
+   - 输出状态改为 PROCESSING。
+   - 已勾选验收项改为“上传后状态为 PROCESSING 并注册后台解析任务”。
+2. specs_SDD/PaperLens/spec.md：
+   - F01 验收标准不得再写 UPLOADING。
+   - 当前流程不得再写 UPLOADING → PROCESSING；应写 PROCESSING → PARSED / FAILED。
+   - 可以注明 UPLOADING 是允许值但当前端点未使用。
+3. tasks.md 第 1.1 节验收标准改为 PROCESSING，并与该文件顶部 CURRENT 摘要一致。
+4. design/01 第 2.1 节不得把当前流程写成“创建 Paper 状态 UPLOADING → PROCESSING”。
+5. 全局检查“状态为 UPLOADING”“UPLOADING → PROCESSING”“标题选填”“从 PDF 提取标题”；若描述未来目标必须明确标 PLANNED，不能与当前实现混写。
+
+三、修复剩余 API、Sprint 和前端矛盾
+
+1. systemDesign/04 开头仍写 Swagger 为 /docs 或 /redoc，与文末 /api/docs 冲突。当前地址统一为：
+   - Swagger UI：/api/docs
+   - OpenAPI：/api/openapi.json
+   - ReDoc 若保留，按 FastAPI main.py 的真实默认配置说明。
+2. sprint/证据提取与检索.md 的“已完成”仍写 Evidence 列表支持 page_number/evidence_type 过滤。改为当前返回全部证据，过滤为 PLANNED。
+3. sprint/论文上传与解析.md 在已完成任务 API 引用中仍无标记列出 DELETE paper。明确标为 PLANNED，T-1.1.2 的已完成范围只包括列表和详情 GET。
+4. design/07-前端展示.md 第 14 行仍写“基于 Element Plus 构建”，但同文第 24 行又写尚未引入。当前实现描述应为 Vue3 + TypeScript + 原生模板/CSS；Element Plus 只保留为 PLANNED。
+5. 全局确认 P2.5 历史 14 项记录和当前 15 项记录的阶段语义，不能把 P2.4 的历史 14 项机械改成 15。
+
+四、修复关联表名和物理模型伪索引
+
+真实关联表是 finding_evidences。修复仍然存在的单数写法：
+
+- specs_SDD/PaperLens/design/03-审阅生成.md
+- specs_SDD/PaperLens/tasks.md
+- 其他通过全局搜索发现的 finding_evidence 单数引用
+
+注意：匹配 finding_evidence 但排除合法 finding_evidences。
+
+以 models.py 和 001_initial.py 为准重新校准 systemDesign/03 与 SDD design/08 的物理模型：
+
+1. uq_paper_page、uq_paper_chunk、uq_paper_table、uq_review_dimension 是 UniqueConstraint 名称，不要伪写成 Alembic 的 op.create_index。
+2. finding_evidences 使用 finding_id + evidence_id 复合主键，迁移中没有 idx_finding_evidence。
+3. experiment_results.file_id 使用 unique=True，迁移中没有名为 idx_exp_result_file_id 的显式索引。
+4. 只有真实 op.create_index/ORM Index 才列入“显式索引”。
+5. 主键、唯一约束、CheckConstraint 和显式索引分栏或分节描述，不能混为一谈。
+6. 删除或更正不存在的 CREATE UNIQUE INDEX 示例。
+7. 14 张表“6 张功能已用 + 8 张仅模型骨架”的分层保持不变。
+
+五、修正阶段状态和补齐 bugfix 报告
+
+1. ProjectDocs/project-config.yaml 在完成后将 current_stage 更新为：
+   - P2.7 文档收口已完成，P3 待开始
+   - 或语义完全等价的最终状态
+   不得继续写“当前进行 P2.6”。
+2. 使用 bug-fix-reporter 创建非空文件：
+   - ProjectDocs/bugfix-report/P2.7-ProjectDocs验收去伪与文档收口.md
+3. 报告必须记录：
+   - P2.6 为何误报 0 锚点；
+   - 可靠检查器如何复现 17 → 0；
+   - 剩余实现态矛盾；
+   - 修改文件；
+   - 静态验证结果；
+   - 未修改业务代码、未运行测试。
+4. 空目录不算 bugfix 报告。
+
+六、进度记录必须纠正 P2.6 的误报
+
+docs/PROGRESS.md 中既有 P2.6 内容保留作为码道原始报告，不删除、不偷偷改成另一个数字。在其后追加：
+
+P2.7 — ProjectDocs 验收去伪与文档收口
+
+明确记录：
+
+- Codex 独立复核发现 P2.6 的“0 失效锚点”不成立，实际为路径 0、锚点 17。
+- 新检查器修改前真实复现 75/0/17。
+- 修复后真实结果 75/0/0。
+- 上传状态、标题、Swagger、Evidence 过滤、DELETE、Element Plus、finding_evidences 和物理约束/索引的修正。
+- bugfix 报告路径。
+- 修改范围和 git diff --check。
+- 本轮没有业务代码变更。
+- 本轮没有运行产品测试，只进行静态文档验收。
+
+更新 docs/IMPLEMENTATION_STATUS.md：
+
+1. P2.6-01 应标为“文件路径已修，仍遗留 17 个锚点”，不能继续写完全通过。
+2. P2.6-07 应标出原锚点检查不可靠。
+3. 新增 P2.7 清单，只有可靠检查器输出 0 后才能标完成。
+4. P3～P6 保持未开始。
+
+七、验证和范围
+
+本轮允许修改：
+
+- ProjectDocs/**
+- docs/PROGRESS.md
+- docs/IMPLEMENTATION_STATUS.md
+
+禁止修改：
+
+- AGENTS.md
+- backend/**
+- frontend/**
+- backend/alembic/**
+- docker-compose.yml
+- .arts/**
+- .codeartsdoer/**
+- .skills/**
+- .git/**
+- docs/CODEARTS_NEXT_PROMPT.md
+- docs/CODEARTS_PROMPT_ARCHIVE.md
+
+注意：上述两个提示词文件可能已经包含 Codex 在本轮开始前生成的未提交变更。开始工作前先记录 git status --short，并分别记录这两个文件的 SHA-256；它们可以作为既有基线出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须与开始前完全相同。禁止范围中的其他代码和配置应使用 git diff --quiet 单独验证。
+
+完成前依次执行：
+
+1. 修改前运行新检查器并保存 75/0/17 结果。
+2. 修改后运行同一检查器并保存 75/0/0 结果。
+3. git diff --check，必须无错误。
+4. 对比开始前后的状态：P2.7 新增修改必须只有允许范围；两个 Codex 提示词文件只作为既有基线且 SHA-256 不变。
+5. git diff --quiet -- AGENTS.md backend frontend docker-compose.yml .arts .codeartsdoer .skills，必须确认这些禁止范围相对 HEAD 无变化。
+6. 从 route decorator 重新确认 8 个后端端点。
+7. 从 models.py 重新确认 14 张表。
+8. 从 router 确认 4 条前端路由。
+9. 从测试文件确认当前 15 个 it 用例。
+10. 全局搜索下列残留并逐项解释或消除：
+   - 状态为 UPLOADING
+   - UPLOADING → PROCESSING
+   - 支持 page_number / evidence_type 过滤
+   - 基于 Vue3 + TypeScript + Element Plus 构建
+   - finding_evidence 单数
+   - idx_finding_evidence
+   - idx_exp_result_file_id
+   - Swagger /docs
+
+本轮不修改产品代码，不要求运行 Docker、pytest、Vitest 或 build。不得把 P2.5 历史测试结果冒充本轮执行结果。
+
+最终回复必须逐项报告：
+
+1. 检查器路径和实现规则。
+2. 修改前是否真实复现 75/0/17。
+3. 修改后是否真实达到 75/0/0。
+4. 所有残留事实矛盾的修复位置。
+5. 物理模型中约束和索引如何区分。
+6. bugfix 报告实际文件路径。
+7. git diff --check 和修改范围。
+8. 明确没有修改业务代码、没有运行产品测试、没有进入 P3。
+
+不要 git commit，不要删除数据库 volume，不写入密钥，不清理开发库数据。
+~~~~
+
+---
+
+## 11 — P3.1 基于 MockLLM 的结构化审阅后端闭环
+
+> 来源：Codex 在直接完成 P2.7 收口并独立验收后生成（2026-07-13）
+> 状态：已提交给码道并完成；Codex 独立审查、直接修复并于 2026-07-13 验收通过。
+
+~~~~text
+继续维护 D:\shixi\PaperLens 项目。
+
+本轮定义为 P3.1：基于现有 MockLLMClient 和已提取 Evidence，完成“创建审阅任务 → 后台生成结构化审阅 → 查询任务 → 查询审阅结果”的后端最小闭环。
+
+这是一轮受控的后端垂直切片。不得在本轮接入 FAISS、Embedding、MaaS、ModelArts、OpenAI 或任何真实云模型；不得实现审阅前端、指标提取、实验分析、报告导出。P3.1 的目标是先把 Prompt、严格解析、Evidence 绑定、事务边界和 API 契约做成确定性、可测试的基础，后续 P3.2 再接语义检索，P3.3 再接真实模型适配器。
+
+当前可信基线：
+
+- P2.7 文档收口已经完成，`ProjectDocs/tools/check_markdown_links.ps1` 当前检查结果为本地链接 75、坏路径 0、坏锚点 0。
+- 当前后端有 8 个实际 route decorator、14 张 ORM 业务表；审阅相关 4 张表骨架已经存在：`analysis_tasks`、`review_results`、`review_findings`、`finding_evidences`。
+- `LLMClient.chat(messages, **kwargs)` 和默认 `MockLLMClient` 已存在，但 Mock 返回内容尚不足以支撑完整审阅。
+- `PaperStatus`、`TaskStatus`、`TaskType`、`FindingType`、`VerificationStatus`、`OverallVerdict` 已存在。
+- 当前没有 FAISS、Embedding 或真实 LLM SDK 依赖，不要为了本轮新增它们。
+- P2.5 历史验收曾为后端 63 passed / 0 skipped、前端 15 passed、build 成功；这些只是历史基线，不能冒充本轮测试结果。
+
+开始前必须完整阅读：
+
+- AGENTS.md
+- docs/PROGRESS.md 中 P2.5～P2.7 记录
+- docs/IMPLEMENTATION_STATUS.md
+- docs/product-requirements.md
+- docs/architecture.md
+- docs/data-model.md
+- docs/api-contract.md
+- docs/security-design.md
+- ProjectDocs/project-config.yaml
+- ProjectDocs/systemDesign/01-需求细化与决策发现.md
+- ProjectDocs/systemDesign/02-架构设计.md
+- ProjectDocs/systemDesign/03-数据模型设计.md
+- ProjectDocs/systemDesign/04-API接口设计.md
+- ProjectDocs/systemDesign/05-实施计划.md
+- ProjectDocs/systemDesign/06-需求规格说明.md
+- ProjectDocs/systemDesign/08-测试设计.md
+- ProjectDocs/specs_SDD/PaperLens/spec.md
+- ProjectDocs/specs_SDD/PaperLens/tasks.md
+- ProjectDocs/specs_SDD/PaperLens/design/03-审阅生成.md
+- ProjectDocs/specs_SDD/PaperLens/design/08-数据模型详细设计.md
+- ProjectDocs/specs_SDD/PaperLens/design/09-API接口详细设计.md
+- backend/paperlens/main.py
+- backend/paperlens/core/config.py
+- backend/paperlens/core/database.py
+- backend/paperlens/core/enums.py
+- backend/paperlens/core/errors.py
+- backend/paperlens/models/models.py
+- backend/paperlens/api/papers.py
+- backend/paperlens/schemas/paper.py
+- backend/paperlens/services/llm_client.py
+- backend/tests/conftest.py
+- backend/tests/db_helpers.py
+- backend/tests/test_api/test_health.py
+- backend/tests/test_api/test_upload_lifecycle.py
+- backend/tests/test_services/test_llm_client.py
+
+先检查 `git status --short`，记录工作区已有修改，不得覆盖、回退或清理用户/Codex 的既有改动。先给出简短实施计划和预计修改文件，然后直接实施，不要停留在建议层面。
+
+按 AGENTS.md 实际执行相关 skill 工作流：
+
+1. `dev-process-framework`：先校准本轮相关 systemDesign 文档，明确 P3.1 CURRENT 与 P3.2/P3.3 PLANNED 的边界。
+2. `fullstack-testing`：先补充 P3.1 后端单元、服务和 API 集成测试设计，再编写测试。
+3. `function-detail`：更新 SDD spec/design/tasks，使实现步骤、错误语义、事务边界和验收标准可执行。
+4. `sdd-workflow`：创建或更新 `ProjectDocs/sprint/审阅生成.md`，记录真实进度与测试结果。
+
+本轮没有 UI 变更，不运行 `page-mockup`；这是新功能开发，不生成 bugfix 报告；不得运行 `dev-eco-setup`，不得安装或修改 skill。
+
+## 一、先固定 P3.1 契约
+
+本轮支持以下审阅维度：
+
+- SOUNDNESS
+- NOVELTY
+- CLARITY
+- COMPLETENESS
+- REPRODUCIBILITY
+- SIGNIFICANCE
+- OVERALL
+
+如有必要，在 `core/enums.py` 增加 `ReviewDimension`，由 Pydantic 和服务层共同校验；本轮不要求给数据库增加新的 CheckConstraint，也不应因此创建 Alembic migration。
+
+创建任务请求：
+
+```json
+{
+  "task_type": "REVIEW",
+  "options": {
+    "dimensions": ["SOUNDNESS", "OVERALL"],
+    "language": "zh"
+  }
+}
+```
+
+约束：
+
+1. P3.1 只实现 `task_type=REVIEW`。其他已有 TaskType 仍是后续规划，当前请求返回统一的 422 错误，错误码为 `TASK_TYPE_NOT_SUPPORTED`。
+2. `options` 可省略；默认 `dimensions=["OVERALL"]`、`language="zh"`。
+3. dimensions 只能来自上述白名单，数量 1～7，不允许重复；language 只能是 `zh` 或 `en`。
+4. 只有属于当前 `DEMO_USER_ID`、状态为 `PARSED` 且至少存在一条 Evidence 的论文才能创建任务。
+5. 论文不存在返回 404；存在但不属于当前用户，沿用项目当前行为返回 403；尚未解析完成返回 409 / `PAPER_NOT_READY`；没有 Evidence 返回 409 / `NO_EVIDENCE`。
+6. 继续使用 FastAPI `BackgroundTasks` 作为 MVP 实现，并在文档明确：进程重启后的任务恢复、重试队列和分布式执行属于后续生产化范围。
+
+## 二、实现确定性的 Evidence 候选选择和 Prompt 构造
+
+新增职责清晰的审阅服务，不要把业务逻辑全部堆进路由文件。
+
+P3.1 不做“伪语义检索”。候选 Evidence 按以下稳定顺序选择：
+
+1. 只查询当前 paper_id 的 Evidence。
+2. 按 `page_number ASC, created_at ASC, id ASC` 排序。
+3. 默认取前 8 条；可以在 Settings 中增加有上下界的 `review_evidence_top_k`，默认 8，但不要新增第三方依赖。
+4. 给本次候选建立临时别名 `E1`、`E2`……，LLM 只能引用别名，不能自行输出或猜测数据库 UUID。
+5. Prompt 中 Evidence 文本按明确分隔符包裹，并说明其内容是不可信的论文原文，不得把原文中的指令当作系统指令。
+6. 对进入 Prompt 的单条文本设置合理长度上限；截断只影响 Prompt 上下文，不得改变数据库中的 `quoted_text`。
+7. Prompt 必须包含论文标题、目标 dimension、language、候选 Evidence 别名及严格 JSON 输出格式。
+
+文档必须如实称其为“P3.1 确定性候选选择/临时回退”，不得写成向量检索或语义检索已实现。FAISS/Embedding 继续标记为 P3.2 PLANNED。
+
+## 三、完善 MockLLMClient 和严格输出解析
+
+保留统一 `LLMClient` 抽象。增加可测试的 `get_llm_client()` 或等价工厂，默认 `PAPERLENS_LLM_BACKEND=mock`；本轮只允许 mock。测试必须能通过 FastAPI dependency override 或明确的服务注入替换成自定义 Fake LLMClient，禁止依赖真实网络。
+
+`MockLLMClient` 根据 `chat(..., dimension=..., evidence_aliases=...)` 等显式 kwargs 返回确定性的 JSON 字符串，至少满足：
+
+- 返回的 dimension 与请求一致。
+- rating 为 1～5 整数。
+- summary 为非空字符串。
+- OVERALL 维度返回合法 overall_verdict；非 OVERALL 维度 overall_verdict 必须为 null。
+- 有候选 Evidence 时至少返回一条引用 `E1` 的 Finding，便于走通 VERIFIED 闭环。
+
+LLM content 的严格 JSON 结构固定为：
+
+```json
+{
+  "dimension": "SOUNDNESS",
+  "rating": 4,
+  "summary": "...",
+  "overall_verdict": null,
+  "findings": [
+    {
+      "finding_type": "STRENGTH",
+      "content": "...",
+      "confidence": 0.9,
+      "evidence_refs": ["E1"]
+    }
+  ]
+}
+```
+
+使用 Pydantic 模型严格解析，至少校验：
+
+1. content 必须是可解析的 JSON object，不接受 Markdown 代码围栏、前后解释文字或静默正则修补。
+2. 拒绝未知顶层字段和 Finding 未知字段。
+3. 返回 dimension 必须等于本次请求 dimension。
+4. rating 必须为 1～5 整数；confidence 必须为 0～1；finding_type 必须是现有三种枚举。
+5. summary 和 Finding content 必须为去除首尾空白后的非空字符串，并设置合理最大长度。
+6. overall_verdict 只能来自现有枚举；OVERALL 必须非空，其他维度必须为 null。
+7. `evidence_refs` 只解释为本次候选别名，不接受原始 UUID 作为可信绑定。
+
+不要吞掉解析异常，也不要把 LLM 原始输出、Prompt、堆栈、数据库地址或内部路径返回给客户端。
+
+## 四、实现 Evidence 绑定和原子持久化
+
+每个任务可按请求 dimensions 生成多个 ReviewResult。顺序按请求 dimensions 保持稳定；Finding.sequence 从 1 开始。
+
+绑定规则必须固定：
+
+1. Finding 的 `evidence_refs` 非空，且每个别名都在本次候选映射中时，标记 `VERIFIED`，并通过 `finding_evidences` 关联真实 Evidence。
+2. `evidence_refs` 为空、含未知别名、含原始 UUID、或混合了合法与非法引用时，整条 Finding 标记 `UNVERIFIED`，不得建立任何部分关联。
+3. 候选映射只来自同一 paper_id，因此不得把其他论文 Evidence 绑定进来。
+4. UNVERIFIED Finding 可以保存在数据库用于审计，但所有公开审阅查询必须过滤掉它。
+
+任务状态和事务要求：
+
+1. POST 创建 `AnalysisTask` 时写入 `PENDING`、progress=0、当前 user_id，并先提交，使后台任务使用独立 Session。
+2. 后台任务开始时更新为 `RUNNING`，填写 timezone-aware `started_at`。
+3. 所有 dimensions 的 ReviewResult、ReviewFinding 和 finding_evidences 必须作为一个原子结果批次写入。
+4. 任一 LLM 调用、严格解析或数据库写入失败时，回滚本任务全部新审阅结果，不得残留部分 dimension；随后把任务更新为 `FAILED`，填写安全的统一 error_message 和 `completed_at`。
+5. 成功时状态为 `SUCCEEDED`、progress=100、error_message=null，并填写 `completed_at`。
+6. 内部异常写日志；公开失败信息统一使用安全文案，例如“审阅生成失败，请稍后重试”，不得泄露原始 LLM 输出或内部异常。
+
+现有 4 张审阅表已经能承载本轮数据。除非实际模型与迁移不一致，否则不要修改 ORM 结构、不要创建新表、不要生成空迁移。
+
+## 五、实现 4 个后端 API
+
+新增独立路由模块并在 `main.py` 注册。完成后实际端点应由当前 8 个增加到 12 个。
+
+1. `POST /api/v1/papers/{paper_id}/tasks`
+   - 响应 201。
+   - 返回 id、paper_id、task_type、status=`PENDING`、progress=0、created_at。
+   - 后台任务在响应序列化后执行，不得把耗时审阅直接阻塞在请求事务中。
+
+2. `GET /api/v1/papers/{paper_id}/tasks`
+   - 先校验论文归属。
+   - 仅返回当前用户、当前论文的任务，按 created_at DESC、id DESC 稳定排序。
+   - 返回任务状态、进度、error_message、started_at、completed_at、created_at。
+
+3. `GET /api/v1/tasks/{task_id}`
+   - 只能查询当前 user_id 的任务。
+   - 不存在返回 404；其他用户任务不得泄露详情，采用与项目既有归属语义一致的安全处理并写入文档。
+   - 用于 HTTP 轮询，字段与实际 ORM 一致。
+
+4. `GET /api/v1/papers/{paper_id}/reviews`
+   - 先校验论文归属，并通过 AnalysisTask.user_id 再次约束结果归属。
+   - 返回该论文已持久化的 ReviewResult，排序必须确定；响应包含 review id、task_id、dimension、rating、summary、overall_verdict、created_at 和 findings。
+   - findings 只返回 `VERIFIED`，按 sequence ASC、id ASC 排序；至少返回 id、finding_type、content、confidence、verification_status、sequence、evidence_ids。
+   - `evidence_ids` 顺序必须稳定，只能是同论文真实 Evidence UUID。
+
+`POST /api/v1/tasks/{task_id}/cancel` 本轮不实现，文档继续明确标记 PLANNED。不要顺手实现 DELETE paper、Evidence 过滤或其他无关 API。
+
+所有请求、响应使用独立 Pydantic schema；UUID 路径参数继续使用项目当前校验方式；错误响应继续使用现有统一结构：
+
+```json
+{
+  "error": {
+    "code": "...",
+    "message": "...",
+    "details": null
+  }
+}
+```
+
+## 六、测试必须覆盖真实风险
+
+先更新测试设计，再编写测试。测试不得只断言状态码或字段存在，至少覆盖：
+
+### 单元/服务测试
+
+1. MockLLMClient 对普通维度和 OVERALL 返回严格合法结构。
+2. Evidence 候选只来自目标论文，Top-K 和三字段排序确定。
+3. Prompt 中 alias 映射稳定，包含安全边界，不包含未选 Evidence。
+4. 合法 JSON 解析成功。
+5. 非 JSON、代码围栏、额外字段、错误 dimension、rating 越界、confidence 越界、非法 finding_type、错误 overall_verdict 规则分别失败。
+6. 全部合法 alias 绑定为 VERIFIED；空引用、未知 alias、原始 UUID、合法与非法混合引用均为 UNVERIFIED 且无部分关联。
+
+### Docker/PostgreSQL API 集成测试
+
+1. 构造当前用户的 PARSED Paper 和真实 Evidence，POST 创建 REVIEW 任务返回 201/PENDING；后台执行后 GET task 为 SUCCEEDED/100。
+2. GET paper tasks 能看到该任务，GET reviews 返回 ReviewResult、VERIFIED Finding 和正确 evidence_ids。
+3. 多 dimension 请求生成对应数量和稳定顺序的 ReviewResult；OVERALL verdict 规则正确。
+4. PROCESSING/FAILED Paper 不能创建审阅任务，返回 `PAPER_NOT_READY`。
+5. PARSED 但没有 Evidence 的 Paper 返回 `NO_EVIDENCE`。
+6. 非法 task_type、空/重复/非法 dimensions、非法 language 被拒绝。
+7. 其他用户论文、任务、审阅结果不能被当前用户读取或触发。
+8. 注入返回未知 alias 的 Fake LLM：任务可以成功，数据库中 Finding 为 UNVERIFIED、没有关联行，公开 reviews 不返回该 Finding。
+9. 注入畸形 JSON 或第二个 dimension 失败的 Fake LLM：任务为 FAILED，error_message 不含注入的秘密字符串或内部路径，且数据库不存在本任务的任何部分 ReviewResult/Finding/关联行。
+10. UUID 非法路径继续返回统一 422；不存在资源返回约定的 404。
+11. 测试只使用 `paperlens_test`，结束后 14 张业务表无残留，开发库 papers 数量测试前后不变；Docker 全量必须 0 skipped。
+
+不要通过删除断言、放宽严格校验、条件 skip、吞异常、mock 掉持久化，或只测试服务不测试真实 API 来获得绿色结果。
+
+## 七、同步文档，但只宣称真实完成内容
+
+至少更新：
+
+- docs/api-contract.md
+- docs/IMPLEMENTATION_STATUS.md
+- docs/PROGRESS.md
+- README.md（如运行说明或端点列表受影响）
+- ProjectDocs/project-config.yaml
+- ProjectDocs/systemDesign 中与需求、架构、API、实施计划、需求规格和测试设计相关的文件
+- ProjectDocs/specs_SDD/PaperLens/spec.md
+- ProjectDocs/specs_SDD/PaperLens/tasks.md
+- ProjectDocs/specs_SDD/PaperLens/design/03-审阅生成.md
+- ProjectDocs/specs_SDD/PaperLens/design/09-API接口详细设计.md
+- ProjectDocs/sprint/审阅生成.md
+
+文档要求：
+
+1. 把实际完成的 4 个端点标为 CURRENT；取消任务继续 PLANNED；当前总实际端点写为 12。
+2. 明确 P3.1 使用确定性 Evidence 候选选择，不得声称 FAISS、Embedding、语义检索或真实 MaaS 已实现。
+3. P3-02 Prompt、P3-04 解析与绑定、P3-05 本轮 API 按真实完成情况更新；P3-01 必须区分“P3.1 确定性候选选择已完成”和“P3.2 语义检索未开始”；P3-03 MaaSLLMClient 保持未开始。
+4. `ProjectDocs/project-config.yaml` 完成后更新为“P3.1 已完成，P3.2 待开始”或语义等价状态。
+5. 记录真实测试命令、pass/skip 数量、Alembic 状态、开发库隔离结果；失败或未运行的命令必须如实写，不得复用 P2.5 历史数字。
+6. 不生成 bugfix 报告，不修改 AGENTS.md，不修改任何 skill 配置。
+7. 运行 `ProjectDocs/tools/check_markdown_links.ps1`，允许本轮新增链接导致总数变化，但坏路径和坏锚点必须都为 0。
+
+## 八、修改范围和保护规则
+
+允许修改：
+
+- backend/paperlens/core/config.py
+- backend/paperlens/core/enums.py
+- backend/paperlens/main.py
+- backend/paperlens/api/**
+- backend/paperlens/schemas/**
+- backend/paperlens/services/llm_client.py
+- backend/paperlens/services/ 中本轮新增审阅服务
+- backend/tests/**
+- README.md
+- docs/api-contract.md
+- docs/IMPLEMENTATION_STATUS.md
+- docs/PROGRESS.md
+- ProjectDocs/**（仅设计、SDD、Sprint、项目状态和现有只读检查器相关文档；不得改 skill）
+
+原则上禁止修改，除非先用实际证据证明契约无法由现有结构承载：
+
+- backend/paperlens/models/models.py
+- backend/alembic/**
+- backend/requirements.txt
+- backend/pyproject.toml
+- docker-compose.yml
+
+绝对禁止修改：
+
+- frontend/**
+- AGENTS.md
+- .arts/**
+- .codeartsdoer/**
+- .skills/**
+- .git/**
+- docs/CODEARTS_NEXT_PROMPT.md
+- docs/CODEARTS_PROMPT_ARCHIVE.md
+
+开始工作前分别记录两个 Codex 提示词文件的 SHA-256；它们可以作为既有未提交修改出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须完全相同。不得清理其他既有工作区修改。
+
+不要 git commit，不要执行 `docker compose down -v`，不要删除数据库 volume，不要清空或改写开发库，不要写入任何真实密钥。
+
+## 九、完成前的真实验收
+
+在 Docker 已运行的前提下，至少执行并报告：
+
+1. `docker compose ps`
+2. `docker compose config`
+3. `docker compose exec -T backend python -m pytest -q -rs`
+4. `docker compose exec -T backend alembic current`
+5. `docker compose exec -T backend alembic check`
+6. `docker compose exec -T frontend npm test -- --run`
+7. `docker compose exec -T frontend npm run build`
+8. `powershell -ExecutionPolicy Bypass -File ProjectDocs/tools/check_markdown_links.ps1`
+9. 从 route decorator 统计实际端点，必须为 12，并逐项列出新增 4 个端点。
+10. 从 SQLAlchemy metadata/模型重新确认仍为 14 张表；如果没有 schema 变化，明确说明未新增 migration 的理由。
+11. 核验 `paperlens_test` 测试后 14 张业务表无残留，开发库 papers 数量测试前后不变。
+12. `git diff --check`
+13. 对比开始前后两个提示词文件 SHA-256，必须不变。
+14. 审查最终 diff：不得包含 frontend、AGENTS.md、Docker 配置、依赖文件、Alembic、skill 目录或其他越界修改；如果确有必要修改“原则上禁止”文件，必须在最终报告给出不可替代的证据。
+
+如果 Docker 命令失败，不得伪造结果或改用历史数字；报告完整命令、退出码和真实错误，并继续完成不依赖该阻塞的静态检查。
+
+最终回复必须逐项报告：
+
+1. 实际使用了哪些 skill，以及各自更新了什么设计/测试/Sprint 内容。
+2. 新增和修改的代码文件。
+3. 4 个新增 API 的真实契约与当前总端点数。
+4. Evidence 候选顺序、alias、Prompt 和严格解析规则。
+5. VERIFIED/UNVERIFIED 绑定规则及公开过滤规则。
+6. 成功与失败事务如何保证没有部分审阅结果。
+7. 用户隔离、错误安全和无真实密钥/网络依赖的证据。
+8. 每条验收命令的实际退出码、passed/skipped/build/Alembic/Markdown 链接结果。
+9. 测试库清理和开发库未污染结果。
+10. 两个提示词文件 SHA-256 是否保持不变，以及最终修改范围。
+11. 明确本轮没有实现 FAISS、真实 LLM、取消任务、审阅前端、指标、实验分析或报告导出。
+12. 尚未完成的问题和建议的 P3.2 下一步，但不要自行进入 P3.2。
+~~~~
+
+---
+
+## 12 — P3.2 华为云优先的 Embedding 抽象与语义 Evidence 检索
+
+> 来源：Codex 在 P3.1 独立审查、直接修复并验收通过后生成（2026-07-13）
+> 状态：待用户提交给码道实施；完成后由 Codex 审查并在授权范围内直接修正。
+
+~~~~text
+继续维护 D:\shixi\PaperLens 项目。
+
+本轮定义为 P3.2：华为云优先的 Embedding 抽象与语义 Evidence 检索。P3.1 已完成 MockLLM 结构化审阅后端闭环并经 Codex 独立验收；当前真实基线为 Docker 后端 115 passed、0 skipped，P3.1 定向测试 53 passed，前端 15 passed 且构建成功，12 条 /api/v1 业务端点、14 张业务表，Alembic 位于 003 head 且 check 无差异，Markdown 链接 75/0/0。
+
+本轮目标是把 P3.1 的“固定排序取前 8 条 Evidence”升级为按审阅维度进行语义相关性检索，同时建立可替换的 EmbeddingClient。生产适配方向优先华为云 MaaS；默认本地和测试仍使用确定性的 MockEmbeddingClient，不调用真实网络、不要求用户提供密钥、不产生云费用。
+
+先完整阅读并以当前真实代码为准：
+
+- AGENTS.md
+- README.md
+- docs/PROGRESS.md
+- docs/IMPLEMENTATION_STATUS.md
+- docs/architecture.md
+- docs/api-contract.md
+- docs/data-model.md
+- backend/requirements.txt
+- backend/paperlens/core/config.py
+- backend/paperlens/core/errors.py
+- backend/paperlens/core/enums.py
+- backend/paperlens/models/models.py
+- backend/paperlens/services/llm_client.py
+- backend/paperlens/services/review_service.py
+- backend/paperlens/api/tasks.py
+- backend/tests/conftest.py
+- backend/tests/test_services/test_review_service.py
+- backend/tests/test_api/test_review_tasks.py
+- ProjectDocs/project-config.yaml
+- ProjectDocs/systemDesign/01-需求细化与决策发现.md
+- ProjectDocs/systemDesign/02-架构设计.md
+- ProjectDocs/systemDesign/03-数据模型设计.md
+- ProjectDocs/systemDesign/04-API接口设计.md
+- ProjectDocs/systemDesign/05-实施计划.md
+- ProjectDocs/systemDesign/06-需求规格说明.md
+- ProjectDocs/systemDesign/08-测试设计.md
+- ProjectDocs/specs_SDD/PaperLens/spec.md
+- ProjectDocs/specs_SDD/PaperLens/tasks.md
+- ProjectDocs/specs_SDD/PaperLens/design/02-证据提取与检索.md
+- ProjectDocs/specs_SDD/PaperLens/design/03-审阅生成.md
+- ProjectDocs/sprint/证据提取与检索.md
+- ProjectDocs/sprint/审阅生成.md
+
+必须遵守 AGENTS.md 的研发流程，按顺序实际使用并记录对应 skill：
+
+1. dev-process-framework：先更新 01～06 中与 Embedding、语义检索和华为云选型有关的需求、架构、实施计划与边界。
+2. fullstack-testing：先补充 08-测试设计.md 的 P3.2 测试矩阵，再写测试。
+3. function-detail：更新 SDD spec/design/tasks，使接口、算法、错误语义和验收标准可执行。
+4. sdd-workflow：更新“证据提取与检索”和“审阅生成”Sprint 的真实进度。
+5. 若实施中修复缺陷，使用 bug-fix-reporter 在 ProjectDocs/bugfix-report/ 生成对应报告。
+
+一、严格任务边界
+
+本轮只允许修改：
+
+- backend/paperlens/core/config.py
+- backend/paperlens/services/ 下与 Embedding、Evidence 检索、审阅集成直接相关的文件
+- backend/tests/ 下与 P3.2 直接相关的测试
+- README.md
+- docs/PROGRESS.md
+- docs/IMPLEMENTATION_STATUS.md
+- docs/architecture.md
+- 必要的 ProjectDocs/systemDesign、specs_SDD、sprint 和 bugfix-report 文档
+
+原则上不要修改 API 路由、请求/响应 schema、ORM 模型、Alembic、Docker、前端和依赖文件。当前 requirements.txt 已包含 httpx，标准库足以实现精确余弦相似度；本轮禁止新增 numpy、FAISS、pgvector 或其他第三方依赖。
+
+以下范围禁止修改、删除、还原或覆盖：
+
+- AGENTS.md
+- .arts/
+- .codeartsdoer/
+- .skills/
+- docs/CODEARTS_NEXT_PROMPT.md
+- docs/CODEARTS_PROMPT_ARCHIVE.md
+- docker-compose.yml
+- backend/alembic/
+- backend/requirements.txt
+- frontend/
+
+开始工作前先记录 `git status --short`，并分别记录两个 Codex 提示词文件的 SHA-256。它们可以作为既有未提交基线出现在 git diff 中，但本轮结束时 SHA-256 必须完全不变。不要清理或覆盖其他既有未提交修改。
+
+二、实现 EmbeddingClient 抽象
+
+新增独立的 Embedding 服务模块，例如 `backend/paperlens/services/embedding_client.py`。命名可按现有风格微调，但职责必须清晰。
+
+1. 定义同步、可替换的 EmbeddingClient 接口或 Protocol：
+
+   `embed(texts: list[str]) -> list[list[float]]`
+
+2. 输入和输出契约：
+
+   - 输入必须是非空文本列表；不得静默删除、重排或合并元素。
+   - 输出向量数量必须与输入数量完全一致，顺序一致。
+   - 每个向量必须非空、维度一致，只包含有限数值，不接受 NaN、Infinity、布尔值或字符串数值。
+   - 零范数向量必须作为明确错误处理，不能参与余弦计算后得到伪结果。
+   - 面向外部的错误不得泄漏 API Key、Authorization header、完整响应体、服务器路径或堆栈。
+
+3. 实现 `MockEmbeddingClient`：
+
+   - 完全离线、确定性、无全局可变替换器。
+   - 不得使用 Python 进程随机化的内置 `hash()`；使用 hashlib 或等价稳定算法。
+   - 同一文本跨实例、跨调用产生相同向量；不同文本通常可区分。
+   - 向量维度固定且经过归一化，适合精确余弦检索。
+   - 必须让测试可以构造可预测的语义排序；如果纯哈希不足以表达词项相关性，应使用确定性的词项 hashing/bag-of-words 方案，而不是返回与文本语义无关的随机向量。
+
+4. 工厂函数只根据配置创建默认客户端，不提供进程级 `set/reset` 可变单例。测试使用显式依赖注入、构造参数或受控 transport。
+
+三、实现华为云 MaaS Embedding 适配器
+
+实现 `HuaweiMaaSEmbeddingClient`，遵循华为云当前“创建文本向量化”接口契约：
+
+- 官方参考：https://support.huaweicloud.com/usermanual-maas/usermanual_maas_0029.html
+- 请求：`POST {base_url}/embeddings`
+- 默认 base_url：`https://api.modelarts-maas.com/v1`
+- Authorization：`Bearer <API Key>`
+- JSON 请求至少包含 `model`、`input`、`encoding_format: "float"`
+- 默认模型参数可设为 `bge-m3`，但必须可配置；自定义接入点模型名同样通过配置传入，禁止散落硬编码。
+
+在 Settings 中增加有类型和上下界的配置，环境变量沿用 `PAPERLENS_` 前缀，至少包括：
+
+- embedding_provider，默认 `mock`，只允许 `mock` 或 `huawei_maas`
+- embedding_base_url，默认官方 v1 base URL
+- embedding_model，默认 `bge-m3`
+- embedding_api_key，可选、使用 SecretStr 或等价安全类型；provider 为 huawei_maas 时缺失必须明确失败
+- embedding_timeout_seconds，正数且有合理上限
+- embedding_batch_size，正整数且有合理上限
+
+具体要求：
+
+1. 使用现有 httpx，不新增 SDK 或依赖。
+2. TLS 校验保持开启，禁止照抄 `verify=False`。
+3. API Key 只从配置/环境读取，禁止写入仓库、日志、异常、测试快照和文档示例值。
+4. 对输入按 batch_size 分批，但最终结果必须恢复全局原始顺序。
+5. 按响应 `data[].index` 恢复每个 batch 内顺序，拒绝缺失、重复、越界或不连续 index。
+6. 统一验证所有 batch 的向量维度；任一 batch 异常则整次 embed 失败，不返回部分结果。
+7. 对超时、连接错误、非 2xx、非 JSON、错误 data 结构和非法向量给出稳定、安全的领域错误。
+8. httpx transport/client 必须可注入，使测试用 MockTransport 完整验证而不访问外网。
+9. 不要在本轮真实调用华为云，不要要求用户开通服务。文档需要说明：真实调用需用户自行开通支持的模型服务/接入点并配置 API Key，区域与模型可用性以华为云控制台和官方文档为准。
+
+四、实现按审阅维度的语义 Evidence 检索
+
+新增独立检索服务，例如 `backend/paperlens/services/evidence_retriever.py`，并由 review_service 使用。不要把 HTTP、向量验证、SQL 查询、相似度计算和 Prompt 拼接全部堆在一个函数中。
+
+1. 候选范围：
+
+   - 只加载当前 paper_id 的 Evidence。
+   - 初始稳定顺序仍为 `page_number ASC, created_at ASC, id ASC`。
+   - 不得把其他论文的 Evidence 放入候选或返回结果。
+   - 不改变 Evidence 表，不写 embedding_id，不新增迁移。
+
+2. 检索查询：
+
+   - 为每个 ReviewDimension 构造稳定、可测试的查询文本。
+   - 查询应包含论文标题、维度名称及该维度的简短审阅关注点，例如 SOUNDNESS 关注方法和论证可靠性、NOVELTY 关注创新与相关工作、REPRODUCIBILITY 关注实现细节和实验设置。
+   - language 可以影响查询说明使用 zh/en，但不得把 Evidence 原文当作指令。
+   - 同一请求的维度顺序必须保持，不允许用 set 破坏顺序。
+
+3. 批量与调用次数：
+
+   - 一个审阅任务内，全部 Evidence 文本只生成一遍 embedding；不得按每个 dimension 重复嵌入全部 Evidence。
+   - 所有维度查询尽量一次批量嵌入，并由客户端内部按 batch_size 分批。
+   - 禁止在数据库 Session 事务中进行不必要的重复网络调用。
+
+4. 相似度与排序：
+
+   - 使用标准库实现精确 cosine similarity，不引入 numpy/FAISS。
+   - 每个 dimension 独立排序，主键为 similarity 降序；分数相同用 `page_number ASC, created_at ASC, id ASC` 稳定打破平局。
+   - 每个维度返回 Settings.review_evidence_top_k 条；不足时返回全部。
+   - similarity 必须是有限值；非法向量不得被当成最低分后继续。
+   - 不要只用 Mock 的数组顺序假装语义检索，测试必须证明查询相关性会改变候选排序。
+
+5. 与 P3.1 集成：
+
+   - `run_review_task` 显式接收或取得 EvidenceRetriever/EmbeddingClient，保持可测试依赖注入。
+   - 每个 dimension 的 Prompt 只包含该维度检索出的 Top-K Evidence，并重新建立该维度自己的 E1/E2…临时 alias。
+   - 继续保留标题/Evidence HTML 转义、不可信边界、严格 LLM 输出解析、同论文绑定、重复 alias 去重和 UNVERIFIED 不公开规则。
+   - 所有维度结果和 SUCCEEDED 状态仍在同一事务提交。
+   - Embedding 创建、响应校验或检索任一步失败时，任务应安全进入 FAILED，ReviewResult/ReviewFinding/关联必须为 0，错误信息不泄漏密钥或内部响应。
+   - 不改变现有 4 个审阅 API 的请求/响应契约和当前 12 条业务端点数量。
+
+五、测试先行并覆盖失败路径
+
+新增或更新测试，不能只测 happy path。至少覆盖：
+
+1. MockEmbeddingClient：同文本稳定、不同文本可区分、维度固定、有限、非零且归一化；相关词项能影响排序。
+2. Embedding 输出验证：空输入/空文本策略明确；数量不符、维度不一致、空向量、零向量、NaN、Infinity、布尔值、字符串数值均被拒绝。
+3. HuaweiMaaS：通过 httpx MockTransport 验证 URL、Bearer header、model/input/encoding_format、batch 分割和全局顺序；测试中不得真实联网。
+4. HuaweiMaaS 响应：按乱序 index 正确恢复；重复/缺失/越界 index、非 JSON、非 2xx、超时、连接失败、非法向量均安全失败。
+5. 密钥安全：异常字符串、任务 error_message 和日志捕获中不得出现测试 API Key、Authorization header 或完整服务响应体。
+6. 检索隔离：只返回同一 paper 的 Evidence；另一个 paper 即使更相似也不得进入候选。
+7. 检索排序：不同 dimension/query 可产生不同 Top-K；相同分数按 page/created_at/id 稳定排序；Top-K 上下界和不足 K 正确。
+8. 调用次数：多 dimension 任务中 Evidence embedding 不按维度重复，查询保持请求顺序。
+9. 审阅集成：每个 dimension 的 Prompt 只包含其检索结果；alias 从 E1 重新开始且稳定；LLM 引用正确绑定回真实 Evidence。
+10. 原子失败：Embedding 在首批、后续 batch 或查询阶段失败时任务 FAILED，所有审阅结果/发现/关联为 0，开发库不受测试污染。
+11. provider 配置：默认 mock 无网络；huawei_maas 缺少 key 明确失败；非法 provider 和越界 batch/timeout 返回配置校验错误。
+12. 现有 P3.1 严格类型、UUID4、用户隔离、Prompt 边界、UNVERIFIED 过滤和第二维失败回滚测试继续通过。
+
+测试不得使用全局 set/reset 客户端，不得依赖执行顺序，不得访问真实华为云。需要数据库的测试继续强制使用 paperlens_test，并在结束后验证所有业务表无测试残留；不要清理 paperlens 开发库已有数据。
+
+六、文档必须区分当前实现和后续规划
+
+按实际完成情况更新 README、docs/PROGRESS.md、docs/IMPLEMENTATION_STATUS.md、docs/architecture.md 以及相关 ProjectDocs：
+
+1. P3.2 CURRENT：EmbeddingClient、MockEmbeddingClient、HuaweiMaaSEmbeddingClient 配置适配器、精确余弦检索、按维度 Top-K、P3.1 集成。
+2. 默认运行态明确为 mock，不得声称已开通或真实调用华为云。
+3. 华为云方向明确为优先使用 MaaS 文本向量化 API；API Key 仅来自环境变量。
+4. 当前实现是任务内即时精确余弦检索，不是 FAISS/pgvector 持久化索引；PaperChunk.embedding_id 本轮不回填。
+5. FAISS/pgvector/华为云向量数据库、持久化缓存、增量索引和大规模检索继续标为 PLANNED，不得冒充已实现。
+6. P3.3 华为云真实生成式 LLM 适配器仍为 PLANNED，不要在本轮实现。
+7. 前端审阅展示、取消任务、Celery/Redis、指标提取、实验分析和报告导出继续为 PLANNED。
+8. Sprint 和 IMPLEMENTATION_STATUS 的测试数量必须按 pytest 实际 collection/result 填写，不得手算后冒充执行结果。
+9. docs/PROGRESS.md 追加 P3.2 的修改、验证命令、真实结果和已知边界，不得覆盖历史记录。
+10. 运行 `ProjectDocs/tools/check_markdown_links.ps1`，允许新增链接使总数变化，但坏路径和坏锚点必须都是 0。
+
+七、验收顺序
+
+完成实现后依次执行并记录真实退出码和输出：
+
+1. 对新增/修改 Python 文件运行 `python -m py_compile`。
+2. 在 Docker backend 内运行新增 P3.2 定向测试；报告 passed/failed/skipped。
+3. `docker compose exec -T backend python -m pytest -q -rs`，必须全量通过且 0 skipped。
+4. `docker compose exec -T backend alembic current`。
+5. `docker compose exec -T backend alembic check`，必须确认无模型差异。
+6. `npm test -- --run`，必须报告真实 passed 数量。
+7. `npm run build`，必须成功。
+8. `docker compose ps`，确认 backend/frontend 运行且 postgres healthy。
+9. 核对 `/api/v1` 业务端点仍为 12、ORM 业务表仍为 14。
+10. 运行 Markdown 链接检查器并报告本地链接/坏路径/坏锚点。
+11. `git diff --check`，必须无错误。
+12. 对禁止范围执行独立 diff 检查，证明没有修改前端、Docker、Alembic、依赖、skills 和 AGENTS。
+13. 比较两个 Codex 提示词文件开始前后的 SHA-256，必须完全不变。
+14. 检查测试库所有业务表无测试残留，并确认开发库 papers 数量与本轮测试前一致。
+
+如果 Docker、Node 或网络不可用，必须报告真实原因和完整命令，禁止把未执行写成通过。华为云真实网络测试本轮本来就禁止执行，不能将“未调用真实云”记为缺陷或 skip。
+
+八、最终回复必须逐项报告
+
+1. 实际调用的 skill 及对应更新文档。
+2. 新增/修改文件清单。
+3. EmbeddingClient、Mock 和 HuaweiMaaS 适配器的真实契约。
+4. 当前配置默认值、启用 huawei_maas 所需环境变量，但不得显示真实密钥。
+5. 语义检索查询、批量、相似度、稳定排序、Top-K 和同论文隔离实现。
+6. 与 P3.1 集成后每维 Prompt、alias、Evidence 绑定和事务失败行为。
+7. HuaweiMaaS MockTransport 测试、错误安全和无真实网络/费用的证据。
+8. 新增测试数量及定向、全量后端、前端测试和构建的实际结果。
+9. Alembic、Docker、端点、表、Markdown、diff check 结果。
+10. 测试库清理、开发库未污染和提示词 SHA-256 不变的证据。
+11. 明确本轮没有新增依赖/迁移，没有实现 FAISS/pgvector、真实生成式 LLM、前端审阅、取消任务或 P4～P6 功能。
+12. 尚未完成的问题和建议的 P3.3 下一步，但不要自行进入 P3.3。
+
+不要 git commit，不要删除数据库 volume，不写入任何真实密钥，不清理开发库已有数据，不要修改或还原 Codex 提示词文件。
 ~~~~

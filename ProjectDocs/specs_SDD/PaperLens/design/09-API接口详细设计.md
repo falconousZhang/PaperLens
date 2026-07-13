@@ -64,7 +64,9 @@
 
 ### 1.4 认证方式
 
-Bearer Token 认证: `Authorization: Bearer <token>`
+> 📋 **PLANNED**: Bearer/JWT 认证尚未实现。当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权。
+
+规划 Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 1.5 通用约定
 
@@ -76,14 +78,15 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 2.1 上传论文
 
-**接口**: `POST /api/v1/papers/upload`
+✅ **CURRENT**: `POST /api/v1/papers/upload`
 
 **请求类型**: `multipart/form-data`
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | file | File | 是 | PDF 文件，最大 50MB |
-| title | String | 否 | 论文标题（默认从 PDF 提取） |
+
+> **注意**: 当前实现仅接受 `file` 字段，无可选 `title` 参数。标题由清洗后的文件名 stem 自动生成。响应状态为 `PROCESSING`（非 `UPLOADING`）。
 
 **响应** `201`:
 
@@ -93,14 +96,14 @@ Bearer Token 认证: `Authorization: Bearer <token>`
   "title": "Attention Is All You Need",
   "filename": "attention.pdf",
   "file_size": 1048576,
-  "status": "UPLOADING",
+  "status": "PROCESSING",
   "created_at": "2026-07-12T10:00:00Z"
 }
 ```
 
 ### 2.2 获取论文列表
 
-**接口**: `GET /api/v1/papers`
+✅ **CURRENT**: `GET /api/v1/papers`
 
 **查询参数**:
 
@@ -132,7 +135,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 2.3 获取论文详情
 
-**接口**: `GET /api/v1/papers/{paper_id}`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}`
 
 **响应** `200`:
 
@@ -152,7 +155,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 2.4 删除论文
 
-**接口**: `DELETE /api/v1/papers/{paper_id}`
+📋 **PLANNED**: `DELETE /api/v1/papers/{paper_id}`
 
 **响应** `204`: 无内容
 
@@ -160,7 +163,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 3.1 获取章节结构
 
-**接口**: `GET /api/v1/papers/{paper_id}/sections`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/sections`
 
 **响应** `200`:
 
@@ -183,7 +186,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 3.2 获取页面内容
 
-**接口**: `GET /api/v1/papers/{paper_id}/pages/{page_number}`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/pages/{page_number}`
 
 **响应** `200`:
 
@@ -200,7 +203,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 3.3 获取表格列表
 
-**接口**: `GET /api/v1/papers/{paper_id}/tables`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/tables`
 
 **响应** `200`:
 
@@ -227,7 +230,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 4.1 创建分析任务
 
-**接口**: `POST /api/v1/papers/{paper_id}/tasks`
+✅ **CURRENT**: `POST /api/v1/papers/{paper_id}/tasks`（P3.1 仅支持 REVIEW）
 
 **请求参数**:
 
@@ -256,7 +259,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 4.2 获取任务列表
 
-**接口**: `GET /api/v1/papers/{paper_id}/tasks`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/tasks`
 
 **响应** `200`:
 
@@ -277,7 +280,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 4.3 获取任务详情
 
-**接口**: `GET /api/v1/tasks/{task_id}`
+✅ **CURRENT**: `GET /api/v1/tasks/{task_id}`
 
 **响应** `200`:
 
@@ -297,7 +300,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 4.4 取消任务
 
-**接口**: `POST /api/v1/tasks/{task_id}/cancel`
+📋 **PLANNED**: `POST /api/v1/tasks/{task_id}/cancel`
 
 **响应** `200`:
 
@@ -312,7 +315,9 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 5.1 获取审阅结果
 
-**接口**: `GET /api/v1/papers/{paper_id}/reviews`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/reviews`
+
+P3.1 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离的结果。公开 findings 仅包含 VERIFIED 项；UNVERIFIED 项不展示。Evidence 候选为确定性 Top-K，语义检索和真实云模型仍为 PLANNED。
 
 **响应** `200`:
 
@@ -347,14 +352,16 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 6.1 获取证据列表
 
-**接口**: `GET /api/v1/papers/{paper_id}/evidences`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/evidences`
+
+> **注意**: 当前实现不接受 `page_number` 或 `evidence_type` 过滤参数，返回该论文全部证据。
 
 **查询参数**:
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| page_number | Integer | 按页码过滤 |
-| evidence_type | String | TEXT / TABLE / FIGURE_CAPTION / EQUATION |
+| page_number | Integer | 📋 PLANNED: 按页码过滤 |
+| evidence_type | String | 📋 PLANNED: TEXT / TABLE / FIGURE_CAPTION / EQUATION |
 
 **响应** `200`:
 
@@ -381,7 +388,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 6.2 获取证据详情
 
-**接口**: `GET /api/v1/evidences/{evidence_id}`
+✅ **CURRENT**: `GET /api/v1/evidences/{evidence_id}`
 
 **响应** `200`: 同证据列表中的单条数据
 
@@ -389,7 +396,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 7.1 获取指标记录
 
-**接口**: `GET /api/v1/papers/{paper_id}/metrics`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/metrics`
 
 **查询参数**:
 
@@ -425,7 +432,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 8.1 上传实验数据文件
 
-**接口**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
+📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
 
 **请求类型**: `multipart/form-data`
 
@@ -452,7 +459,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 8.2 获取实验数据文件列表
 
-**接口**: `GET /api/v1/papers/{paper_id}/experiment-files`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/experiment-files`
 
 **响应** `200`:
 
@@ -472,7 +479,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 8.3 获取实验数据分析结果
 
-**接口**: `GET /api/v1/experiment-files/{file_id}/result`
+📋 **PLANNED**: `GET /api/v1/experiment-files/{file_id}/result`
 
 **响应** `200`:
 
@@ -507,7 +514,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 8.4 删除实验数据文件
 
-**接口**: `DELETE /api/v1/experiment-files/{file_id}`
+📋 **PLANNED**: `DELETE /api/v1/experiment-files/{file_id}`
 
 **响应** `204`: 无内容
 
@@ -515,7 +522,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 9.1 生成导出报告
 
-**接口**: `POST /api/v1/papers/{paper_id}/exports`
+📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/exports`
 
 **请求参数**:
 
@@ -541,7 +548,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 9.2 获取导出状态
 
-**接口**: `GET /api/v1/exports/{export_id}`
+📋 **PLANNED**: `GET /api/v1/exports/{export_id}`
 
 **响应** `200`:
 
@@ -559,7 +566,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 9.3 下载导出报告
 
-**接口**: `GET /api/v1/exports/{export_id}/download`
+📋 **PLANNED**: `GET /api/v1/exports/{export_id}/download`
 
 **响应** `200`: 文件流
 
@@ -567,7 +574,7 @@ Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 10.1 服务健康检查
 
-**接口**: `GET /api/v1/health`
+✅ **CURRENT**: `GET /api/v1/health`
 
 **响应** `200`:
 

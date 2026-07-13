@@ -70,6 +70,16 @@ class CheckpointType(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class ReviewDimension(StrEnum):
+    SOUNDNESS = "SOUNDNESS"
+    NOVELTY = "NOVELTY"
+    CLARITY = "CLARITY"
+    COMPLETENESS = "COMPLETENESS"
+    REPRODUCIBILITY = "REPRODUCIBILITY"
+    SIGNIFICANCE = "SIGNIFICANCE"
+    OVERALL = "OVERALL"
+
+
 class OverallVerdict(StrEnum):
     ACCEPT = "ACCEPT"
     WEAK_ACCEPT = "WEAK_ACCEPT"

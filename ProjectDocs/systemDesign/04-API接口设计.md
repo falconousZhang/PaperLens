@@ -7,7 +7,7 @@
 - **创建日期**: 2026-07-13
 - **最后更新**: 2026-07-13
 
-> **说明**: FastAPI 会自动生成 OpenAPI 文档，本文档定义核心接口规范和设计原则。详细接口定义请参考 FastAPI 自动生成的 API 文档（`/docs` 或 `/redoc`）。
+> **说明**: FastAPI 会自动生成 OpenAPI 文档，本文档定义核心接口规范和设计原则。当前 Swagger UI 为 `/api/docs`，OpenAPI Schema 为 `/api/openapi.json`，ReDoc 保持 FastAPI 默认地址 `/redoc`。
 
 ## 1. API设计规范
 
@@ -97,7 +97,9 @@
 
 ### 1.4 认证方式
 
-使用Bearer Token认证：
+> 📋 **PLANNED**: Bearer/JWT 认证尚未实现。当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权。
+
+规划使用 Bearer Token 认证：
 ```
 Authorization: Bearer <token>
 ```
@@ -112,14 +114,15 @@ Authorization: Bearer <token>
 
 ### 2.1 上传论文
 
-**接口**：`POST /api/v1/papers/upload`
+✅ **CURRENT**: `POST /api/v1/papers/upload`
 
 **请求类型**：`multipart/form-data`
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | file | File | 是 | PDF 文件，最大 50MB，仅支持包含可提取文本的 PDF |
-| title | String | 否 | 论文标题（默认从 PDF 提取） |
+
+> **注意**: 当前实现仅接受 `file` 字段，无可选 `title` 参数。标题由清洗后的文件名 stem 自动生成。响应状态为 `PROCESSING`（非 `UPLOADING`）。
 
 **响应** `201`：
 ```json
@@ -128,14 +131,14 @@ Authorization: Bearer <token>
   "title": "Attention Is All You Need",
   "filename": "attention.pdf",
   "file_size": 1048576,
-  "status": "UPLOADING",
+  "status": "PROCESSING",
   "created_at": "2026-07-12T10:00:00Z"
 }
 ```
 
 ### 2.2 获取论文列表
 
-**接口**：`GET /api/v1/papers`
+✅ **CURRENT**: `GET /api/v1/papers`
 
 **查询参数**：
 | 参数 | 类型 | 说明 |
@@ -165,7 +168,7 @@ Authorization: Bearer <token>
 
 ### 2.3 获取论文详情
 
-**接口**：`GET /api/v1/papers/{paper_id}`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}`
 
 **响应** `200`：
 ```json
@@ -184,7 +187,7 @@ Authorization: Bearer <token>
 
 ### 2.4 删除论文
 
-**接口**：`DELETE /api/v1/papers/{paper_id}`
+📋 **PLANNED**: `DELETE /api/v1/papers/{paper_id}`
 
 删除论文及其所有关联数据（页面、章节、分块、表格、证据、审阅结果、指标记录）。
 
@@ -194,7 +197,7 @@ Authorization: Bearer <token>
 
 ### 3.1 获取章节结构
 
-**接口**：`GET /api/v1/papers/{paper_id}/sections`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/sections`
 
 **响应** `200`：
 ```json
@@ -216,7 +219,7 @@ Authorization: Bearer <token>
 
 ### 3.2 获取页面内容
 
-**接口**：`GET /api/v1/papers/{paper_id}/pages/{page_number}`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/pages/{page_number}`
 
 **响应** `200`：
 ```json
@@ -232,7 +235,7 @@ Authorization: Bearer <token>
 
 ### 3.3 获取表格列表
 
-**接口**：`GET /api/v1/papers/{paper_id}/tables`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/tables`
 
 **响应** `200`：
 ```json
@@ -258,7 +261,7 @@ Authorization: Bearer <token>
 
 ### 4.1 创建分析任务
 
-**接口**：`POST /api/v1/papers/{paper_id}/tasks`
+✅ **CURRENT**: `POST /api/v1/papers/{paper_id}/tasks`（P3.1 仅支持 REVIEW）
 
 **请求参数**：
 ```json
@@ -273,8 +276,8 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| task_type | String | 是 | REVIEW / METRIC_EXTRACTION / EXPERIMENT_ANALYSIS |
-| options | Object | 否 | 任务选项 |
+| task_type | String | 是 | 当前仅支持 REVIEW；其他类型返回 422 / TASK_TYPE_NOT_SUPPORTED |
+| options | Object | 否 | 默认 dimensions=[OVERALL]、language=zh |
 
 **响应** `201`：
 ```json
@@ -290,7 +293,7 @@ Authorization: Bearer <token>
 
 ### 4.2 获取任务列表
 
-**接口**：`GET /api/v1/papers/{paper_id}/tasks`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/tasks`
 
 **响应** `200`：
 ```json
@@ -310,7 +313,7 @@ Authorization: Bearer <token>
 
 ### 4.3 获取任务详情
 
-**接口**：`GET /api/v1/tasks/{task_id}`
+✅ **CURRENT**: `GET /api/v1/tasks/{task_id}`
 
 用于 HTTP 轮询任务进度。
 
@@ -331,7 +334,7 @@ Authorization: Bearer <token>
 
 ### 4.4 取消任务
 
-**接口**：`POST /api/v1/tasks/{task_id}/cancel`
+📋 **PLANNED**: `POST /api/v1/tasks/{task_id}/cancel`
 
 **响应** `200`：
 ```json
@@ -345,9 +348,9 @@ Authorization: Bearer <token>
 
 ### 5.1 获取审阅结果
 
-**接口**：`GET /api/v1/papers/{paper_id}/reviews`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/reviews`
 
-一个任务可产生多个 ReviewResult（按维度），每个 ReviewResult 包含多个 ReviewFinding。
+一个任务可产生多个 ReviewResult（按请求维度稳定持久化），每个 ReviewResult 包含多个 ReviewFinding。公开响应仅返回 `VERIFIED` Finding；`UNVERIFIED` Finding 保留在数据库用于审计但不展示。P3.1 使用确定性 Top-K Evidence 候选，FAISS/Embedding 仍为 PLANNED。
 
 **响应** `200`：
 ```json
@@ -399,15 +402,17 @@ Authorization: Bearer <token>
 
 ### 6.1 获取证据列表
 
-**接口**：`GET /api/v1/papers/{paper_id}/evidences`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/evidences`
 
 Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
+
+> **注意**: 当前实现不接受 `page_number` 或 `evidence_type` 过滤参数，返回该论文全部证据。
 
 **查询参数**：
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| page_number | Integer | 按页码过滤 |
-| evidence_type | String | 按类型过滤：TEXT / TABLE / FIGURE_CAPTION / EQUATION |
+| page_number | Integer | 📋 PLANNED: 按页码过滤 |
+| evidence_type | String | 📋 PLANNED: 按类型过滤：TEXT / TABLE / FIGURE_CAPTION / EQUATION |
 
 **响应** `200`：
 ```json
@@ -433,7 +438,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 6.2 获取证据详情
 
-**接口**：`GET /api/v1/evidences/{evidence_id}`
+✅ **CURRENT**: `GET /api/v1/evidences/{evidence_id}`
 
 含页面内定位信息，用于前端高亮跳转。
 
@@ -459,7 +464,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 7.1 获取指标记录
 
-**接口**：`GET /api/v1/papers/{paper_id}/metrics`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/metrics`
 
 **查询参数**：
 | 参数 | 类型 | 说明 |
@@ -493,7 +498,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 8.1 上传实验数据文件
 
-**接口**：`POST /api/v1/papers/{paper_id}/experiment-files/upload`
+📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
 
 **请求类型**：`multipart/form-data`
 
@@ -519,7 +524,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 8.2 获取实验数据文件列表
 
-**接口**：`GET /api/v1/papers/{paper_id}/experiment-files`
+📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/experiment-files`
 
 **响应** `200`：
 ```json
@@ -538,7 +543,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 8.3 获取实验数据分析结果
 
-**接口**：`GET /api/v1/experiment-files/{file_id}/result`
+📋 **PLANNED**: `GET /api/v1/experiment-files/{file_id}/result`
 
 **响应** `200`：
 ```json
@@ -572,7 +577,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 8.4 删除实验数据文件
 
-**接口**：`DELETE /api/v1/experiment-files/{file_id}`
+📋 **PLANNED**: `DELETE /api/v1/experiment-files/{file_id}`
 
 删除实验数据文件及其分析结果。
 
@@ -582,7 +587,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 9.1 生成导出报告
 
-**接口**：`POST /api/v1/papers/{paper_id}/exports`
+📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/exports`
 
 **请求参数**：
 ```json
@@ -613,7 +618,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 9.2 获取导出状态
 
-**接口**：`GET /api/v1/exports/{export_id}`
+📋 **PLANNED**: `GET /api/v1/exports/{export_id}`
 
 用于 HTTP 轮询导出进度。
 
@@ -632,7 +637,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 9.3 下载导出报告
 
-**接口**：`GET /api/v1/exports/{export_id}/download`
+📋 **PLANNED**: `GET /api/v1/exports/{export_id}/download`
 
 **响应** `200`：文件流（Content-Type 根据 report_type 确定）
 
@@ -640,7 +645,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 10.1 服务健康检查
 
-**接口**：`GET /api/v1/health`
+✅ **CURRENT**: `GET /api/v1/health`
 
 **响应** `200`：
 ```json
@@ -688,9 +693,9 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 ### 12.1 OpenAPI文档
 
 FastAPI 自动生成以下文档：
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
-- OpenAPI JSON: `/openapi.json`
+- Swagger UI: `/api/docs`
+- ReDoc: `/api/redoc`
+- OpenAPI JSON: `/api/openapi.json`
 
 ### 12.2 接口版本管理
 

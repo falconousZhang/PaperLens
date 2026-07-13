@@ -3,7 +3,7 @@
 ## 通用约定
 
 - 基础路径：`/api/v1`
-- 认证：Bearer Token（JWT）
+- 认证：当前使用配置项 `DEMO_USER_ID` 做数据隔离；Bearer Token（JWT）为后续计划
 - 分页：`?page=1&page_size=20`
 - 时间格式：ISO 8601（`2026-07-12T10:30:00Z`）
 - 错误响应格式：
@@ -171,7 +171,11 @@
 
 ## 3. 分析任务
 
+> P3.1 CURRENT：当前仅支持 `task_type=REVIEW`，使用 FastAPI BackgroundTasks 和 MockLLMClient。`METRIC_EXTRACTION`、`EXPERIMENT_ANALYSIS` 与任务取消仍为规划功能。
+
 ### POST /papers/{paper_id}/tasks
+✅ **CURRENT**
+
 创建分析任务。
 
 **请求**：
@@ -187,8 +191,8 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| task_type | String | 是 | REVIEW / METRIC_EXTRACTION / EXPERIMENT_ANALYSIS |
-| options | Object | 否 | 任务选项 |
+| task_type | String | 是 | 当前仅支持 REVIEW；其他类型返回 `TASK_TYPE_NOT_SUPPORTED` |
+| options | Object | 否 | 默认 dimensions=[OVERALL]、language=zh |
 
 **响应** `201`：
 ```json
@@ -203,6 +207,8 @@
 ```
 
 ### GET /papers/{paper_id}/tasks
+✅ **CURRENT**
+
 获取论文的分析任务列表。
 
 **响应** `200`：
@@ -222,6 +228,8 @@
 ```
 
 ### GET /tasks/{task_id}
+✅ **CURRENT**
+
 获取任务详情（含进度，用于 HTTP 轮询）。
 
 **响应** `200`：
@@ -240,6 +248,8 @@
 ```
 
 ### POST /tasks/{task_id}/cancel
+📋 **PLANNED**
+
 取消正在运行的任务。
 
 **响应** `200`：
@@ -253,7 +263,11 @@
 ## 4. 审阅结果
 
 ### GET /papers/{paper_id}/reviews
+✅ **CURRENT**
+
 获取论文的审阅结果。一个任务可产生多个 ReviewResult（按维度），每个 ReviewResult 包含多个 ReviewFinding。
+
+当前公开响应只返回 `VERIFIED` Finding；引用为空、未知 alias、原始 UUID 或混合非法引用的 Finding 保存为 `UNVERIFIED` 且不展示。P3.1 使用同论文 Evidence 的确定性 Top-K 候选，FAISS/Embedding 语义检索仍为规划。
 
 **响应** `200`：
 ```json
@@ -311,6 +325,8 @@
 |------|------|------|
 | page_number | Integer | 按页码过滤 |
 | evidence_type | String | 按类型过滤：TEXT / TABLE / FIGURE_CAPTION / EQUATION |
+
+> 当前实现暂不接受上述过滤参数，返回论文全部 Evidence；过滤功能为后续计划。
 
 **响应** `200`：
 ```json

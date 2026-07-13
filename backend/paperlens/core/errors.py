@@ -8,6 +8,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 logger = logging.getLogger(__name__)
 
 
+def _json_safe(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
 class AppError(Exception):
     def __init__(self, code: str, message: str, status_code: int = 400, details=None):
         self.code = code
@@ -32,7 +42,7 @@ async def http_exception_handler(_request: Request, exc: StarletteHTTPException)
 
 
 async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
-    details = exc.errors()
+    details = _json_safe(exc.errors())
     messages = []
     for d in details:
         loc = ".".join(str(x) for x in d.get("loc", []))

@@ -50,8 +50,8 @@ graph TB
 | 层次 | 技术选型 | 版本 | 说明 |
 |------|----------|------|------|
 | 前端框架 | Vue3 + TypeScript | 3.x | 组合式 API + `<script setup>` |
-| UI 组件库 | Element Plus | - | PC 端组件库 |
-| 状态管理 | Pinia | 2.x | Vue3 官方推荐 |
+| UI 组件库 | Element Plus | - | PC 端组件库（📋 PLANNED，尚未引入） |
+| 状态管理 | Pinia | 3.x | Vue3 官方推荐 |
 | HTTP 客户端 | Axios | - | API 请求封装 |
 | 后端框架 | FastAPI | 0.100+ | 异步 Python Web 框架 |
 | ORM | SQLAlchemy | 2.x | 声明式 ORM + Alembic 迁移 |
@@ -161,7 +161,7 @@ class OBSStorage(StorageBackend):
 |------|------|----------|----------|
 | 01 | 论文上传与解析 | [01-论文上传与解析.md](01-论文上传与解析.md) | 已实现 |
 | 02 | 证据提取与检索 | [02-证据提取与检索.md](02-证据提取与检索.md) | 部分实现 |
-| 03 | 审阅生成 | [03-审阅生成.md](03-审阅生成.md) | 规划 |
+| 03 | 审阅生成 | [03-审阅生成.md](03-审阅生成.md) | P3.1 后端已实现；语义检索/真实模型/前端规划 |
 | 04 | 指标提取与口径判断 | [04-指标提取与口径判断.md](04-指标提取与口径判断.md) | 规划 |
 | 05 | 实验数据分析 | [05-实验数据分析.md](05-实验数据分析.md) | 规划 |
 | 06 | 报告导出 | [06-报告导出.md](06-报告导出.md) | 规划 |
@@ -211,13 +211,13 @@ sequenceDiagram
 ### 7.2 数据安全
 
 - 用户数据隔离（user_id 过滤）
-- SHA-256 文件哈希去重
+- SHA-256 文件哈希计算与存储（去重/复用逻辑 📋 PLANNED）
 - HTTPS 传输加密（云端部署）
 - SQL 注入防护（ORM 参数化查询）
 
 ### 7.3 认证安全
 
-- Bearer Token（JWT）认证
+- Bearer Token（JWT）认证（📋 PLANNED: 当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权）
 - MVP 阶段使用简单 Token
 - 后续版本集成 IAM / JWT
 
