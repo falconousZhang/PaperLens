@@ -11,20 +11,37 @@
 {
   "error": {
     "code": "INVALID_FILE_TYPE",
-    "message": "Only PDF files are accepted"
+    "message": "Only PDF files are accepted",
+    "details": null
   }
 }
 ```
 
+`details` 字段：`null` 或数组。当存在多个验证错误时返回数组：
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": [
+      {"field": "task_type", "message": "Invalid task type"},
+      {"field": "options.language", "message": "Unsupported language"}
+    ]
+  }
+}
+```
+
+- UUID 路径参数：当 `{paper_id}`、`{task_id}`、`{evidence_id}` 等为无效 UUID 格式时，返回 `422 Unprocessable Entity`
+
 ## 1. 论文管理
 
 ### POST /papers/upload
-上传论文 PDF。
+上传论文 PDF（multipart 流式上传，最大 50MB）。
 
 **请求**：`multipart/form-data`
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| file | File | 是 | PDF 文件，最大 50MB |
+| file | File | 是 | PDF 文件，最大 50MB，仅支持包含可提取文本的 PDF |
 | title | String | 否 | 论文标题（默认从 PDF 提取） |
 
 **响应** `201`：
@@ -47,7 +64,7 @@
 |------|------|------|
 | page | Integer | 页码，默认 1 |
 | page_size | Integer | 每页数量，默认 20 |
-| status | String | 过滤状态：UPLOADING / PARSED / FAILED |
+| status | String | 过滤状态：UPLOADING / PROCESSING / PARSED / FAILED |
 
 **响应** `200`：
 ```json
@@ -80,13 +97,14 @@
   "file_size": 1048576,
   "page_count": 12,
   "status": "PARSED",
+  "error_message": null,
   "created_at": "2026-07-12T10:00:00Z",
   "updated_at": "2026-07-12T10:05:00Z"
 }
 ```
 
 ### DELETE /papers/{paper_id}
-删除论文及其所有关联数据（页面、章节、分块、证据、审阅结果、指标记录）。
+删除论文及其所有关联数据（页面、章节、分块、表格、证据、审阅结果、指标记录）。
 
 **响应** `204`：无内容
 
@@ -122,8 +140,32 @@
   "id": "uuid",
   "page_number": 1,
   "text_content": "...",
+  "normalized_text_content": "...",
   "width": 612.0,
   "height": 792.0
+}
+```
+
+### GET /papers/{paper_id}/tables
+获取论文表格列表。
+
+**响应** `200`：
+```json
+{
+  "tables": [
+    {
+      "id": "uuid",
+      "page_number": 5,
+      "table_index": 1,
+      "caption": "Table 1: Main results on SQuAD 2.0",
+      "bbox_x0": 72.0,
+      "bbox_y0": 200.0,
+      "bbox_x1": 540.0,
+      "bbox_y1": 450.0,
+      "structured_data": { ... },
+      "raw_text": "Model | EM | F1\nBERT | 86.1 | 88.7"
+    }
+  ]
 }
 ```
 
@@ -180,7 +222,7 @@
 ```
 
 ### GET /tasks/{task_id}
-获取任务详情（含进度）。
+获取任务详情（含进度，用于 HTTP 轮询）。
 
 **响应** `200`：
 ```json
@@ -211,7 +253,7 @@
 ## 4. 审阅结果
 
 ### GET /papers/{paper_id}/reviews
-获取论文的审阅结果。
+获取论文的审阅结果。一个任务可产生多个 ReviewResult（按维度），每个 ReviewResult 包含多个 ReviewFinding。
 
 **响应** `200`：
 ```json
@@ -219,51 +261,101 @@
   "reviews": [
     {
       "id": "uuid",
+      "task_id": "uuid",
       "dimension": "SOUNDNESS",
       "rating": 4,
       "summary": "The methodology is sound and well-justified.",
-      "strengths": [
+      "overall_verdict": null,
+      "findings": [
         {
+          "id": "uuid",
+          "finding_type": "STRENGTH",
           "content": "Clear experimental setup with proper baselines.",
+          "confidence": 0.92,
+          "verification_status": "VERIFIED",
+          "sequence": 1,
           "evidence_ids": ["uuid-e1", "uuid-e2"]
-        }
-      ],
-      "weaknesses": [
+        },
         {
+          "id": "uuid",
+          "finding_type": "WEAKNESS",
           "content": "Limited dataset diversity.",
+          "confidence": 0.85,
+          "verification_status": "VERIFIED",
+          "sequence": 2,
           "evidence_ids": ["uuid-e3"]
-        }
-      ],
-      "suggestions": [
+        },
         {
+          "id": "uuid",
+          "finding_type": "SUGGESTION",
           "content": "Consider evaluating on additional benchmarks.",
+          "confidence": 0.78,
+          "verification_status": "VERIFIED",
+          "sequence": 3,
           "evidence_ids": ["uuid-e3"]
         }
       ],
-      "overall_verdict": "WEAK_ACCEPT",
       "created_at": "2026-07-12T10:35:00Z"
     }
   ]
 }
 ```
 
+## 5. 证据
+
+### GET /papers/{paper_id}/evidences
+获取论文的证据列表。Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
+
+**查询参数**：
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| page_number | Integer | 按页码过滤 |
+| evidence_type | String | 按类型过滤：TEXT / TABLE / FIGURE_CAPTION / EQUATION |
+
+**响应** `200`：
+```json
+{
+  "evidences": [
+    {
+      "id": "uuid",
+      "quoted_text": "Our model achieves 89.1% accuracy on SQuAD...",
+      "page_number": 7,
+      "bbox_x0": 72.0,
+      "bbox_y0": 350.0,
+      "bbox_x1": 540.0,
+      "bbox_y1": 380.0,
+      "char_start": 1420,
+      "char_end": 1498,
+      "evidence_type": "TEXT",
+      "section_id": "uuid",
+      "chunk_id": "uuid"
+    }
+  ]
+}
+```
+
 ### GET /evidences/{evidence_id}
-获取证据详情（用于前端高亮定位）。
+获取证据详情（含页面内定位信息，用于前端高亮跳转）。
 
 **响应** `200`：
 ```json
 {
   "id": "uuid",
-  "content": "Our model achieves 89.1% accuracy on SQuAD...",
+  "quoted_text": "Our model achieves 89.1% accuracy on SQuAD...",
   "page_number": 7,
-  "location_desc": "Section 4.2, Paragraph 2",
+  "bbox_x0": 72.0,
+  "bbox_y0": 350.0,
+  "bbox_x1": 540.0,
+  "bbox_y1": 380.0,
+  "char_start": 1420,
+  "char_end": 1498,
   "evidence_type": "TEXT",
   "section_id": "uuid",
   "chunk_id": "uuid"
 }
 ```
 
-## 5. 实验指标
+## 6. 实验指标
 
 ### GET /papers/{paper_id}/metrics
 获取论文的实验指标记录。
@@ -289,14 +381,14 @@
       "checkpoint_source": "TABLE_HEADER",
       "evidence_id": "uuid",
       "raw_text": "BERT-base 83.1 79.0",
-      "table_id": "table-3",
+      "table_id": "uuid",
       "row_index": 2
     }
   ]
 }
 ```
 
-## 6. 实验数据文件
+## 7. 实验数据文件
 
 ### POST /papers/{paper_id}/experiment-files/upload
 上传实验数据文件（CSV/Excel）。
@@ -378,7 +470,7 @@
 
 **响应** `204`：无内容
 
-## 7. 报告导出
+## 8. 报告导出
 
 ### POST /papers/{paper_id}/exports
 生成导出报告。
@@ -405,13 +497,13 @@
 {
   "id": "uuid",
   "report_type": "MARKDOWN",
-  "status": "GENERATING",
+  "status": "PENDING",
   "created_at": "2026-07-12T12:00:00Z"
 }
 ```
 
 ### GET /exports/{export_id}
-获取导出状态。
+获取导出状态（用于 HTTP 轮询）。
 
 **响应** `200`：
 ```json
@@ -420,7 +512,9 @@
   "report_type": "MARKDOWN",
   "status": "READY",
   "file_size": 20480,
-  "created_at": "2026-07-12T12:00:00Z"
+  "error_message": null,
+  "created_at": "2026-07-12T12:00:00Z",
+  "completed_at": "2026-07-12T12:01:00Z"
 }
 ```
 
@@ -429,9 +523,9 @@
 
 **响应** `200`：文件流（Content-Type 根据 report_type 确定）
 
-## 8. 健康检查
+## 9. 健康检查
 
-### GET /health
+### GET /api/v1/health
 服务健康检查。
 
 **响应** `200`：
@@ -455,6 +549,6 @@
 | 404 | 资源不存在 |
 | 413 | 文件过大 |
 | 415 | 不支持的文件类型 |
-| 422 | 请求体验证失败 |
+| 422 | 请求体验证失败（含无效 UUID 路径参数） |
 | 429 | 请求频率过高 |
 | 500 | 服务器内部错误 |

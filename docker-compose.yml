@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: paperlens
+      POSTGRES_PASSWORD: paperlens
+      POSTGRES_DB: paperlens
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperlens"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      PAPERLENS_DATABASE_URL: postgresql+psycopg2://paperlens:paperlens@postgres:5432/paperlens
+      PAPERLENS_TEST_DATABASE_URL: postgresql+psycopg2://paperlens:paperlens@postgres:5432/paperlens_test
+      PAPERLENS_LLM_BACKEND: mock
+      PAPERLENS_DEBUG: "true"
+      PAPERLENS_STORAGE_BACKEND: local
+      PAPERLENS_STORAGE_ROOT: /app/data
+      PAPERLENS_DEMO_USER_ID: demo-user
+      PAPERLENS_DB_HOST: postgres
+      PAPERLENS_REQUIRE_TEST_DB: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  backend_data:

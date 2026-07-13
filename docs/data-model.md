@@ -6,14 +6,16 @@
 Paper 1──N PaperPage
 Paper 1──N PaperSection
 Paper 1──N PaperChunk
+Paper 1──N PaperTable
 Paper 1──N Evidence
 Paper 1──N AnalysisTask
 Paper 1──N ExperimentFile
-AnalysisTask 1──1 ReviewResult
-AnalysisTask 1──N MetricRecord
-ExperimentFile 1──1 ExperimentResult
 Paper 1──N ExportReport
-ReviewResult N──N Evidence (通过 review_evidence 关联表)
+AnalysisTask 1──N ReviewResult
+AnalysisTask 1──N MetricRecord
+ReviewResult 1──N ReviewFinding
+ReviewFinding N──N Evidence (通过 finding_evidence 关联表)
+ExperimentFile 1──1 ExperimentResult
 ```
 
 ## 1. Paper
@@ -25,11 +27,11 @@ ReviewResult N──N Evidence (通过 review_evidence 关联表)
 | id | UUID | PK | 主键 |
 | title | VARCHAR(500) | NOT NULL | 论文标题（从 PDF 提取或用户填写） |
 | filename | VARCHAR(255) | NOT NULL | 原始文件名 |
-| obs_key | VARCHAR(1024) | NOT NULL | OBS 存储路径 |
+| storage_key | VARCHAR(1024) | NOT NULL | 存储路径，格式：papers/{paper_uuid}/source.pdf |
 | file_size | BIGINT | NOT NULL | 文件大小（字节） |
 | file_hash | VARCHAR(64) | NOT NULL | SHA-256 文件哈希（去重） |
 | page_count | INTEGER | | 页数 |
-| status | VARCHAR(20) | NOT NULL | UPLOADING / PARSED / FAILED |
+| status | VARCHAR(20) | NOT NULL | UPLOADING / PROCESSING / PARSED / FAILED |
 | user_id | VARCHAR(128) | NOT NULL | 所属用户 |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
 | updated_at | TIMESTAMP | NOT NULL | 更新时间 |
@@ -49,9 +51,10 @@ ReviewResult N──N Evidence (通过 review_evidence 关联表)
 | paper_id | UUID | FK → Paper.id | 所属论文 |
 | page_number | INTEGER | NOT NULL | 页码（从 1 开始） |
 | text_content | TEXT | | 页面纯文本内容 |
+| normalized_text_content | TEXT | | 页面归一化文本（空白字符合并） |
 | width | FLOAT | | 页面宽度（pt） |
 | height | FLOAT | | 页面高度（pt） |
-| obs_key | VARCHAR(1024) | | 页面图片 OBS 路径（可选） |
+| storage_key | VARCHAR(1024) | | 页面图片存储路径（可选，预留） |
 
 索引：
 - `idx_paper_page_paper_id` ON (paper_id, page_number) UNIQUE
@@ -93,9 +96,30 @@ ReviewResult N──N Evidence (通过 review_evidence 关联表)
 索引：
 - `idx_paper_chunk_paper_id` ON (paper_id, chunk_index) UNIQUE
 
-## 5. Evidence
+## 5. PaperTable
 
-原文证据，审阅结论的依据。
+论文表格实体，记录从 PDF 中提取的表格。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | UUID | PK | 主键 |
+| paper_id | UUID | FK → Paper.id | 所属论文 |
+| page_number | INTEGER | NOT NULL | 所在页码 |
+| table_index | INTEGER | NOT NULL | 页内表格序号（从 1 开始） |
+| caption | VARCHAR(500) | | 表格标题 |
+| bbox_x0 | FLOAT | | 表格边界框左上角 X |
+| bbox_y0 | FLOAT | | 表格边界框左上角 Y |
+| bbox_x1 | FLOAT | | 表格边界框右下角 X |
+| bbox_y1 | FLOAT | | 表格边界框右下角 Y |
+| structured_data | JSONB | | 结构化表格数据（行列形式） |
+| raw_text | TEXT | | 表格原始文本（兜底） |
+
+索引：
+- `idx_paper_table_paper_id` ON (paper_id, page_number, table_index) UNIQUE
+
+## 6. Evidence
+
+原文证据，审阅结论的依据。Evidence 为页内定位（page-local），基于 PyMuPDF block 提取，使用真实 bbox 坐标。不涉及跨页 span。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -103,17 +127,23 @@ ReviewResult N──N Evidence (通过 review_evidence 关联表)
 | paper_id | UUID | FK → Paper.id | 所属论文 |
 | chunk_id | UUID | FK → PaperChunk.id | 来源文本块 |
 | section_id | UUID | FK → PaperSection.id | 来源章节 |
-| content | TEXT | NOT NULL | 证据原文内容 |
-| page_number | INTEGER | | 所在页码 |
-| location_desc | VARCHAR(500) | | 位置描述（如 "Table 3, Row 2"） |
+| quoted_text | TEXT | NOT NULL | 证据原文引用文本 |
+| page_number | INTEGER | NOT NULL | 所在页码 |
+| bbox_x0 | FLOAT | | 证据区域左上角 X（pt） |
+| bbox_y0 | FLOAT | | 证据区域左上角 Y（pt） |
+| bbox_x1 | FLOAT | | 证据区域右下角 X（pt） |
+| bbox_y1 | FLOAT | | 证据区域右下角 Y（pt） |
+| char_start | INTEGER | | 在页面文本中的起始字符偏移 |
+| char_end | INTEGER | | 在页面文本中的结束字符偏移 |
 | evidence_type | VARCHAR(30) | NOT NULL | TEXT / TABLE / FIGURE_CAPTION / EQUATION |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
 
 索引：
 - `idx_evidence_paper_id` ON (paper_id)
 - `idx_evidence_chunk_id` ON (chunk_id)
+- `idx_evidence_page` ON (paper_id, page_number)
 
-## 6. AnalysisTask
+## 7. AnalysisTask
 
 分析任务，记录后台处理任务的状态。
 
@@ -135,49 +165,56 @@ ReviewResult N──N Evidence (通过 review_evidence 关联表)
 - `idx_task_status` ON (status)
 - `idx_task_user_id` ON (user_id)
 
-## 7. ReviewResult
+## 8. ReviewResult
 
-审阅结果，每条审阅意见绑定 Evidence。
+审阅结果，按维度组织。一个 AnalysisTask 可产生多个 ReviewResult（每个维度一个）。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | UUID | PK | 主键 |
-| task_id | UUID | FK → AnalysisTask.id, UNIQUE | 关联任务 |
+| task_id | UUID | FK → AnalysisTask.id | 关联任务 |
 | paper_id | UUID | FK → Paper.id | 关联论文 |
-| dimension | VARCHAR(50) | NOT NULL | 审阅维度：SOUNDNESS / NOVELTY / CLARITY / COMPLETENESS / REPRODUCIBILITY / SIGNIFICANCE / OTHER |
+| dimension | VARCHAR(50) | NOT NULL | 审阅维度：SOUNDNESS / NOVELTY / CLARITY / COMPLETENESS / REPRODUCIBILITY / SIGNIFICANCE / OVERALL / OTHER |
 | rating | INTEGER | | 评分 1-5 |
-| summary | TEXT | | 总体评价 |
-| strengths | JSONB | | 优点列表，每项含 content + evidence_ids |
-| weaknesses | JSONB | | 缺点列表，每项含 content + evidence_ids |
-| suggestions | JSONB | | 改进建议列表，每项含 content + evidence_ids |
-| overall_verdict | VARCHAR(20) | | ACCEPT / WEAK_ACCEPT / BORDERLINE / WEAK_REJECT / REJECT |
+| summary | TEXT | | 该维度的总体评价 |
+| overall_verdict | VARCHAR(20) | | ACCEPT / WEAK_ACCEPT / BORDERLINE / WEAK_REJECT / REJECT（仅 OVERALL 维度使用） |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
 
-JSONB 结构示例（strengths/weaknesses/suggestions）：
-```json
-[
-  {
-    "content": "The proposed method achieves significant improvement on Dataset A.",
-    "evidence_ids": ["uuid-1", "uuid-2"]
-  }
-]
-```
-
 索引：
+- `idx_review_task_id` ON (task_id)
 - `idx_review_paper_id` ON (paper_id)
-- `idx_review_task_id` ON (task_id) UNIQUE
+- `idx_review_dimension` ON (task_id, dimension) UNIQUE
 
-### review_evidence 关联表
+## 9. ReviewFinding
+
+审阅发现，每条发现绑定 Evidence。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| review_id | UUID | FK → ReviewResult.id | 审阅结果 |
+| id | UUID | PK | 主键 |
+| review_id | UUID | FK → ReviewResult.id | 所属审阅结果 |
+| finding_type | VARCHAR(20) | NOT NULL | STRENGTH / WEAKNESS / SUGGESTION |
+| content | TEXT | NOT NULL | 发现内容 |
+| confidence | FLOAT | | 置信度 0.0-1.0 |
+| verification_status | VARCHAR(20) | NOT NULL DEFAULT PENDING | VERIFIED / UNVERIFIED / PENDING |
+| sequence | INTEGER | NOT NULL | 排序序号 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+
+索引：
+- `idx_finding_review_id` ON (review_id, sequence)
+- `idx_finding_type` ON (review_id, finding_type)
+
+### finding_evidence 关联表
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| finding_id | UUID | FK → ReviewFinding.id | 审阅发现 |
 | evidence_id | UUID | FK → Evidence.id | 证据 |
 
 索引：
-- `idx_review_evidence` ON (review_id, evidence_id) UNIQUE
+- `idx_finding_evidence` ON (finding_id, evidence_id) UNIQUE
 
-## 8. MetricRecord
+## 10. MetricRecord
 
 实验指标记录，从论文表格和正文中提取。
 
@@ -194,7 +231,7 @@ JSONB 结构示例（strengths/weaknesses/suggestions）：
 | checkpoint_source | VARCHAR(50) | | 口径来源：EXPLICIT_TEXT / IMPLICIT_CONTEXT / TABLE_HEADER / UNKNOWN |
 | evidence_id | UUID | FK → Evidence.id | 关联证据 |
 | raw_text | TEXT | | 原始文本片段 |
-| table_id | VARCHAR(100) | | 来源表格标识 |
+| table_id | UUID | FK → PaperTable.id | 来源表格 |
 | row_index | INTEGER | | 表格行号 |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
 
@@ -203,7 +240,7 @@ JSONB 结构示例（strengths/weaknesses/suggestions）：
 - `idx_metric_task_id` ON (task_id)
 - `idx_metric_checkpoint_type` ON (checkpoint_type)
 
-## 9. ExperimentFile
+## 11. ExperimentFile
 
 实验数据文件（CSV/Excel）。
 
@@ -212,7 +249,7 @@ JSONB 结构示例（strengths/weaknesses/suggestions）：
 | id | UUID | PK | 主键 |
 | paper_id | UUID | FK → Paper.id | 关联论文 |
 | filename | VARCHAR(255) | NOT NULL | 原始文件名 |
-| obs_key | VARCHAR(1024) | NOT NULL | OBS 存储路径 |
+| storage_key | VARCHAR(1024) | NOT NULL | 存储路径 |
 | file_size | BIGINT | NOT NULL | 文件大小 |
 | file_hash | VARCHAR(64) | NOT NULL | SHA-256 哈希 |
 | file_type | VARCHAR(10) | NOT NULL | CSV / XLSX / XLS |
@@ -226,7 +263,7 @@ JSONB 结构示例（strengths/weaknesses/suggestions）：
 - `idx_exp_file_paper_id` ON (paper_id)
 - `idx_exp_file_user_id` ON (user_id)
 
-## 10. ExperimentResult
+## 12. ExperimentResult
 
 实验数据分析结果，由确定性代码计算。
 
@@ -274,7 +311,7 @@ JSONB 结构示例（metric_comparisons）：
 索引：
 - `idx_exp_result_file_id` ON (file_id) UNIQUE
 
-## 11. ExportReport
+## 13. ExportReport
 
 导出报告记录。
 
@@ -283,12 +320,32 @@ JSONB 结构示例（metric_comparisons）：
 | id | UUID | PK | 主键 |
 | paper_id | UUID | FK → Paper.id | 关联论文 |
 | report_type | VARCHAR(20) | NOT NULL | MARKDOWN / PDF / DOCX |
-| obs_key | VARCHAR(1024) | | 导出文件 OBS 路径 |
+| status | VARCHAR(20) | NOT NULL DEFAULT PENDING | PENDING / GENERATING / READY / FAILED |
+| storage_key | VARCHAR(1024) | | 导出文件存储路径 |
 | content_hash | VARCHAR(64) | | 内容哈希 |
 | file_size | BIGINT | | 文件大小 |
+| error_message | TEXT | | 失败原因 |
 | user_id | VARCHAR(128) | NOT NULL | 所属用户 |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| completed_at | TIMESTAMP | | 完成时间 |
 
 索引：
 - `idx_export_paper_id` ON (paper_id)
 - `idx_export_user_id` ON (user_id)
+- `idx_export_status` ON (status)
+
+## 数据库约束
+
+002_constraints 迁移新增 CheckConstraints：
+
+| 表 | 约束名 | 约束表达式 | 说明 |
+|------|--------|-----------|------|
+| Paper | ck_paper_status | status IN ('UPLOADING','PROCESSING','PARSED','FAILED') | 状态枚举约束 |
+| AnalysisTask | ck_task_status | status IN ('PENDING','RUNNING','SUCCEEDED','FAILED','CANCELLED') | 任务状态枚举约束 |
+| AnalysisTask | ck_task_progress | progress >= 0 AND progress <= 100 | 进度范围约束 |
+| ReviewResult | ck_review_rating | rating >= 1 AND rating <= 5 | 评分范围约束 |
+| ReviewFinding | ck_finding_confidence | confidence >= 0.0 AND confidence <= 1.0 | 置信度范围约束 |
+| ReviewFinding | ck_finding_verification | verification_status IN ('VERIFIED','UNVERIFIED','PENDING') | 验证状态枚举约束 |
+| Evidence | ck_evidence_type | evidence_type IN ('TEXT','TABLE','FIGURE_CAPTION','EQUATION') | 证据类型枚举约束 |
+| ReviewFinding | ck_finding_type | finding_type IN ('STRENGTH','WEAKNESS','SUGGESTION') | 发现类型枚举约束 |
+| ExportReport | ck_export_status | status IN ('PENDING','GENERATING','READY','FAILED') | 导出状态枚举约束 |

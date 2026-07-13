@@ -7,7 +7,7 @@
 │                        外部系统                              │
 │                                                             │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
-│  │  用户浏览器 │  │  OBS 存储  │  │  RDS 数据库│  │ ModelArts │  │
+│  │  用户浏览器 │  │  OBS 存储  │  │  RDS 数据库│  │ModelArts │  │
 │  │  (前端SPA) │  │ (文件存储) │  │ (PostgreSQL)│ │ (LLM推理) │  │
 │  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  │
 │        │              │              │              │         │
@@ -56,6 +56,7 @@ frontend/
 │   ├── api/              # API 请求封装
 │   ├── components/       # 通用组件
 │   ├── views/            # 页面视图
+│   │   ├── HomeView      # 首页
 │   │   ├── UploadView    # 论文上传
 │   │   ├── ReviewView    # 审阅结果
 │   │   ├── MetricsView   # 指标分析
@@ -66,10 +67,11 @@ frontend/
 ```
 
 前端职责：
-- 文件上传（分片上传大文件）
-- 展示审阅结果（含 Evidence 高亮定位）
+- 文件上传（multipart 流式上传，最大 50MB）
+- 展示审阅结果（含 Evidence 高亮定位，通过 bbox 跳转原文页内位置）
 - 展示指标表格与统计口径标注
 - 触发报告导出并下载
+- 后端不可用时显示明确错误
 
 ### 2.2 后端架构（FastAPI + Python）
 
@@ -102,6 +104,24 @@ backend/
 - 实验数据文件解析与统计分析
 - 报告组装与导出
 
+### 2.3 LLM 调用抽象
+
+LLM 必须通过统一 `LLMClient` 接口调用：
+
+```python
+class LLMClient(ABC):
+    @abstractmethod
+    async def chat(self, messages: list[dict], **kwargs) -> dict: ...
+
+class MockLLMClient(LLMClient):
+    """默认实现，返回固定结构化响应，无需云端密钥即可演示"""
+
+class MaaSLLMClient(LLMClient):
+    """华为云 MaaS / ModelArts 推理端点实现（后续版本）"""
+```
+
+通过环境变量 `LLM_BACKEND=mock|maas` 切换。
+
 ## 3. 后台任务处理流程
 
 ```
@@ -114,7 +134,7 @@ backend/
        │
        ▼
 ┌─────────────┐
-│ 2. 存储到OBS │  原始 PDF 存入 OBS，记录 Paper 记录到 RDS
+│ 2. 存储到本地  │  原始 PDF 存入本地存储，记录 Paper 记录到 RDS
 └──────┬──────┘
        │
        ▼
@@ -147,12 +167,12 @@ backend/
                       │
                       ▼
               ┌─────────────┐
-              │ 7. 结果存储  │  ReviewResult、MetricRecord 写入 RDS
+              │ 7. 结果存储  │  ReviewResult + ReviewFinding + Evidence 写入 RDS
               └──────┬──────┘
                      │
                      ▼
               ┌─────────────┐
-              │ 8. 通知前端  │  WebSocket / 轮询通知任务完成
+              │ 8. 通知前端  │  HTTP 轮询通知任务完成
               └─────────────┘
 ```
 
@@ -194,9 +214,9 @@ PENDING → RUNNING → SUCCEEDED
     │                    RDS (PostgreSQL)                      │
     │                                                         │
     │  Paper │ PaperPage │ PaperSection │ PaperChunk          │
-    │  Evidence │ AnalysisTask │ ReviewResult                  │
-    │  MetricRecord │ ExperimentFile │ ExperimentResult       │
-    │  ExportReport                                            │
+    │  PaperTable │ Evidence │ AnalysisTask                    │
+    │  ReviewResult │ ReviewFinding │ MetricRecord             │
+    │  ExperimentFile │ ExperimentResult │ ExportReport        │
     └─────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -212,15 +232,15 @@ PENDING → RUNNING → SUCCEEDED
 
 | 步骤 | 源 | 目标 | 数据 | 说明 |
 |------|----|------|------|------|
-| 1 | 用户 | ECS | PDF 文件 | HTTP 上传 |
+| 1 | 用户 | ECS | PDF 文件 | HTTP multipart 上传 |
 | 2 | ECS | OBS | PDF 原文 | 存储原始文件 |
 | 3 | ECS | RDS | Paper 元数据 | 记录文件信息 |
 | 4 | ECS | OBS | 解析后文本/表格 | 存储中间结果 |
-| 5 | ECS | RDS | PaperPage/PaperSection/PaperChunk | 结构化数据 |
+| 5 | ECS | RDS | PaperPage/PaperSection/PaperChunk/PaperTable | 结构化数据 |
 | 6 | ECS | ModelArts | 文本块 | Embedding 向量化 |
 | 7 | ECS | RDS | 向量索引引用 | 存储向量 ID |
 | 8 | ECS | ModelArts | Prompt + Evidence | Chat 推理生成审阅 |
-| 9 | ECS | RDS | ReviewResult + Evidence | 审阅结果与证据绑定 |
+| 9 | ECS | RDS | ReviewResult + ReviewFinding + Evidence | 审阅结果与证据绑定 |
 | 10 | ECS | RDS | MetricRecord | 指标提取结果 |
 | 11 | 用户 | ECS | CSV/Excel | 实验数据上传 |
 | 12 | ECS | OBS | 实验数据文件 | 存储原始文件 |
@@ -231,12 +251,12 @@ PENDING → RUNNING → SUCCEEDED
 
 | 维度 | 本地开发 | 云端部署 |
 |------|---------|---------|
-| 文件存储 | 本地文件系统 `./data/uploads/` | 华为云 OBS |
-| 数据库 | SQLite / 本地 PostgreSQL | 华为云 RDS PostgreSQL |
+| 文件存储 | 本地文件系统 `./data/uploads/` | 华为云 OBS（OBSStorage 未实现，后续版本） |
+| 数据库 | 本地 PostgreSQL（Docker Compose） | 华为云 RDS PostgreSQL |
 | 向量存储 | FAISS 本地索引 | FAISS 索引（ECS 本地）+ OBS 备份 |
-| LLM 推理 | OpenAI 兼容 API / 本地模型 | 华为云 ModelArts 推理端点 |
+| LLM 推理 | MockLLMClient / OpenAI 兼容 API | 华为云 ModelArts 推理端点 |
 | PDF 解析 | 本地 PyMuPDF / pdfplumber | 同左（ECS 上运行） |
-| 任务队列 | 内存队列 / Celery + Redis | Celery + Redis（ECS 部署） |
+| 任务队列 | FastAPI BackgroundTasks（MVP，非生产级） | Celery + Redis（后续版本） |
 | 前端 | Vite dev server | Nginx 静态托管 |
 | HTTPS | 无（HTTP localhost） | 华为云 ELB + SSL 证书 |
 | 认证 | 无 / 简单 Token | IAM 集成 / JWT |
@@ -245,9 +265,9 @@ PENDING → RUNNING → SUCCEEDED
 ### 环境配置策略
 
 - 通过环境变量 `PAPERLENS_ENV=local|cloud` 切换
-- 存储层抽象：`StorageBackend` 接口，`LocalStorage` 和 `OBSStorage` 两种实现
-- 数据库：SQLAlchemy 统一 ORM，通过 `DATABASE_URL` 切换
-- LLM：统一 `LLMClient` 接口，通过 `LLM_BACKEND` 切换
+- 存储层抽象：`StorageBackend` 接口，`LocalStorage` 为当前实现，`OBSStorage` 为后续云端部署实现（未实现）
+- 数据库：SQLAlchemy 统一 ORM，通过 `DATABASE_URL` 切换，统一使用 PostgreSQL
+- LLM：统一 `LLMClient` 接口，通过 `LLM_BACKEND` 切换（mock / maas）
 
 ## 6. 关键设计决策
 
@@ -267,8 +287,8 @@ PENDING → RUNNING → SUCCEEDED
 2. 从向量索引中检索 Top-K 相关 PaperChunk
 3. 将 PaperChunk 内容作为 Evidence 传入 Prompt
 4. 要求 LLM 在输出中标注引用的 Evidence ID
-5. 后处理验证：每条审阅结论必须关联至少一个 Evidence
-6. 未关联 Evidence 的结论标记为 "unverified"，不写入 ReviewResult
+5. 后处理验证：每条 ReviewFinding 必须关联至少一个 Evidence
+6. 未关联 Evidence 的 Finding 标记为 verification_status=UNVERIFIED，不展示给用户
 ```
 
 ### 6.3 指标提取的确定性保证
@@ -277,3 +297,10 @@ PENDING → RUNNING → SUCCEEDED
 - 统计计算（mean、max、std 等）：使用 pandas/numpy 确定性计算
 - 口径判断：基于规则引擎（关键词匹配 + 上下文分析），LLM 仅辅助歧义消解
 - LLM 不参与任何数值计算，仅负责语义理解和文本生成
+
+### 6.4 MVP 范围约束
+
+- 仅支持包含可提取文本的 PDF，不支持扫描型 PDF / OCR
+- 文件上传使用普通 multipart 流式上传，暂不实现分片上传
+- 任务进度通知使用 HTTP 轮询，暂不实现 WebSocket
+- 后台任务使用 FastAPI BackgroundTasks（仅 MVP 阶段，非生产级方案），暂不引入 Celery + Redis
