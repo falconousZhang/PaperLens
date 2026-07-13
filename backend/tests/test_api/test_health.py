@@ -1,5 +1,8 @@
 import os
+import logging
 import uuid
+from unittest.mock import MagicMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -52,15 +55,13 @@ async def db_client():
         f"Engine URL must point to paperlens_test, got: {actual_url}"
     )
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
-
     try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    finally:
         truncate_test_tables(test_url)
         verify_no_test_residuals(test_url)
-    except Exception:
-        pass
 
 
 @pytest_asyncio.fixture
@@ -84,17 +85,11 @@ async def test_health_check(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_upload_non_pdf_closes_file(client: AsyncClient, tmp_path):
-    from unittest.mock import AsyncMock, patch
+async def test_upload_non_pdf_returns_415(client: AsyncClient, tmp_path):
     txt_path = tmp_path / "test.txt"
     txt_path.write_text("not a pdf")
     with open(str(txt_path), "rb") as f:
-        with patch("paperlens.api.papers.UploadFile") as MockUploadFile:
-            mock_file = AsyncMock()
-            mock_file.filename = "test.txt"
-            mock_file.read = AsyncMock(return_value=b"")
-            mock_file.close = AsyncMock()
-            resp = await client.post("/api/v1/papers/upload", files={"file": ("test.txt", f, "text/plain")})
+        resp = await client.post("/api/v1/papers/upload", files={"file": ("test.txt", f, "text/plain")})
     assert resp.status_code == 415
 
 
@@ -257,38 +252,59 @@ async def test_evidence_detail_fields_strict(db_client: AsyncClient, tmp_path):
 
 @requires_db
 @pytest.mark.asyncio
-async def test_evidence_nullable_fields(db_client: AsyncClient, tmp_path):
-    from tests.conftest import create_test_pdf
+async def test_evidence_nullable_fields(db_client: AsyncClient):
     from paperlens.core.database import SessionLocal
-    from paperlens.models.models import Evidence as EvidenceModel
+    from paperlens.core.enums import EvidenceType, PaperStatus
+    from paperlens.models.models import Evidence as EvidenceModel, Paper
 
-    pdf_path = create_test_pdf("Testing nullable evidence fields.", tmp_path=str(tmp_path))
-    with open(pdf_path, "rb") as f:
-        upload_resp = await db_client.post("/api/v1/papers/upload", files={"file": ("null_test.pdf", f, "application/pdf")})
-    assert upload_resp.status_code == 201
-    paper_id = upload_resp.json()["id"]
-
-    status = wait_for_paper_status(paper_id)
-    assert status == "PARSED"
-
+    paper_id = str(uuid.uuid4())
+    evidence_id = str(uuid.uuid4())
     db = SessionLocal()
     try:
-        null_evs = db.query(EvidenceModel).filter(
-            EvidenceModel.paper_id == paper_id,
-            EvidenceModel.char_start.is_(None),
-        ).all()
+        db.add(Paper(
+            id=paper_id,
+            title="nullable evidence",
+            filename="nullable.pdf",
+            storage_key=f"papers/{paper_id}/source.pdf",
+            file_size=123,
+            file_hash="0" * 64,
+            status=PaperStatus.PARSED,
+            user_id="demo-user",
+        ))
+        db.add(EvidenceModel(
+            id=evidence_id,
+            paper_id=paper_id,
+            section_id=None,
+            chunk_id=None,
+            quoted_text="deterministic nullable evidence",
+            page_number=1,
+            bbox_x0=None,
+            bbox_y0=None,
+            bbox_x1=None,
+            bbox_y1=None,
+            char_start=None,
+            char_end=None,
+            evidence_type=EvidenceType.TEXT,
+        ))
+        db.commit()
     finally:
         db.close()
 
-    if not null_evs:
-        pytest.skip("No evidence with null char_start in this test run")
-
-    ev_id = null_evs[0].id
-    detail_resp = await db_client.get(f"/api/v1/evidences/{ev_id}")
+    detail_resp = await db_client.get(f"/api/v1/evidences/{evidence_id}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
+    assert detail["id"] == evidence_id
+    assert detail["quoted_text"] == "deterministic nullable evidence"
+    assert detail["page_number"] == 1
+    assert detail["bbox_x0"] is None
+    assert detail["bbox_y0"] is None
+    assert detail["bbox_x1"] is None
+    assert detail["bbox_y1"] is None
     assert detail["char_start"] is None
     assert detail["char_end"] is None
+    assert detail["section_id"] is None
+    assert detail["chunk_id"] is None
+    assert detail["evidence_type"] == "TEXT"
 
 
 @requires_db
@@ -436,19 +452,14 @@ async def test_error_message_safe_with_injected_exception(db_client: AsyncClient
 
 
 @requires_db
-def test_table_savepoint_degradation():
-    from paperlens.core.database import SessionLocal, configure_engine, get_engine
-    from paperlens.models.models import Paper, PaperPage, PaperSection, PaperChunk, PaperTable, Evidence, PaperStatus
-    from unittest.mock import patch
-    import uuid
+@pytest.mark.asyncio
+async def test_table_savepoint_degradation(db_client: AsyncClient, tmp_path, caplog):
+    from paperlens.core.database import SessionLocal, get_engine
+    from paperlens.core.enums import PaperStatus
+    from paperlens.models.models import Paper, PaperPage, PaperSection, PaperChunk, PaperTable, Evidence
 
     test_url = get_test_db_url()
-    if not test_url:
-        pytest.skip("需要 PAPERLENS_TEST_DATABASE_URL")
-
-    ensure_test_database()
-    run_alembic_migrations(test_url)
-    configure_engine(test_url)
+    assert test_url is not None
     actual_url = str(get_engine().url)
     assert "paperlens_test" in actual_url, f"Engine must point to test DB, got: {actual_url}"
 
@@ -474,18 +485,20 @@ def test_table_savepoint_degradation():
             "chunks": [{"section_sequence": 1, "chunk_index": 0, "content": "Test", "char_count": 4, "page_numbers": [1]}],
             "tables": [
                 {"page_number": 1, "table_index": 1, "caption": None, "bbox_x0": 72, "bbox_y0": 72, "bbox_x1": 200, "bbox_y1": 200, "structured_data": {"rows": [["a"]]}, "raw_text": "a"},
-                {"page_number": 1, "table_index": 2, "caption": None, "bbox_x0": 200, "bbox_y0": 200, "bbox_x1": 72, "bbox_y1": 72, "structured_data": {"rows": [["b"]]}, "raw_text": "b"},
+                {"page_number": 0, "table_index": 2, "caption": None, "bbox_x0": 72, "bbox_y0": 72, "bbox_x1": 200, "bbox_y1": 200, "structured_data": {"rows": [["b"]]}, "raw_text": "b"},
             ],
             "evidences": [{"quoted_text": "Test", "page_number": 1, "bbox_x0": 72, "bbox_y0": 72, "bbox_x1": 200, "bbox_y1": 100, "char_start": 0, "char_end": 4, "evidence_type": "TEXT", "chunk_index": 0}],
         }
 
-        tmp_path = "/tmp/fake_table_test.pdf"
+        pdf_path = tmp_path / "fake_table_test.pdf"
+        pdf_path.write_bytes(b"%PDF-fake")
         from paperlens.api.papers import _process_paper
 
-        with patch("paperlens.api.papers.parse_pdf", return_value=fake_result), \
-             patch("os.path.exists", return_value=False):
-            _process_paper(paper_id, tmp_path)
+        caplog.set_level(logging.WARNING, logger="paperlens.api.papers")
+        with patch("paperlens.api.papers.parse_pdf", return_value=fake_result):
+            _process_paper(paper_id, str(pdf_path))
 
+        db.expire_all()
         paper = db.get(Paper, paper_id)
         assert paper is not None
         assert paper.status == "PARSED", f"Expected PARSED, got {paper.status}: {paper.error_message}"
@@ -500,19 +513,58 @@ def test_table_savepoint_degradation():
         assert len(chunks) == 1
 
         tables = db.query(PaperTable).filter(PaperTable.paper_id == paper_id).all()
-        assert len(tables) >= 1, "At least the valid table should be saved"
+        assert len(tables) == 1
+        assert tables[0].page_number == 1
+        assert tables[0].table_index == 1
+        assert tables[0].raw_text == "a"
+        assert db.query(PaperTable).filter(
+            PaperTable.paper_id == paper_id,
+            PaperTable.page_number == 0,
+        ).count() == 0
 
         evidences = db.query(Evidence).filter(Evidence.paper_id == paper_id).all()
         assert len(evidences) == 1
+        assert not pdf_path.exists()
+        assert any(
+            paper_id in record.message and "page=0" in record.message and "table_idx=2" in record.message
+            for record in caplog.records
+        )
     finally:
         db.close()
-        try:
-            truncate_test_tables(test_url)
-            verify_no_test_residuals(test_url)
-        except Exception:
-            pass
 
 
-def test_cleanup_failure_propagates():
+def test_cleanup_rejects_non_test_database():
     with pytest.raises(AssertionError, match="Refusing to truncate"):
         truncate_test_tables("postgresql+psycopg2://user:pass@localhost:5432/paperlens")
+
+
+def test_cleanup_connect_failure_propagates():
+    test_url = "postgresql+psycopg2://user:pass@localhost:5432/paperlens_test"
+    with patch("psycopg2.connect", side_effect=RuntimeError("connect failed")):
+        with pytest.raises(RuntimeError, match="connect failed"):
+            truncate_test_tables(test_url)
+
+
+def test_cleanup_truncate_failure_propagates():
+    test_url = "postgresql+psycopg2://user:pass@localhost:5432/paperlens_test"
+    connection = MagicMock()
+    cursor = connection.cursor.return_value
+    cursor.execute.side_effect = RuntimeError("truncate failed")
+    with patch("psycopg2.connect", return_value=connection):
+        with pytest.raises(RuntimeError, match="truncate failed"):
+            truncate_test_tables(test_url)
+    cursor.close.assert_called_once_with()
+    connection.close.assert_called_once_with()
+
+
+def test_cleanup_residual_failure_names_table():
+    test_url = "postgresql+psycopg2://user:pass@localhost:5432/paperlens_test"
+    connection = MagicMock()
+    cursor = connection.cursor.return_value
+    cursor.fetchone.return_value = (1,)
+    with patch("psycopg2.connect", return_value=connection):
+        with pytest.raises(AssertionError, match=r"paperlens_test\.finding_evidences: 1 rows"):
+            verify_no_test_residuals(test_url)
+    cursor.execute.assert_called_once_with('SELECT count(*) FROM "finding_evidences"')
+    cursor.close.assert_called_once_with()
+    connection.close.assert_called_once_with()

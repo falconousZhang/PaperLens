@@ -205,9 +205,9 @@ ExperimentFile 1──1 ExperimentResult
 
 | 验证项 | 结果 |
 |--------|------|
-| 后端测试（本地） | ✅ 38 passed, 12 skipped |
-| 后端测试（Docker） | ✅ 49 passed, 1 skipped |
-| 前端 Vitest | ✅ 14 passed |
+| 后端测试（本地） | ✅ 51 passed, 12 skipped（宿主机无 PostgreSQL，集成测试诚实跳过） |
+| 后端测试（Docker） | ✅ 63 passed, 0 skipped |
+| 前端 Vitest | ✅ 15 passed |
 | 前端构建 | ✅ npm run build 成功 |
 | Docker 容器 | ✅ 3 容器全部运行 |
 | Alembic 版本 | ✅ 003_normalized_and_error (head) |
@@ -216,11 +216,11 @@ ExperimentFile 1──1 ExperimentResult
 | 路径穿越 | ✅ ../, ..\, /absolute, sibling-prefix 均被拒绝 |
 | 双页 PDF 端到端 | ✅ 上传→PARSED，2 Evidence，char range 精确匹配 |
 | 前端→后端代理 | ✅ 正常 |
-| 开发库隔离 | ✅ paperlens=26（不变），paperlens_test=0（已清理） |
+| 开发库隔离 | ✅ 最终全量测试前后 paperlens=28（不变），paperlens_test 14 张业务表均为 0 |
 | alembic check | ✅ 无差异 |
 | error_message 安全 | ✅ 不含 /tmp/、Traceback、File 路径 |
 | 表格 SAVEPOINT 降级 | ✅ 非法表格不影响论文 PARSED 状态 |
-| 前端降级/轮询/导航 | ✅ 14 项测试覆盖 null/越界/mismatch/timer/重试 |
+| 前端降级/轮询/导航 | ✅ 15 项测试覆盖 null/越界/mismatch/timer/重试/乱序响应/快速 1→2→1 |
 
 ---
 
@@ -396,3 +396,58 @@ P2.3 遗留 10 大问题：UploadFile 资源泄漏、测试库冷启动失败、
 | Health 端点 | ✅ healthy |
 | 前端页面 | ✅ 200 OK |
 | 文档同步 | ✅ IMPLEMENTATION_STATUS.md, README.md, security-design.md |
+
+---
+
+### P2.5 — 验收去伪与并发翻页修复 ✅
+
+#### 核心问题
+
+P2.4 虽然报告为 49 passed、1 skipped，但唯一 nullable Evidence 测试依赖解析结果“碰巧”产生 null；UploadFile 测试创建的 mock 从未传给生产函数；表格测试的反向 bbox 会被生产代码自动纠正，未触发数据库约束；cleanup 测试没有模拟真实连接/TRUNCATE 失败；前端 `pageLoading` 会直接丢弃加载期间的新目标页请求。
+
+#### 修改文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| backend/paperlens/api/papers.py | `upload_paper()` 改为单一资源所有权模型：UploadFile 仅在外层 finally 关闭一次；NamedTemporaryFile 使用 context manager；临时文件和 storage 在数据库提交且后台任务注册前均由请求负责回滚；表格 SAVEPOINT 改用 `with db.begin_nested()` |
+| backend/tests/test_api/test_upload_lifecycle.py | 新增 10 项直接生命周期测试，覆盖扩展名、PDF magic、大小超限、read/hash/storage/Paper/commit/task 注册失败和成功所有权转移 |
+| backend/tests/test_api/test_health.py | nullable Evidence 改为直接插入确定性 null 数据；db_client 清理失败不再吞掉；表格使用 page_number=0 真实触发 PostgreSQL 约束；新增连接、TRUNCATE 和残留失败传播测试 |
+| frontend/src/views/PaperDetailView.vue | 删除全局 `pageLoading` 拦截；每次页面导航递增 request id 并真实发请求；旧响应不能覆盖最新目标页；页面 Tab 使用单一 openPages 入口 |
+| frontend/src/tests/PaperDetailView.test.ts | 全局清理 mock 和组件；严格验证第 1 页 pending 时第 2 页请求已发出、第二页先返回、第一页后返回不覆盖；同页 Evidence 恰好一次；快速 1→2→1 最终保持最后一页 |
+| README.md / docs/*.md | 区分已实现功能与规划功能，明确 FAISS/LLM 尚未实现、当前为 normalized 文本高亮；更新最新验收结果 |
+| docs/CODEARTS_PROMPT_ARCHIVE.md | 从 Codex rollout JSONL 恢复 8 个逐字原文版本：首次 P1、P1/P2 初版、Docker 执行版、P2.1～P2.5；P2.5 标明为生成后由 Codex 实施 |
+
+#### 验收去伪结果
+
+1. **唯一 skipped 消除**：测试直接在 `paperlens_test` 插入 bbox/char range/section/chunk 均为 null 的 Evidence，再调用真实详情 API，严格逐字段断言；不再依赖 PDF 解析结果或条件 skip。
+2. **UploadFile close 恰好一次**：10 项直接测试覆盖所有指定失败路径与成功路径，每条均使用 `assert_awaited_once_with()`。
+3. **临时文件清理**：read/hash/magic/超限及后续失败时，NamedTemporaryFile 句柄已关闭且路径不存在；成功路径由后台任务接管。
+4. **storage 回滚**：storage.save 已开始但 Paper 构造、DB commit 或任务注册失败时，`storage.delete()` 恰好调用一次；成功路径不提前删除。
+5. **真实 SAVEPOINT**：非法表格 `page_number=0` 触发 `ck_paper_table_page_number_gte1`；warning 包含 paper/page/table index；论文仍 PARSED，Page/Section/Chunk/Evidence 各 1 条，PaperTable 恰好保留合法 1 条。
+6. **cleanup 失败传播**：分别验证非测试库守卫、psycopg2 connect 失败、TRUNCATE execute 失败以及残留表检测，异常均向上传播且资源关闭。
+7. **并发翻页**：第 1 页请求 pending 时第 2 页请求真实发起；第 2 页先返回并显示高亮，第 1 页后返回不能覆盖；快速 1→2→1 的调用序列严格为 `[1, 2, 1]`，最终显示最后一次第 1 页。
+
+#### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| 后端测试（本地） | ✅ 51 passed, 12 skipped（宿主机未配置 PostgreSQL） |
+| 后端测试（Docker 强制测试库） | ✅ 63 passed, 0 skipped |
+| 上传生命周期专项测试 | ✅ 10 passed |
+| 前端 Vitest | ✅ 15 passed |
+| 前端 TypeScript + Vite 构建 | ✅ 成功 |
+| Docker 构建与容器 | ✅ backend/frontend 重新构建；3 容器运行，postgres healthy |
+| 开发库隔离 | ✅ 最终镜像全量测试前后 papers 28 → 28 |
+| 测试库残留 | ✅ 14 张业务表均为 0 |
+| Alembic | ✅ `003_normalized_and_error (head)`；`alembic check` 无差异 |
+| 双页 HTTP E2E | ✅ 经 frontend Nginx 上传，PARSED，2 页、2 Evidence，页码 `[1,2]`，全部 char range 精确匹配 |
+| 可视化浏览器验收 | ⚠️ 内置应用浏览器无可用实例；由 15 项组件测试覆盖 DOM 高亮与乱序导航，未冒充人工页面点击结果 |
+
+双页 E2E 向开发库新增了 1 条明确归属的回归记录：`a92285fa-f0c5-4a53-9f7f-e8abc8a027ea`。该记录未自动删除；随后最终镜像全量测试再次确认开发库 28 → 28。
+
+#### 尚未完成项
+
+1. FAISS 向量索引与语义 Evidence 检索。
+2. LLM 审阅生成、ReviewResult/ReviewFinding API 与前端展示。
+3. 指标提取、checkpoint 口径判断、CSV/Excel 分析和报告导出。
+4. PDF.js/bbox 原文覆盖层；当前为 normalized 页面文本字符区间高亮。

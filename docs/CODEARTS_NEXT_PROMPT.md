@@ -1,341 +1,208 @@
-# 码道下一阶段提示词：P2.4 事务边界与验收收口
+# 码道下一阶段提示词：P2.6 ProjectDocs 实现态校准
 
 > 复制下面代码框中的全部内容，粘贴到华为云码道“智能体 / 规范开发”模式。
 
 ~~~text
-继续修复 D:\shixi\PaperLens 项目。
+继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P2.4：修复 P2.3 遗留的事务边界、测试库冷启动、资源关闭和前端轮询/高亮降级问题，完成 P2 解析闭环的最后收口。
+本轮定义为 P2.6：ProjectDocs 实现态校准与可追溯性修复。目标是让新生成的设计文档准确区分“当前已实现”“仅有数据模型骨架”“规划功能”，修复失效链接和事实漂移，为 P3 开发建立可信基线。
 
-P2.3 的数据库隔离主目标已经真实生效。外部独立复测结果：
+本轮只允许修改文档和项目级研发约定，不修改 backend、frontend、alembic、Docker 配置或业务代码，不实现 P3，不实现 FAISS、语义检索、MaaS/LLM 审阅、指标提取、Excel 分析或报告导出。
 
-```text
-Docker backend pytest: 46 passed, 0 skipped
-frontend Vitest:        11 passed
-frontend build:         success
-开发库 papers:          测试前 25，测试后 25
-测试库 papers:          测试后 0
-alembic check:          No new upgrade operations detected
-```
+开始前完整阅读并以真实代码为准，不得只相信 docs/PROGRESS.md：
 
-不要推翻或重复重写已经正确的测试库 Engine 隔离方案。但代码审查确认仍有数个运行级缺陷和弱断言，P2 暂不能结束。禁止开始 P3、LLM、MaaS/ModelArts、FAISS、指标提取、Excel 或报告导出。
-
-开始前完整阅读：
-
+- AGENTS.md
+- ProjectDocs/project-config.yaml
+- ProjectDocs/systemDesign/01-需求细化与决策发现.md 至 08-测试设计.md
+- ProjectDocs/specs_SDD/PaperLens/spec.md
+- ProjectDocs/specs_SDD/PaperLens/tasks.md
+- ProjectDocs/specs_SDD/PaperLens/design/ 下全部文档
+- ProjectDocs/sprint/ 下全部文档
 - docs/PROGRESS.md
-- backend/paperlens/core/database.py
+- docs/IMPLEMENTATION_STATUS.md
+- README.md
+- backend/paperlens/main.py
+- backend/paperlens/api/health.py
 - backend/paperlens/api/papers.py
-- backend/paperlens/services/pdf_parser.py
-- backend/tests/conftest.py
-- backend/tests/test_api/test_health.py
-- backend/tests/test_services/test_pdf_parser.py
-- frontend/src/views/PaperDetailView.vue
+- backend/paperlens/models/models.py
+- backend/paperlens/schemas/paper.py
+- backend/paperlens/core/enums.py
+- backend/alembic/versions/ 下全部迁移
+- frontend/package.json
+- frontend/src/api/index.ts
+- frontend/src/router/index.ts
+- frontend/src/views/ 下现有页面
 - frontend/src/tests/PaperDetailView.test.ts
-- docker-compose.yml
-- README.md
-- docs/IMPLEMENTATION_STATUS.md
-- docs/api-contract.md
-- docs/architecture.md
-- docs/data-model.md
-- docs/security-design.md
+- backend/tests/ 下现有测试
 
-先给出简短计划，然后直接实施。所有测试必须验证真实行为，禁止只增加测试名称或放宽断言。
+先给出简短计划，然后直接实施。使用已安装的相关 skill 完成对应文档校准：
 
-一、真正保证 UploadFile 和临时文件在所有路径关闭
+1. dev-process-framework：校准 systemDesign/01～06。
+2. page-mockup：校准 07-页面设计.md，保留有价值的线框图。
+3. fullstack-testing：校准 08-测试设计.md 的当前测试事实和规划测试。
+4. function-detail：校准 specs_SDD/PaperLens/ 的 spec、design、tasks。
+5. sdd-workflow：校准 sprint 进度。
+6. bug-fix-reporter：在 ProjectDocs/bugfix-report/ 生成本轮文档缺陷修复报告。
 
-当前 `upload_paper()` 仍有明确缺陷：
+不得运行 dev-eco-setup，不得安装或更新 skill，不得修改 .arts/、.codeartsdoer/ 或 .skills/。校准应在现有文档上做最小、可审查的修改，不要无差别重写全部文档。
 
-```python
-filename = _sanitize_filename(raw_filename)
+一、修复 SDD 本地链接
 
-if not filename.lower().endswith(".pdf"):
-    raise AppError(...)
-
-try:
-    ...
-```
-
-扩展名错误发生在 `try/finally` 之外，因此服务端 UploadFile 没有执行 `await file.close()`。另外，读取循环异常时 NamedTemporaryFile 句柄也不一定先关闭，外层代码就尝试删除路径。
+当前 ProjectDocs 中检查到 75 个 Markdown 本地链接，其中 48 个目标路径失效，主要集中在 ProjectDocs/specs_SDD/PaperLens/tasks.md：链接文字写着 design/...，实际 target 却缺少 design/ 前缀。
 
 要求：
 
-1. 将扩展名校验也纳入最外层资源管理边界。
-2. UploadFile 在以下每条路径都必须且只能关闭一次：
-   - 非 PDF 扩展名
-   - PDF 扩展名但魔数错误
-   - 文件超过业务上限
-   - `await file.read()` 抛异常
-   - hash 计算异常
-   - storage.save 异常
-   - DB commit 异常
-   - 正常上传并交给 BackgroundTasks
-3. NamedTemporaryFile 使用明确的 context/finally 管理，任何异常发生前先关闭句柄，再删除文件。
-4. 未成功交给后台任务的临时文件必须由请求路径删除；已成功交给后台任务的临时文件只能由 `_process_paper()` 最终删除。
-5. storage.save 成功但后续 Paper 构造、DB commit 或响应构造失败时，存储对象不能遗留。删除失败要记录 warning，不能静默 `pass`。
-6. 增加直接针对服务端 UploadFile 的单元测试或可靠 spy。仅关闭客户端上传文件句柄不能证明服务端 `UploadFile.close()` 被调用。
-7. 每个资源测试严格断言 close 调用次数和临时路径不存在，不能只断言 HTTP 状态码。
+1. 修复 tasks.md 以及 ProjectDocs 其他文档中的所有失效本地链接。
+2. 同时检查锚点，不仅检查目标文件是否存在；标题锚点必须能对应实际章节。
+3. 相对路径必须从链接所在 Markdown 文件的位置正确解析。
+4. 完成后用可复现的只读检查统计：本地链接总数、失效文件路径数、失效锚点数。
+5. 验收必须为失效文件路径 0、失效锚点 0。
 
-二、修复测试数据库“已存在时可用、缺失时无法创建”的冷启动问题
+二、明确 API 的当前实现态与规划态
 
-当前 `_ensure_test_database()` 先连接 `paperlens_test`，再检查该数据库是否存在：
+真实后端当前只有以下 8 个端点：
 
-```python
-conn = psycopg2.connect(test_database_url)
-SELECT 1 FROM pg_database ...
-CREATE DATABASE paperlens_test
-```
+- GET /api/v1/health
+- POST /api/v1/papers/upload
+- GET /api/v1/papers
+- GET /api/v1/papers/{paper_id}
+- GET /api/v1/papers/{paper_id}/pages/{page_number}
+- GET /api/v1/papers/{paper_id}/sections
+- GET /api/v1/papers/{paper_id}/evidences
+- GET /api/v1/evidences/{evidence_id}
 
-如果 `paperlens_test` 根本不存在，第一步连接已经失败，无法执行 CREATE DATABASE。更早的 `_db_available()` 也会返回 false，使集成测试直接 skip，`_ensure_test_database()` 根本不会运行。
+在 systemDesign/04、SDD design/09、各模块设计、tasks、sprint 中统一校准：
 
-要求：
+1. 将以上端点标为“已实现”。
+2. DELETE paper、GET paper tables、tasks、reviews、metrics、experiment-files、exports、FAISS index 等接口可以保留为目标设计，但必须逐项标为“规划/未实现”，不能混在已实现清单中。
+3. 当前上传接口只接收 file，不接收可选 title；title 使用清洗后的文件名 stem；成功记录和响应状态是 PROCESSING，而不是 UPLOADING。
+4. 当前只计算并保存 SHA-256 file_hash，没有按哈希查询、复用或拒绝重复文件。所有“已实现 SHA-256 去重”改为“哈希计算已实现，去重策略未实现/规划”。
+5. 当前 Evidence 列表接口不接受 page_number 或 evidence_type 过滤参数。过滤能力只能标为规划。
+6. 当前没有 Bearer/JWT 认证；_get_user_id() 固定返回 settings.demo_user_id。认证和用户隔离目标保留为规划，不得写成已启用。
+7. FastAPI 当前 Swagger 为 /api/docs，OpenAPI 为 /api/openapi.json；其他地址必须按 main.py 的真实配置描述。
+8. 目标 API 契约可以保留，但每个章节或表格必须能一眼区分 CURRENT 与 PLANNED。
 
-1. 测试库确保逻辑必须连接维护库 `postgres` 或已知存在的开发库，只使用同一 host/user/password，然后查询并幂等创建 `paperlens_test`。
-2. 创建完成后再连接 `paperlens_test`、执行 Alembic upgrade head、校验 revision。
-3. Docker 强制模式不得在 `_db_available()` 阶段因为测试库尚不存在而 skip。
-4. 在 docker-compose backend 环境中显式增加：
+三、校准数据模型和“表已存在”与“功能已实现”的边界
 
-```text
-PAPERLENS_REQUIRE_TEST_DB=true
-```
+以 models.py、Alembic migration 和数据库约束为准：
 
-5. 当强制模式为 true 时，缺失 TEST URL、数据库名不是严格的 `paperlens_test`、创建失败、迁移失败或连接失败都必须 fail，禁止 skip。
-6. 宿主机没有 PostgreSQL 时仍可诚实 skip integration 测试，但 Docker 全量测试必须 0 skipped。
-7. 不要通过删除当前 `paperlens_test` 或 PostgreSQL volume 来测试冷启动。使用 mock、独立辅助函数测试，或创建和删除一个不会碰业务数据的专用临时数据库名；任何临时数据库操作必须有严格命名守卫。
-8. 测试库初始化代码应放在可复用 helper/fixture 中，不要把数据库管理逻辑继续堆在 `test_health.py`。
+1. Paper 文档补充真实存在的 error_message。
+2. PaperPage 不得把当前不存在的 storage_key 写成已实现字段；如保留，明确标为规划。
+3. 关联表真实名称为 finding_evidences，不是 finding_evidence。
+4. 字段 nullable、外键 ondelete、唯一约束、CheckConstraint、索引和名称应与 ORM/Alembic 一致；不要编造实际不存在的索引。
+5. 明确 14 张业务表的数据库骨架已经存在，但 AnalysisTask、ReviewResult、ReviewFinding、MetricRecord、ExperimentFile、ExperimentResult、ExportReport 对应的服务/API/前端仍未实现。
+6. 不得因为 ORM 表存在就把 P3～P6 业务功能标成已完成。
 
-三、测试清理必须 fail-closed，禁止继续吞异常
+四、校准前端设计和依赖
 
-当前 `_truncate_test_tables()` 有两层静默异常：
+1. frontend/package.json 当前没有 Element Plus，不能写“基于 Element Plus 构建”。
+2. Pinia 当前为 3.x，不是 2.x；Vue、Vue Router、Axios、Vite 等版本按 package.json 描述。
+3. 当前实际路由只有 /、/upload、/papers、/papers/:id；P05～P08 路由和页面必须标为规划。
+4. 不存在的 components、utils、PollingWrapper、未来 Layout 等可作为建议结构保留，但必须明确是“规划目录/拟新增组件”。
+5. 保留 07-页面设计.md 中有价值的 8 页面线框图、交互状态、共享布局和颜色规范，不要把目标原型误写成当前页面已经具备的组件库实现。
+6. PaperDetailView.test.ts 当前有 15 个 it 用例。修复 3 份 sprint 文档中“14 项”的旧数字，并全局检查测试数量表述。
+7. P2.5 的历史验收结果为 Docker backend 63 passed、0 skipped，frontend 15 passed，build 成功。若本轮未实际重跑，必须标为“P2.5 历史验收结果”，不得冒充本轮新测试。
 
-```python
-for t in tables:
-    try:
-        TRUNCATE ...
-    except Exception:
-        pass
-...
-except Exception:
-    pass
-```
+五、修复项目工作流元数据
 
-这意味着清理失败后测试仍会显示通过，残留数据可能污染后续测试。
+更新 ProjectDocs/project-config.yaml：
 
-要求：
+1. current_stage 不得仍为“需求阶段”，应准确表达“P2.5 已完成，P3 待开始；当前进行 P2.6 文档校准”或完成后的等价状态。
+2. completed_docs 应列出已经生成并校准的 01～08 文档。
+3. next_steps 删除“填写已存在文档、再次生成 SDD”等过期事项，改为 P3 开发前的真实下一步。
+4. 保留 created_at，可增加 updated_at。
 
-1. 删除所有 cleanup `except: pass`。
-2. fixture 使用 `try/finally`，无论测试通过或失败都执行清理。
-3. 优先使用一条 `TRUNCATE table1, table2, ... CASCADE`，或从 SQLAlchemy metadata/数据库 schema 安全获得业务表集合，避免逐表失败后继续。
-4. 清理连接和 cursor 也必须用 context manager/finally 关闭。
-5. 清理失败必须让测试 session 明确失败，并输出数据库名和原始异常。
-6. 清理前后都严格断言当前数据库名为 `paperlens_test`；禁止对开发库执行 TRUNCATE。
-7. 清理结束后查询所有业务表，严格断言无测试残留；至少不能只查 papers 一张表。
-8. 增加 cleanup 失败测试，证明异常不会被吞掉。
+审查 AGENTS.md：
 
-四、修复 PaperTable 降级时回滚整篇论文的问题
+1. 保留 7 个 CodeArts skill 的用途、测试命令和安全约束。
+2. 确认其中路径与真实目录一致。
+3. ProjectDocs/bugfix-report/ 若尚不存在，由 bug-fix-reporter 创建本轮报告；AGENTS 中注明该目录按首次报告创建即可。
+4. 不要把本轮提示词或 Codex/码道职责改写进 AGENTS.md。
 
-当前 `_process_paper()` 对每张表执行 `db.flush()`，失败后调用：
+六、跨文档一致性要求
 
-```python
-db.rollback()
-```
+至少全局检查这些关键词并逐项确认语境：
 
-这会回滚当前整个事务，连此前已加入的 PaperPage、PaperSection、PaperChunk 也一起撤销。随后代码继续添加 Evidence，而 `chunk_id_map` 仍引用已回滚的 chunk ID，最终可能导致外键失败并把整篇论文标为 FAILED。该实现不是“表格失败可降级”。
+- 已实现、已完成、当前、规划、未实现
+- SHA-256、去重
+- DELETE、tables、page_number、evidence_type
+- Bearer、JWT、demo_user_id
+- Element Plus、Pinia
+- 14 passed、15 passed、63 passed
+- P2.5、P3、FAISS、LLM
 
 要求：
 
-1. 表格单项失败只能回滚该表格，不能回滚页面、章节、分块和其他表格。
-2. 使用 `db.begin_nested()`/SAVEPOINT 或先完成严格数据验证后跳过非法表格；禁止在表格循环的局部异常中调用整个 Session 的 `rollback()`。
-3. 单张表失败后：
-   - 论文仍可 PARSED
-   - PaperPage/PaperSection/PaperChunk/Evidence 均正常保存
-   - 合法表格正常保存
-   - 仅非法表格被跳过
-   - warning 日志包含 paper_id、page_number、table_index
-4. 如果页面/章节/分块/Evidence 等核心数据失败，仍应回滚整篇解析并将 Paper 标为 FAILED。
-5. 增加真实 PostgreSQL 集成测试：受控 mock `parse_pdf()` 返回页面、章节、分块、Evidence、一个合法表格和一个违反约束的表格，严格断言上述降级行为。
-6. 测试必须能在旧实现上失败，不能只直接调用 bbox 交换代码。
+1. 需求文档可以描述目标，设计文档可以描述未来方案，但必须带清晰状态。
+2. systemDesign、specs_SDD、sprint、README/docs 的实现状态不得互相冲突。
+3. 不删除 P3～P6 设计内容，只修正状态和当前事实。
+4. 避免在多份文档复制相互冲突的测试数字；必要时注明事实来源和验证日期。
+5. docs/PROGRESS.md 中既有历史记录不得篡改，只在末尾追加 P2.6 记录。
+6. docs/CODEARTS_NEXT_PROMPT.md 和 docs/CODEARTS_PROMPT_ARCHIVE.md 由 Codex 管理，本轮不得修改。
 
-五、修正后端仍然存在的弱断言
+七、验证与允许修改范围
 
-当前 Evidence 详情测试包含永远为真的断言：
+本轮允许修改：
 
-```python
-assert detail["char_start"] is not None or detail["char_start"] is None
-assert detail["char_end"] is not None or detail["char_end"] is None
-```
-
-它没有严格验证 bbox、char range、section_id 和 chunk_id，与 P2.3 汇报不一致。
-
-要求：
-
-1. 删除所有恒真断言。
-2. Evidence 详情测试确定性插入完整字段值，严格逐字段比较：
-   - id
-   - quoted_text
-   - page_number
-   - bbox_x0/y0/x1/y1
-   - char_start/char_end
-   - evidence_type
-   - section_id
-   - chunk_id
-3. 另设 nullable 字段测试，不要把 nullable 和完整字段测试混在一起。
-4. error_message 安全测试必须注入包含真实内部信息模式的异常，例如：
-
-```text
-/tmp/private/source.pdf
-C:\secret\source.pdf
-postgresql://user:password@host/db
-SELECT * FROM secret_table
-Traceback ...
-```
-
-严格断言数据库和 API 均只包含安全映射后的中文消息，不包含任何注入内容。
-5. 为非 PDF 扩展名、读取异常、临时文件清理、表格 SAVEPOINT、cleanup 失败分别增加能失败的行为测试。
-6. 整理重复的“等待 Paper 终态”代码为有超时、返回终态并在超时/FAILED 时给出明确信息的 helper。
-
-六、修复前端降级提示、Evidence 导航和轮询定时器
-
-当前 PaperDetailView 仍有以下问题：
-
-1. `highlightDegraded` 只在 char_start/char_end 为 null 时为 true。offset 越界或切片与 quoted_text 不一致时，`highlightRange` 返回 null，但不会显示“该证据暂不支持精确高亮”。
-2. `retryPoll()` 直接调用 `load()`，但原有 interval 在轮询失败时没有停止。重试后可能再创建一个 interval，造成重复轮询和计时器泄漏。
-3. `load()` 每次看到 PROCESSING 都直接 `setInterval()`，没有先清理既有 timer。
-4. 点击当前页 Evidence 时 `isNavigatingToEvidence = true`，但 currentPage 没变化，watcher 不会复位该标志；后续普通跳页可能被错误当成 Evidence 导航。
-5. 切换到页面 Tab 的 watcher和 `goToEvidence()` 都可能调用 `loadPage()`，造成重复请求。
-
-要求：
-
-1. 只要已选择 Evidence 且无法形成严格匹配的 highlightRange，包括 null、越界、start>=end、文本 mismatch，都显示统一降级提示，且不渲染 mark。
-2. 抽取 `stopPolling()` 和 `startPolling()`：任何时刻最多一个 timer。
-3. 轮询失败时停止当前 timer，再显示错误；点击重试先清理旧 timer，再立即请求一次，根据结果决定是否重新开始轮询。
-4. PROCESSING → PARSED/FAILED、详情重新加载、组件卸载时都必须停止 timer。
-5. 重构页面导航为单一入口，普通翻页/跳页清除 Evidence，Evidence 导航保留 Evidence；不要依赖可能残留的布尔标志。
-6. 每次用户动作只请求一次目标页。tab watcher、page watcher 和 goToEvidence 不得竞争发请求。
-7. 继续保留 pageRequestId 或等价的陈旧响应防护。
-
-七、把 11 项前端测试改为真实验收测试
-
-当前测试仍有以下缺口：
-
-1. 页面错误测试只检查“重试”按钮存在，没有点击重试并验证恢复。
-2. 初始详情失败测试也没有点击重试。
-3. mismatch 测试只断言没有 mark，没有断言降级提示存在。
-4. rapid evidence 测试顺序等待每个请求完成，没有制造“旧请求晚于新请求返回”，因此没有验证 pageRequestId。
-5. 没有轮询失败 → 点击重试 → 只有一个 timer 的测试。
-6. XSS mock 使用字符串 `&amp;`，没有验证原始 `&` 字符的显示。
-
-要求新增或重写严格测试：
-
-1. 页面加载失败后点击重试，断言第二次 getPage 成功、错误消失、页面内容出现。
-2. 初始 getPaper 失败后点击重试，断言论文详情、章节和 Evidence 正常加载。
-3. mismatch、越界和 null range 三种情况都断言：降级提示存在、mark 不存在。
-4. 使用可控 deferred Promise：先请求第 1 页，再请求第 2 页；让第 2 页先返回、第 1 页后返回，最终 DOM 必须仍显示第 2 页及其高亮。
-5. 同一 Evidence 导航严格断言目标 `getPage()` 调用一次，禁止仅使用 `toHaveBeenCalledWith`。
-6. 轮询失败后断言旧 timer 已停止；点击重试后任意时刻只有一个 timer；PARSED 后 timer 清零且不再调用 API。
-7. XSS 文本包含原始 `<script>`、`<b>`、`<`、`>`、`&`，断言无可执行元素、无双重转义字面量、原始可读字符存在。
-8. 每项测试结束恢复 fake timers 并 unmount，避免测试间泄漏。
-
-八、完成文档同步
-
-P2.3 后文档仍有未同步项：
-
-1. docs/IMPLEMENTATION_STATUS.md 的 P7-01“论文上传页面”仍标为未开始，但 UploadView 已实现。
-2. P7-02 将“审阅结果展示”和“Evidence 高亮”混在一个条目中；审阅结果尚未实现，但论文详情、页面与 Evidence 高亮已经部分实现，应拆分或标为部分完成。
-3. README 没有明确记录 Nginx 60MB 代理上限与后端 50MB 业务上限。
-4. README/文档没有清楚说明测试强制使用 paperlens_test 以及清理失败会使测试失败。
-5. architecture/security-design 中 FAISS 描述容易被读成当前实现，应明确标注为规划方案。
-
-同步以下文件：
-
-- README.md
-- docs/IMPLEMENTATION_STATUS.md
-- docs/api-contract.md
-- docs/architecture.md
-- docs/data-model.md
-- docs/security-design.md
+- AGENTS.md
+- ProjectDocs/**
 - docs/PROGRESS.md
+- docs/IMPLEMENTATION_STATUS.md
 
-要求：
+禁止修改：
 
-1. 如实标记已实现、部分实现和未实现功能。
-2. 明确当前前端只展示 normalized 文本高亮，不是 PDF.js bbox 覆盖层。
-3. 明确 FAISS、LLM 审阅、指标提取、实验数据分析和报告导出均未实现。
-4. “当前验证结果”使用本轮最新实测数据；历史阶段数据可以保留但不能与当前表混淆。
+- backend/**
+- frontend/**
+- alembic/**
+- docker-compose.yml
+- .arts/**
+- .codeartsdoer/**
+- .skills/**
+- .git/**
+- docs/CODEARTS_NEXT_PROMPT.md
+- docs/CODEARTS_PROMPT_ARCHIVE.md
 
-九、真实验证
+完成前执行并记录：
 
-完成后重新构建容器并独立复测，禁止沿用旧输出：
+1. git diff --check。
+2. git diff --name-only，确认只有允许范围内文件。
+3. Markdown 本地文件链接与锚点检查，结果必须为 0 失效。
+4. 从后端 route decorator 重新列出端点，与文档 CURRENT 清单逐项比对。
+5. 从 models.py/Alembic 重新列出表和关键字段，与数据模型文档逐项比对。
+6. 从 package.json、router 和测试文件重新核对前端依赖、路由和 15 个用例。
 
-```powershell
-cd D:\shixi\PaperLens
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail 200
-```
+本轮没有业务代码或测试代码变更，因此不要求为了制造新数字而重建 Docker。若主动运行测试，必须记录真实命令和结果；未运行则明确写“沿用 P2.5 历史验收，本轮仅做静态文档校准”。
 
-记录开发库测试前数量：
+八、完成汇报
 
-```powershell
-docker compose exec -T postgres psql -U paperlens -d paperlens -Atc "SELECT count(*) FROM papers"
-```
+在 docs/PROGRESS.md 末尾追加：
 
-运行：
+P2.6 — ProjectDocs 实现态校准与可追溯性修复
 
-```powershell
-docker compose exec -T backend python -m pytest -q -rs
-docker compose exec -T backend alembic current
-docker compose exec -T backend alembic check
-cd frontend
-npm test -- --run
-npm run build
-```
+至少如实记录：
 
-验收要求：
+- 调用的 skill 及其作用
+- 修改的文档清单
+- 修复前后失效链接和锚点数量
+- CURRENT API 端点数量及清单
+- 被降级为规划的错误实现声明
+- 数据模型校准内容
+- 前端依赖、路由、测试数量校准内容
+- project-config 状态修复
+- git diff --check 和允许范围检查结果
+- 本轮是否实际运行测试
+- P3 仍未实现的范围
 
-1. Docker backend：0 failed、0 errors、0 skipped。
-2. 测试前后开发库 papers 数量严格相等。
-3. 测试库所有业务表清理后无测试残留。
-4. 非 PDF 扩展名等所有上传路径均证明服务端 UploadFile 已关闭。
-5. 受控非法表格只被跳过，论文仍 PARSED，核心解析数据完整。
-6. cleanup 失败测试证明异常不会被吞掉。
-7. 前端页面/详情重试真正恢复。
-8. 轮询始终最多一个 timer。
-9. 陈旧页面响应不能覆盖最后选择。
-10. mismatch/越界/null 均显示降级提示。
-11. Alembic 无未生成差异。
-12. 通过 `http://localhost:3000` 完成一次真实 PDF 上传 → PARSED → Evidence → 跨页高亮回归。
+在 docs/IMPLEMENTATION_STATUS.md 增加 P2.6 文档校准记录，但不得改变 P3～P6 未开始状态。
 
-任何失败必须修复并重新执行对应验证，不得仅记录失败后结束。
+最终回复必须明确：
 
-十、范围限制与汇报
+1. 没有修改业务代码。
+2. 失效链接和锚点是否为 0。
+3. 哪些原“已实现”声明被纠正。
+4. CURRENT API 是否严格等于真实 8 个端点。
+5. 14 张表骨架与 P3～P6 业务未实现是否已明确区分。
+6. 是否运行测试；若未运行，不得声称本轮测试通过。
 
-本轮只完成 P2.4，不进入 P3，不实现 FAISS 或 LLM。
-
-不得修改：
-
-```text
-.arts/
-.codeartsdoer/
-.git/
-```
-
-不要 git commit，不写入真实密钥，不删除数据库 volume，不自动清理无法确认归属的开发库记录。
-
-完成后在 docs/PROGRESS.md 末尾追加 `P2.4 — 事务边界与验收收口`，必须如实记录：
-
-- 开发库测试前后数量
-- 测试库冷启动与强制守卫验证
-- 测试库全业务表清理结果
-- UploadFile 每条路径的关闭验证
-- 临时文件与存储对象清理验证
-- PaperTable SAVEPOINT 降级结果
-- 后端通过/失败/跳过数量
-- 前端测试数量及新增的严格场景
-- 轮询 timer 数量验证
-- 陈旧请求防护验证
-- 前端构建结果
-- 文档状态修正
-- 尚未完成项
-
-禁止把 skip、恒真断言、未点击的重试按钮、未制造乱序的并发测试或被吞掉的异常计为验证通过。
+不要 git commit，不要删除数据库 volume，不写入密钥，不自动清理开发库数据。
 ~~~

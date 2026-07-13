@@ -21,7 +21,7 @@
 
     <div v-if="paper.status === 'PARSED'" class="tabs">
       <button :class="{ active: tab === 'sections' }" @click="tab = 'sections'">章节</button>
-      <button :class="{ active: tab === 'pages' }" @click="tab = 'pages'">页面</button>
+      <button :class="{ active: tab === 'pages' }" @click="openPages">页面</button>
       <button :class="{ active: tab === 'evidences' }" @click="tab = 'evidences'">证据</button>
     </div>
 
@@ -99,7 +99,6 @@ const selectedEvidence = ref<EvidenceItem | null>(null)
 const pageContentRef = ref<HTMLElement | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pageRequestId = 0
-let pageLoading = false
 
 function statusLabel(s: string) {
   const m: Record<string, string> = { UPLOADING: '上传中', PROCESSING: '解析中', PARSED: '已解析', FAILED: '失败' }
@@ -163,9 +162,8 @@ const highlightRange = computed(() => {
 })
 
 async function loadPage(pageNumber: number) {
-  if (!paper.value || pageLoading) return
+  if (!paper.value) return
   const requestId = ++pageRequestId
-  pageLoading = true
   pageError.value = ''
   pageData.value = null
   try {
@@ -179,10 +177,6 @@ async function loadPage(pageNumber: number) {
   } catch (e: any) {
     if (requestId !== pageRequestId) return
     pageError.value = e?.response?.data?.error?.message || e?.message || '加载页面失败'
-  } finally {
-    if (requestId === pageRequestId) {
-      pageLoading = false
-    }
   }
 }
 
@@ -199,6 +193,13 @@ function jumpToPage() {
     selectedEvidence.value = null
     currentPage.value = pageJump.value
     pageJump.value = null
+  }
+}
+
+function openPages() {
+  tab.value = 'pages'
+  if (!pageData.value || pageData.value.page_number !== currentPage.value) {
+    loadPage(currentPage.value)
   }
 }
 
@@ -228,12 +229,6 @@ watch(currentPage, (newPage) => {
   loadPage(newPage)
 })
 
-watch(tab, (newTab) => {
-  if (newTab === 'pages' && !pageData.value && !pageLoading) {
-    loadPage(currentPage.value)
-  }
-})
-
 function retryPoll() {
   pollError.value = ''
   stopPolling()
@@ -259,6 +254,7 @@ async function load() {
 onMounted(load)
 onUnmounted(() => {
   stopPolling()
+  pageRequestId++
 })
 </script>
 

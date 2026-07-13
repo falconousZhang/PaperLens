@@ -72,47 +72,35 @@ async def upload_paper(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    user_id = _get_user_id()
-    raw_filename = file.filename or "unknown.pdf"
-    filename = _sanitize_filename(raw_filename)
-
-    if not filename.lower().endswith(".pdf"):
-        await file.close()
-        raise AppError("INVALID_FILE_TYPE", "仅支持 PDF 文件", 415)
-
-    max_bytes = settings.max_pdf_size_mb * 1024 * 1024
     tmp_path: str | None = None
+    tmp_transferred = False
+    storage = None
     storage_key: str | None = None
-    file_closed = False
+    storage_touched = False
+    storage_transferred = False
+    paper_added = False
     try:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        tmp_path = tmp.name
+        user_id = _get_user_id()
+        raw_filename = file.filename or "unknown.pdf"
+        filename = _sanitize_filename(raw_filename)
+
+        if not filename.lower().endswith(".pdf"):
+            raise AppError("INVALID_FILE_TYPE", "仅支持 PDF 文件", 415)
+
+        max_bytes = settings.max_pdf_size_mb * 1024 * 1024
         total = 0
-        try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp_path = tmp.name
             while True:
                 chunk = await file.read(1024 * 1024)
                 if not chunk:
                     break
                 total += len(chunk)
                 if total > max_bytes:
-                    tmp.close()
-                    os.unlink(tmp_path)
-                    tmp_path = None
                     raise AppError("FILE_TOO_LARGE", f"文件超过 {settings.max_pdf_size_mb}MB 限制", 413)
                 tmp.write(chunk)
-            tmp.close()
-        except Exception:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-                tmp_path = None
-            raise
-        finally:
-            await file.close()
-            file_closed = True
 
         if not check_pdf_magic(tmp_path):
-            os.unlink(tmp_path)
-            tmp_path = None
             raise AppError("INVALID_FILE_TYPE", "文件不是有效的 PDF", 415)
 
         file_hash = compute_file_hash(tmp_path)
@@ -120,6 +108,7 @@ async def upload_paper(
 
         storage = get_storage()
         storage_key = storage.build_key("papers", paper_id, filename)
+        storage_touched = True
         storage.save(storage_key, tmp_path)
 
         paper = Paper(
@@ -132,23 +121,12 @@ async def upload_paper(
             status=PaperStatus.PROCESSING,
             user_id=user_id,
         )
-        try:
-            db.add(paper)
-            db.commit()
-            db.refresh(paper)
-        except Exception:
-            db.rollback()
-            if storage_key:
-                try:
-                    storage.delete(storage_key)
-                except Exception:
-                    logger.warning("Failed to delete storage object %s after DB error", storage_key, exc_info=True)
-            raise
+        db.add(paper)
+        paper_added = True
+        db.flush()
+        db.refresh(paper)
 
-        background_tasks.add_task(_process_paper, paper_id, tmp_path)
-        tmp_path = None
-
-        return PaperUploadResponse(
+        response = PaperUploadResponse(
             id=paper.id,
             title=paper.title,
             filename=paper.filename,
@@ -156,19 +134,38 @@ async def upload_paper(
             status=paper.status,
             created_at=paper.created_at,
         )
+
+        background_tasks.add_task(_process_paper, paper_id, tmp_path)
+        db.commit()
+
+        tmp_transferred = True
+        storage_transferred = True
+        return response
     except AppError:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("上传论文失败")
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
         raise AppError("UPLOAD_FAILED", "上传失败，请稍后重试", 500)
     finally:
-        if not file_closed:
+        if paper_added and not storage_transferred:
             try:
-                await file.close()
+                db.rollback()
             except Exception:
-                pass
+                logger.warning("Failed to roll back upload database transaction", exc_info=True)
+        if storage_touched and not storage_transferred and storage is not None and storage_key:
+            try:
+                storage.delete(storage_key)
+            except Exception:
+                logger.warning("Failed to delete unowned storage object %s", storage_key, exc_info=True)
+        if tmp_path and not tmp_transferred and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                logger.warning("Failed to delete upload temporary file %s", tmp_path, exc_info=True)
+        try:
+            await file.close()
+        except Exception:
+            logger.warning("Failed to close uploaded file", exc_info=True)
 
 
 def _process_paper(paper_id: str, tmp_path: str):
@@ -244,18 +241,9 @@ def _process_paper(paper_id: str, tmp_path: str):
                     if table_obj.bbox_y0 is not None and table_obj.bbox_y1 is not None:
                         if table_obj.bbox_y1 < table_obj.bbox_y0:
                             table_obj.bbox_y1, table_obj.bbox_y0 = table_obj.bbox_y0, table_obj.bbox_y1
-                    nested = db.begin_nested()
-                    try:
+                    with db.begin_nested():
                         db.add(table_obj)
                         db.flush()
-                        nested.commit()
-                    except Exception:
-                        nested.rollback()
-                        logger.warning(
-                            "表格提取异常 paper_id=%s page=%d table_idx=%d",
-                            paper_id, t["page_number"], t["table_index"],
-                            exc_info=True,
-                        )
                 except Exception:
                     logger.warning(
                         "表格提取异常 paper_id=%s page=%d table_idx=%d",

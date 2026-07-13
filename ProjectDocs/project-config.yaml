@@ -1,0 +1,31 @@
+# 项目配置文件
+# 由 dev-process-framework 自动生成
+
+project:
+  name: "PaperLens"
+  type: "Web应用"
+  created_at: "2026-07-13T14:26:03.660203"
+  
+workflow:
+  current_stage: "需求阶段"
+  completed_docs: []
+  
+design:
+  templates_used:
+    - 01-需求细化与决策发现.md
+    - 02-架构设计.md
+    - 03-数据模型设计.md
+    - 04-API接口设计.md
+    - 05-实施计划.md
+    - 06-需求规格说明.md
+  
+next_steps:
+  - "完成需求澄清对话"
+  - "填写需求规格说明书 (06)"
+  - "设计系统架构 (02)"
+  - "设计数据模型 (03)"
+  - "设计API接口 (04)"
+  - "分解实施任务 (05)"
+  - "调用 page-mockup 生成页面设计"
+  - "调用 fullstack-testing 生成测试设计"
+  - "调用 function-detail 转换为SDD文档"

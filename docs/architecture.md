@@ -68,9 +68,9 @@ frontend/
 
 前端职责：
 - 文件上传（multipart 流式上传，最大 50MB）
-- 展示审阅结果（含 Evidence 高亮定位，通过 bbox 跳转原文页内位置）
-- 展示指标表格与统计口径标注
-- 触发报告导出并下载
+- 展示论文解析结果与 Evidence 定位（当前基于 `normalized_text_content` 字符区间高亮，不是 PDF.js/bbox 覆盖层）
+- 展示审阅结果、指标表格与统计口径标注（规划，尚未实现）
+- 触发报告导出并下载（规划，尚未实现）
 - 后端不可用时显示明确错误
 
 ### 2.2 后端架构（FastAPI + Python）
@@ -98,11 +98,9 @@ backend/
 后端职责：
 - 文件接收与校验
 - PDF 解析与结构化
-- 文本分块与向量索引
-- 调用 LLM 生成审阅意见（含 Evidence 绑定）
-- 指标提取与口径判断（确定性代码计算）
-- 实验数据文件解析与统计分析
-- 报告组装与导出
+- 文本分块与 page-local Evidence 提取（已实现）
+- 向量索引与语义检索（规划，尚未实现）
+- 调用 LLM 生成审阅意见、指标提取、实验分析和报告导出（规划，尚未实现）
 
 ### 2.3 LLM 调用抽象
 
@@ -123,6 +121,8 @@ class MaaSLLMClient(LLMClient):
 通过环境变量 `LLM_BACKEND=mock|maas` 切换。
 
 ## 3. 后台任务处理流程
+
+> 以下为目标流程。当前实现完成步骤 1～4 及 page-local Evidence 提取；步骤 5 之后的 FAISS、LLM 审阅、指标分析和报告导出尚未实现。
 
 ```
 用户上传 PDF
@@ -230,6 +230,8 @@ PENDING → RUNNING → SUCCEEDED
 
 ### 数据流说明
 
+> 步骤 1～5 为当前解析闭环；步骤 6～14 是后续阶段规划。
+
 | 步骤 | 源 | 目标 | 数据 | 说明 |
 |------|----|------|------|------|
 | 1 | 用户 | ECS | PDF 文件 | HTTP multipart 上传 |
@@ -253,8 +255,8 @@ PENDING → RUNNING → SUCCEEDED
 |------|---------|---------|
 | 文件存储 | 本地文件系统 `./data/uploads/` | 华为云 OBS（OBSStorage 未实现，后续版本） |
 | 数据库 | 本地 PostgreSQL（Docker Compose） | 华为云 RDS PostgreSQL |
-| 向量存储 | FAISS 本地索引 | FAISS 索引（ECS 本地）+ OBS 备份 |
-| LLM 推理 | MockLLMClient / OpenAI 兼容 API | 华为云 ModelArts 推理端点 |
+| 向量存储 | 规划使用 FAISS（尚未实现） | 规划使用 FAISS 索引（ECS 本地）+ OBS 备份 |
+| LLM 推理 | 仅有 LLMClient/MockLLMClient 骨架，审阅流程尚未实现 | 规划使用华为云 ModelArts 推理端点 |
 | PDF 解析 | 本地 PyMuPDF / pdfplumber | 同左（ECS 上运行） |
 | 任务队列 | FastAPI BackgroundTasks（MVP，非生产级） | Celery + Redis（后续版本） |
 | 前端 | Vite dev server | Nginx 静态托管 |
@@ -271,9 +273,9 @@ PENDING → RUNNING → SUCCEEDED
 
 ## 6. 关键设计决策
 
-### 6.1 向量索引方案
+### 6.1 向量索引规划（尚未实现）
 
-选择 FAISS 而非独立向量数据库（如 Milvus），原因：
+计划选择 FAISS 而非独立向量数据库（如 Milvus），原因：
 - MVP 阶段数据量可控（单篇论文 ~数百 chunk）
 - 避免引入额外基础设施依赖
 - FAISS 索引可序列化到 OBS 持久化

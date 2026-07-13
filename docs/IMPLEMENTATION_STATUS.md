@@ -11,7 +11,7 @@
 | P4 | 指标提取 | 表格提取、指标识别、口径判断 | ⬜ 未开始 |
 | P5 | 实验数据分析 | CSV/Excel 上传、统计计算、交叉验证 | ⬜ 未开始 |
 | P6 | 报告导出 | Markdown/PDF/DOCX 导出 | ⬜ 未开始 |
-| P7 | 前端开发 | Vue3 页面开发、交互优化 | ⬜ 未开始 |
+| P7 | 前端开发 | Vue3 页面开发、交互优化 | 🔄 进行中 |
 | P8 | 集成测试与部署 | 端到端测试、云端部署、性能调优 | ⬜ 未开始 |
 
 ## P0 阶段清单
@@ -95,12 +95,29 @@
 | P2.4-06 | test_table_savepoint_degradation：mock parse_pdf 返回合法+非法表格，断言论文仍 PARSED、核心数据完整 | ✅ 已完成 |
 | P2.4-07 | PaperDetailView.vue 重写：stopPolling()/startPolling() 抽取；evidenceDegraded 统一检查 null/越界/mismatch；删除 isNavigatingToEvidence | ✅ 已完成 |
 | P2.4-08 | PaperDetailView.test.ts 重写为 14 项测试 | ✅ 已完成 |
-| P2.4-09 | Docker 全量后端测试 49 passed, 1 skipped | ✅ 已完成 |
+| P2.4-09 | Docker 全量后端测试 49 passed, 1 skipped | ⚠️ 历史结果（skip 已在 P2.5 消除） |
 | P2.4-10 | 前端测试 14/14 通过 | ✅ 已完成 |
 | P2.4-11 | 开发库隔离验证通过（测试前后 papers 数量不变） | ✅ 已完成 |
 | P2.4-12 | alembic check 无差异 | ✅ 已完成 |
 | P2.4-13 | E2E 回归验证通过（上传→PARSED→Evidence→页面数据） | ✅ 已完成 |
 | P2.4-14 | 文档同步（IMPLEMENTATION_STATUS.md, README.md） | ✅ 已完成 |
+
+## P2.5 阶段清单（验收去伪与并发翻页修复）
+
+| 编号 | 交付物 | 状态 |
+|------|--------|------|
+| P2.5-01 | 确定性 nullable Evidence 数据与真实详情 API 严格断言，移除条件 skip | ✅ 已完成 |
+| P2.5-02 | upload_paper() 单一 UploadFile close 出口、NamedTemporaryFile 上下文管理和资源所有权转移 | ✅ 已完成 |
+| P2.5-03 | 上传扩展名、magic、超限、read/hash/storage/Paper/commit/task 失败及成功路径生命周期测试 | ✅ 已完成（10 项） |
+| P2.5-04 | PaperTable `page_number=0` 真实触发 PostgreSQL 约束，SAVEPOINT 仅跳过非法表格 | ✅ 已完成 |
+| P2.5-05 | 测试清理的数据库名守卫、连接失败、TRUNCATE 失败和残留检测传播测试 | ✅ 已完成 |
+| P2.5-06 | 前端移除 pageLoading 丢请求逻辑，使用 request id 防陈旧响应覆盖 | ✅ 已完成 |
+| P2.5-07 | 严格乱序响应、同页恰好一次、快速 1→2→1 导航测试 | ✅ 已完成 |
+| P2.5-08 | Docker 后端全量测试 | ✅ 63 passed, 0 skipped |
+| P2.5-09 | 前端测试与构建 | ✅ 15 passed，生产构建成功 |
+| P2.5-10 | 开发库隔离与测试库清理 | ✅ 最终全量测试开发库 28→28，测试库 14 张业务表均为 0 |
+| P2.5-11 | Alembic 与双页 HTTP E2E | ✅ head/无差异；2 页、2 Evidence、char range 全匹配 |
+| P2.5-12 | 码道提示词统一归档 | ✅ 从 Codex rollout 恢复 8 个原文版本到 `docs/CODEARTS_PROMPT_ARCHIVE.md` |
 
 ## P3 阶段清单（待细化）
 
@@ -143,7 +160,8 @@
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
 | P7-01 | 论文上传页面 | ✅ 已完成 |
-| P7-02 | 审阅结果展示页面（含 Evidence 高亮） | ⬜ 未开始 |
+| P7-02a | 论文详情、页面文本与 Evidence normalized 字符区间高亮 | ✅ 已完成 |
+| P7-02b | LLM 审阅结果展示页面 | ⬜ 未开始 |
 | P7-03 | 指标分析页面 | ⬜ 未开始 |
 | P7-04 | 报告导出页面 | ⬜ 未开始 |
 

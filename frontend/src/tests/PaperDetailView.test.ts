@@ -63,8 +63,17 @@ function createTestRouter() {
 
 describe('PaperDetailView', () => {
   let router: ReturnType<typeof createTestRouter>
+  let wrappers: Array<ReturnType<typeof mount>>
+
+  function mountView() {
+    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    wrappers.push(wrapper)
+    return wrapper
+  }
 
   beforeEach(async () => {
+    vi.clearAllMocks()
+    wrappers = []
     router = createTestRouter()
     router.push('/papers/test-uuid-1')
     await router.isReady()
@@ -79,12 +88,13 @@ describe('PaperDetailView', () => {
   })
 
   afterEach(() => {
+    wrappers.forEach(wrapper => wrapper.unmount())
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
   it('loads paper, sections and evidences on mount', async () => {
-    mount(PaperDetailView, { global: { plugins: [router] } })
+    mountView()
     await flushPromises()
     expect(api.getPaper).toHaveBeenCalledWith('test-uuid-1')
     expect(api.listSections).toHaveBeenCalledWith('test-uuid-1')
@@ -92,7 +102,7 @@ describe('PaperDetailView', () => {
   })
 
   it('clicking page-2 evidence loads page 2 and highlights', async () => {
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -115,7 +125,7 @@ describe('PaperDetailView', () => {
 
   it('shows FAILED status with error_message', async () => {
     vi.mocked(api.getPaper).mockResolvedValue({ ...mockPaper, status: 'FAILED', error_message: 'OCR not supported' } as any)
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
     expect(wrapper.find('.failed-notice').exists()).toBe(true)
     expect(wrapper.text()).toContain('OCR not supported')
@@ -124,7 +134,7 @@ describe('PaperDetailView', () => {
   it('stops polling on unmount and does not call API after', async () => {
     vi.useFakeTimers()
     vi.mocked(api.getPaper).mockResolvedValue({ ...mockPaper, status: 'PROCESSING' } as any)
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const clearIntervalSpy = vi.spyOn(global, 'clearInterval')
@@ -137,7 +147,7 @@ describe('PaperDetailView', () => {
   })
 
   it('null char range: degraded notice shown, no mark', async () => {
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -157,7 +167,7 @@ describe('PaperDetailView', () => {
   it('highlight mismatch: degraded notice shown, no mark', async () => {
     const mismatchEv = { id: 'ev-mis', quoted_text: 'WRONG TEXT', page_number: 1, bbox_x0: 72, bbox_y0: 72, bbox_x1: 200, bbox_y1: 100, char_start: 6, char_end: 16, evidence_type: 'TEXT', section_id: null, chunk_id: null }
     vi.mocked(api.listEvidences).mockResolvedValue([mismatchEv] as any)
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -176,7 +186,7 @@ describe('PaperDetailView', () => {
   it('out-of-bounds char range: degraded notice shown, no mark', async () => {
     const oobEv = { id: 'ev-oob', quoted_text: 'Hello', page_number: 1, bbox_x0: 72, bbox_y0: 72, bbox_x1: 200, bbox_y1: 100, char_start: 999, char_end: 1004, evidence_type: 'TEXT', section_id: null, chunk_id: null }
     vi.mocked(api.listEvidences).mockResolvedValue([oobEv] as any)
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -203,7 +213,7 @@ describe('PaperDetailView', () => {
       if (pn === 2) return mockPage2 as any
       throw { response: { status: 404, data: { error: { message: '页面不存在' } } } }
     })
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -230,7 +240,7 @@ describe('PaperDetailView', () => {
       if (callCount === 1) throw { response: { status: 500, data: { error: { message: '加载失败' } } } }
       return mockPaper as any
     })
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.find('.error-msg').exists()).toBe(true)
@@ -252,7 +262,7 @@ describe('PaperDetailView', () => {
       if (callCount <= 1) return { ...mockPaper, status: 'PROCESSING' } as any
       return mockPaper as any
     })
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    mountView()
     await flushPromises()
 
     vi.advanceTimersByTime(4000)
@@ -265,7 +275,6 @@ describe('PaperDetailView', () => {
     vi.advanceTimersByTime(10000)
     await flushPromises()
     expect(vi.mocked(api.getPaper).mock.calls.length).toBe(callsBefore)
-    wrapper.unmount()
   })
 
   it('XSS: raw special characters displayed safely', async () => {
@@ -278,7 +287,7 @@ describe('PaperDetailView', () => {
       height: 792,
     }
     vi.mocked(api.getPage).mockResolvedValue(xssPage as any)
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -298,37 +307,56 @@ describe('PaperDetailView', () => {
 
   it('stale page response does not overwrite current page', async () => {
     let resolvePage1: (v: any) => void
-    const page1Deferred = new Promise(r => { resolvePage1 = r })
+    let resolvePage2: (v: any) => void
+    let page1Settled = false
+    const page1Deferred = new Promise<any>(r => { resolvePage1 = r }).then(value => {
+      page1Settled = true
+      return value
+    })
+    const page2Deferred = new Promise<any>(r => { resolvePage2 = r })
 
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    vi.mocked(api.getPage).mockImplementation(async (_pid: string, pn: number) => {
+      if (pn === 1) return page1Deferred
+      if (pn === 2) return page2Deferred
+      throw { response: { status: 404, data: { error: { message: '页面不存在' } } } }
+    })
+
+    const wrapper = mountView()
     await flushPromises()
+
+    const pagesTab = wrapper.findAll('.tabs button').find(b => b.text() === '页面')
+    await pagesTab!.trigger('click')
+    await flushPromises()
+
+    expect(vi.mocked(api.getPage).mock.calls.filter(call => call[1] === 1)).toHaveLength(1)
+    expect(page1Settled).toBe(false)
 
     const tabs = wrapper.findAll('.tabs button')
     const evidencesTab = tabs.find(b => b.text() === '证据')
     await evidencesTab!.trigger('click')
     await flushPromises()
 
-    vi.mocked(api.getPage).mockImplementation(async (_pid: string, pn: number) => {
-      if (pn === 1) return page1Deferred
-      if (pn === 2) return mockPage2 as any
-      throw { response: { status: 404, data: { error: { message: '页面不存在' } } } }
-    })
-
     const evItems = wrapper.findAll('.evidence-item')
     const page2Ev = evItems[1]!
     await page2Ev.trigger('click')
     await flushPromises()
 
+    expect(vi.mocked(api.getPage).mock.calls.filter(call => call[1] === 2)).toHaveLength(1)
+
+    resolvePage2!(mockPage2)
+    await flushPromises()
     expect(wrapper.text()).toContain('Evidence on page two')
+    expect(wrapper.find('.highlight').text()).toBe('Evidence on page two')
 
     resolvePage1!(mockPage1)
     await flushPromises()
 
     expect(wrapper.text()).toContain('Evidence on page two')
+    expect(wrapper.text()).not.toContain('Hello This is highlighted')
   })
 
   it('same-page evidence navigation calls getPage exactly once', async () => {
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     const tabs = wrapper.findAll('.tabs button')
@@ -342,8 +370,48 @@ describe('PaperDetailView', () => {
     await page1Ev.trigger('click')
     await flushPromises()
 
-    const page1Calls = vi.mocked(api.getPage).mock.calls.filter(c => c[1] === 1).length
-    expect(page1Calls).toBeLessThanOrEqual(1)
+    expect(api.getPage).toHaveBeenCalledTimes(1)
+    expect(api.getPage).toHaveBeenCalledWith('test-uuid-1', 1)
+  })
+
+  it('rapid page 1 to 2 to 1 navigation keeps the final page', async () => {
+    let resolveFirstPage1: (v: any) => void
+    let resolvePage2: (v: any) => void
+    let resolveLastPage1: (v: any) => void
+    const firstPage1 = new Promise<any>(r => { resolveFirstPage1 = r })
+    const page2 = new Promise<any>(r => { resolvePage2 = r })
+    const lastPage1 = new Promise<any>(r => { resolveLastPage1 = r })
+    let page1CallCount = 0
+
+    vi.mocked(api.getPage).mockImplementation(async (_pid: string, pageNumber: number) => {
+      if (pageNumber === 2) return page2
+      page1CallCount++
+      return page1CallCount === 1 ? firstPage1 : lastPage1
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    const pagesTab = wrapper.findAll('.tabs button').find(button => button.text() === '页面')
+    await pagesTab!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.page-nav button:nth-of-type(2)').trigger('click')
+    await flushPromises()
+    await wrapper.find('.page-nav button:nth-of-type(1)').trigger('click')
+    await flushPromises()
+
+    expect(vi.mocked(api.getPage).mock.calls.map(call => call[1])).toEqual([1, 2, 1])
+
+    const finalPage = { ...mockPage1, normalized_text_content: 'Final page one', text_content: 'Final page one' }
+    resolveLastPage1!(finalPage)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Final page one')
+
+    resolvePage2!(mockPage2)
+    resolveFirstPage1!(mockPage1)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Final page one')
+    expect(wrapper.text()).not.toContain('Evidence on page two')
   })
 
   it('polling failure stops timer; retry creates at most one timer', async () => {
@@ -357,7 +425,7 @@ describe('PaperDetailView', () => {
       return mockPaper as any
     })
 
-    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    const wrapper = mountView()
     await flushPromises()
 
     vi.advanceTimersByTime(4000)
@@ -380,6 +448,5 @@ describe('PaperDetailView', () => {
     const getPaperCallsAfter = vi.mocked(api.getPaper).mock.calls.length
     expect(getPaperCallsAfter).toBe(getPaperCalls)
 
-    wrapper.unmount()
   })
 })
