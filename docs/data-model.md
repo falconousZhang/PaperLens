@@ -223,12 +223,13 @@ ExperimentFile 1──1 ExperimentResult
 | id | UUID | PK | 主键 |
 | paper_id | UUID | FK → Paper.id | 所属论文 |
 | task_id | UUID | FK → AnalysisTask.id | 关联任务 |
+| user_id | VARCHAR(128) | FK → User.id, NOT NULL | 真实资源所有者 |
 | model_name | VARCHAR(200) | | 模型名称 |
 | dataset_name | VARCHAR(200) | | 数据集名称 |
 | metric_name | VARCHAR(100) | NOT NULL | 指标名称（accuracy, F1, BLEU 等） |
 | metric_value | FLOAT | NOT NULL | 指标值 |
-| checkpoint_type | VARCHAR(20) | | 统计口径：FINAL / MAX / MEAN / BEST / LAST / UNKNOWN |
-| checkpoint_source | VARCHAR(50) | | 口径来源：EXPLICIT_TEXT / IMPLICIT_CONTEXT / TABLE_HEADER / UNKNOWN |
+| checkpoint_type | VARCHAR(20) | NOT NULL | FINAL / MAX / MEAN / BEST / LAST / UNKNOWN |
+| checkpoint_source | VARCHAR(50) | | caption / row_header / context / conflict / null |
 | evidence_id | UUID | FK → Evidence.id | 关联证据 |
 | raw_text | TEXT | | 原始文本片段 |
 | table_id | UUID | FK → PaperTable.id | 来源表格 |
@@ -239,10 +240,14 @@ ExperimentFile 1──1 ExperimentResult
 - `idx_metric_paper_id` ON (paper_id)
 - `idx_metric_task_id` ON (task_id)
 - `idx_metric_checkpoint_type` ON (checkpoint_type)
+- `idx_metric_user_id` ON (user_id)
+- `idx_metric_name` ON (metric_name)
+
+完整性：metric_value 必须有限；表格来源要求 `table_id + row_index`，Evidence 来源要求 `evidence_id`，二者严格二选一；来源外键为 RESTRICT。007 另为同一用户/论文的 PENDING/RUNNING METRIC_EXTRACTION 任务建立部分唯一索引。
 
 ## 11. ExperimentFile
 
-实验数据文件（CSV/Excel）。
+实验数据文件（CSV/XLSX/XLS）；P5.1 服务/API 已实现，完整哈希和 storage_key 仅内部使用。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -253,9 +258,9 @@ ExperimentFile 1──1 ExperimentResult
 | file_size | BIGINT | NOT NULL | 文件大小 |
 | file_hash | VARCHAR(64) | NOT NULL | SHA-256 哈希 |
 | file_type | VARCHAR(10) | NOT NULL | CSV / XLSX / XLS |
-| row_count | INTEGER | | 数据行数 |
-| column_count | INTEGER | | 数据列数 |
-| columns_info | JSONB | | 列名与类型信息 |
+| row_count | INTEGER | NOT NULL，1～100000 | 数据行数，不含表头 |
+| column_count | INTEGER | NOT NULL，1～256 | 数据列数 |
+| columns_info | JSONB | NOT NULL | version=1 严格结构元数据 |
 | user_id | VARCHAR(128) | NOT NULL | 所属用户 |
 | created_at | TIMESTAMP | NOT NULL | 创建时间 |
 
@@ -263,9 +268,11 @@ ExperimentFile 1──1 ExperimentResult
 - `idx_exp_file_paper_id` ON (paper_id)
 - `idx_exp_file_user_id` ON (user_id)
 
+008 约束：file_type 仅 CSV/XLSX/XLS、file_size > 0、file_hash 为 64 位小写十六进制、行列范围，以及 `UNIQUE(user_id, paper_id, file_hash)`。upgrade 发现已有冲突会无损中止，不修补或删除记录。
+
 ## 12. ExperimentResult
 
-实验数据分析结果，由确定性代码计算。
+实验数据分析结果模型骨架。P5.1 不写入该表；P5.2 确定性统计与 P5.3 指标交叉验证当前均未实现。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|

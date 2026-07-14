@@ -23,17 +23,26 @@ services:
     environment:
       PAPERLENS_DATABASE_URL: postgresql+psycopg2://paperlens:paperlens@postgres:5432/paperlens
       PAPERLENS_TEST_DATABASE_URL: postgresql+psycopg2://paperlens:paperlens@postgres:5432/paperlens_test
-      PAPERLENS_LLM_BACKEND: mock
+      PAPERLENS_LLM_BACKEND: ${PAPERLENS_LLM_BACKEND:-mock}
+      PAPERLENS_LLM_BASE_URL: ${PAPERLENS_LLM_BASE_URL:-https://api.modelarts-maas.com/v2}
+      PAPERLENS_LLM_MODEL: ${PAPERLENS_LLM_MODEL:-glm-5.2}
+      PAPERLENS_LLM_API_KEY: ${PAPERLENS_LLM_API_KEY:-}
+      PAPERLENS_LLM_TIMEOUT_SECONDS: ${PAPERLENS_LLM_TIMEOUT_SECONDS:-60}
+      PAPERLENS_LLM_MAX_COMPLETION_TOKENS: ${PAPERLENS_LLM_MAX_COMPLETION_TOKENS:-2048}
+      PAPERLENS_EMBEDDING_PROVIDER: mock
       PAPERLENS_DEBUG: "true"
       PAPERLENS_STORAGE_BACKEND: local
       PAPERLENS_STORAGE_ROOT: /app/data
       PAPERLENS_DEMO_USER_ID: demo-user
       PAPERLENS_DB_HOST: postgres
       PAPERLENS_REQUIRE_TEST_DB: "true"
+      PAPERLENS_JWT_SECRET: ${PAPERLENS_JWT_SECRET:?set PAPERLENS_JWT_SECRET in .env}
+      PAPERLENS_AUTH_COOKIE_SECURE: ${PAPERLENS_AUTH_COOKIE_SECURE:-false}
     ports:
       - "8000:8000"
     volumes:
       - backend_data:/app/data
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
     depends_on:
       postgres:
         condition: service_healthy

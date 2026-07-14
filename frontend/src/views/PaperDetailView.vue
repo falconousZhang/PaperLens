@@ -23,7 +23,11 @@
       <button :class="{ active: tab === 'sections' }" @click="tab = 'sections'">章节</button>
       <button :class="{ active: tab === 'pages' }" @click="openPages">页面</button>
       <button :class="{ active: tab === 'evidences' }" @click="tab = 'evidences'">证据</button>
+      <router-link :to="{ name: 'paper-review', params: { id: paper.id } }" class="tab-link">审阅</router-link>
+      <router-link :to="{ name: 'paper-metrics', params: { id: paper.id } }" class="tab-link">指标</router-link>
     </div>
+
+    <div v-if="evidenceNotFoundMsg" class="evidence-not-found">{{ evidenceNotFoundMsg }}</div>
 
     <div v-if="paper.status === 'PARSED' && tab === 'sections'" class="section-list">
       <div v-for="s in sections" :key="s.id" class="section-item">
@@ -63,6 +67,7 @@
     </div>
 
     <div v-if="paper.status === 'PARSED' && tab === 'evidences'" class="evidence-list">
+
       <div v-for="e in evidences" :key="e.id" class="evidence-item" @click="goToEvidence(e)">
         <p class="evidence-meta">页 {{ e.page_number }} | {{ e.evidence_type }}</p>
         <p class="evidence-text">{{ e.quoted_text.slice(0, 300) }}{{ e.quoted_text.length > 300 ? '...' : '' }}</p>
@@ -97,6 +102,7 @@ const currentPage = ref(1)
 const pageJump = ref<number | null>(null)
 const selectedEvidence = ref<EvidenceItem | null>(null)
 const pageContentRef = ref<HTMLElement | null>(null)
+const evidenceNotFoundMsg = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pageRequestId = 0
 
@@ -245,11 +251,36 @@ async function load() {
     } else if (paper.value.status === 'PARSED') {
       sections.value = await listSections(id)
       evidences.value = await listEvidences(id)
+      handleEvidenceQuery()
     }
   } catch (e: any) {
     loadError.value = e?.response?.data?.error?.message || e?.message || '加载论文详情失败'
   }
 }
+
+function handleEvidenceQuery() {
+  const eq = route.query.evidence
+  if (eq == null || eq === '') {
+    evidenceNotFoundMsg.value = ''
+    return
+  }
+  if (typeof eq !== 'string') {
+    evidenceNotFoundMsg.value = '未找到对应证据'
+    return
+  }
+  const found = evidences.value.find(e => e.id === eq)
+  if (found) {
+    evidenceNotFoundMsg.value = ''
+    goToEvidence(found)
+  } else {
+    evidenceNotFoundMsg.value = '未找到对应证据'
+  }
+}
+
+watch(() => route.query.evidence, () => {
+  if (!paper.value || paper.value.status !== 'PARSED') return
+  handleEvidenceQuery()
+})
 
 onMounted(load)
 onUnmounted(() => {
@@ -290,4 +321,7 @@ h2 { color: #1a1a2e; }
 .retry-btn { margin-top: 0.5rem; padding: 0.4rem 1rem; border: 1px solid #c62828; border-radius: 4px; background: #fff; color: #c62828; cursor: pointer; }
 .loading-msg { color: #888; padding: 1rem; text-align: center; }
 .back-link { display: inline-block; margin-top: 1.5rem; color: #1a1a2e; }
+.tab-link { padding: 0.5rem 1.5rem; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; cursor: pointer; text-decoration: none; color: #333; font-size: inherit; }
+.tab-link:hover { background: #f0f0ff; }
+.evidence-not-found { background: #fff3e0; color: #e65100; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem; }
 </style>

@@ -3,7 +3,7 @@
 ## 通用约定
 
 - 基础路径：`/api/v1`
-- 认证：当前使用配置项 `DEMO_USER_ID` 做数据隔离；Bearer Token（JWT）为后续计划
+- 认证：Bearer Token（JWT access token），通过 `/api/v1/auth/login` 获取；refresh token 通过 `paperlens_refresh` HttpOnly cookie 传输
 - 分页：`?page=1&page_size=20`
 - 时间格式：ISO 8601（`2026-07-12T10:30:00Z`）
 - 错误响应格式：
@@ -32,6 +32,140 @@
 ```
 
 - UUID 路径参数：当 `{paper_id}`、`{task_id}`、`{evidence_id}` 等为无效 UUID 格式时，返回 `422 Unprocessable Entity`
+
+## 0. 认证
+
+公开端点仅为 register、login、refresh、forgot-password、reset-password。logout、logout-all、me、change-password 以及其他业务端点都要求 `Authorization: Bearer <access_token>`；认证失败返回 401 和 `WWW-Authenticate: Bearer`。
+
+### POST /auth/register
+
+注册新用户。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | String | 是 | 邮箱地址 |
+| password | String | 是 | 15~128 Unicode code point |
+| display_name | String | 是 | 显示名称，去除首尾空白后 1～100 字符 |
+
+**响应** `201`：
+```json
+{
+  "access_token": "jwt...",
+  "token_type": "bearer",
+  "expires_in": 900,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "display_name": "User",
+    "role": "USER",
+    "status": "ACTIVE",
+    "created_at": "2026-07-13T10:00:00Z"
+  }
+}
+```
+同时设置 refresh HttpOnly cookie，响应不会包含 password/session/token hash。
+
+### POST /auth/login
+
+登录。成功返回 access token 和 refresh cookie。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | String | 是 | 邮箱地址 |
+| password | String | 是 | 密码 |
+
+**响应** `200`：
+```json
+{
+  "access_token": "jwt...",
+  "token_type": "bearer",
+  "expires_in": 900,
+  "user": { "id": "...", "email": "...", "display_name": "...", "role": "USER", "status": "ACTIVE", "created_at": "..." }
+}
+```
+Set-Cookie: `paperlens_refresh=<opaque>; HttpOnly; SameSite=Lax; Path=/api/v1/auth; Max-Age=2592000`。生产 HTTPS 必须含 `Secure`；本地 HTTP 仅可通过显式配置关闭。
+
+### POST /auth/refresh
+
+刷新 access token。读取 `paperlens_refresh` cookie，单次轮换，重放检测撤销整个 family。
+
+**响应** `200`：同 login 响应格式。
+
+### POST /auth/logout
+
+登出当前 session family。**需认证**；服务端依据 access token 的 sid/family 撤销，不信任客户端自报身份。
+
+**响应** `200`：`{ "message": "Logged out" }`
+
+### POST /auth/logout-all
+
+登出所有 session。**需认证**。
+
+**响应** `200`：`{ "message": "Logged out from all sessions" }`
+
+### GET /auth/me
+
+获取当前用户信息。**需认证**。
+
+**响应** `200`：
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "display_name": "User",
+  "role": "USER",
+  "status": "ACTIVE",
+  "created_at": "2026-07-13T10:00:00Z"
+}
+```
+
+### PATCH /auth/me
+
+更新个人资料。**需认证**。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| display_name | String | 否 | 显示名称 |
+
+**响应** `200`：同 GET /auth/me 响应格式。
+
+### POST /auth/change-password
+
+修改密码。**需认证**。修改后撤销所有 session。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| old_password | String | 是 | 当前密码 |
+| new_password | String | 是 | 新密码（15~128 Unicode code point） |
+
+**响应** `200`：`{ "message": "Password changed" }`
+
+### POST /auth/forgot-password
+
+请求密码重置。统一返回 202，不泄露邮箱是否存在。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | String | 是 | 邮箱地址 |
+
+**响应** `202`：`{ "message": "If the email exists, a reset link will be sent" }`
+
+### POST /auth/reset-password
+
+重置密码。单次 token，使用后失效。
+
+**请求**：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token | String | 是 | 重置令牌 |
+| new_password | String | 是 | 新密码（15~128 Unicode code point） |
+
+**响应** `200`：`{ "message": "Password reset successful" }`
 
 ## 1. 论文管理
 
@@ -171,7 +305,7 @@
 
 ## 3. 分析任务
 
-> P3.1 CURRENT：当前仅支持 `task_type=REVIEW`，使用 FastAPI BackgroundTasks 和 MockLLMClient。`METRIC_EXTRACTION`、`EXPERIMENT_ANALYSIS` 与任务取消仍为规划功能。
+> P3.3 CURRENT：当前仅支持 `task_type=REVIEW`，使用 FastAPI BackgroundTasks 和按维度语义 Evidence 检索；LLM 默认使用离线 MockLLMClient，也可配置非流式 HuaweiMaaSLLMClient。`METRIC_EXTRACTION`、`EXPERIMENT_ANALYSIS` 与任务取消仍为规划功能。
 
 ### POST /papers/{paper_id}/tasks
 ✅ **CURRENT**
@@ -267,7 +401,7 @@
 
 获取论文的审阅结果。一个任务可产生多个 ReviewResult（按维度），每个 ReviewResult 包含多个 ReviewFinding。
 
-当前公开响应只返回 `VERIFIED` Finding；引用为空、未知 alias、原始 UUID 或混合非法引用的 Finding 保存为 `UNVERIFIED` 且不展示。P3.1 使用同论文 Evidence 的确定性 Top-K 候选，FAISS/Embedding 语义检索仍为规划。
+当前公开响应只返回 `VERIFIED` Finding；引用为空、未知 alias、原始 UUID 或混合非法引用的 Finding 保存为 `UNVERIFIED` 且不展示。P3.2 对同论文 Evidence 执行任务内即时 Embedding、按审阅维度精确余弦排序和 Top-K 选择；默认客户端为离线 MockEmbeddingClient，也可配置华为云 MaaS Embedding。P3.3 在统一 LLMClient 下增加 HuaweiMaaSLLMClient，响应仍必须经过现有严格 JSON、维度和 Evidence 绑定校验。FAISS/pgvector 持久化索引仍为规划。
 
 **响应** `200`：
 ```json
@@ -373,65 +507,31 @@
 
 ## 6. 实验指标
 
+### POST /papers/{paper_id}/tasks
+
+创建指标提取任务：
+
+```json
+{
+  "task_type": "METRIC_EXTRACTION",
+  "options": {}
+}
+```
+
+`options` 可省略或为空对象，其他字段返回 422。论文必须属于当前用户且状态为 PARSED；无真实候选或已有活动任务返回 409。
+
 ### GET /papers/{paper_id}/metrics
 获取论文的实验指标记录。
 
 **查询参数**：
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| model_name | String | 按模型名过滤 |
+| task_id | UUID | 按指标任务过滤 |
+| metric_name | String | 按规范指标名精确过滤 |
 | dataset_name | String | 按数据集过滤 |
-| checkpoint_type | String | 按口径过滤：FINAL / MAX / MEAN / BEST / UNKNOWN |
-
-**响应** `200`：
-```json
-{
-  "metrics": [
-    {
-      "id": "uuid",
-      "model_name": "BERT-base",
-      "dataset_name": "SQuAD 2.0",
-      "metric_name": "F1",
-      "metric_value": 83.1,
-      "checkpoint_type": "BEST",
-      "checkpoint_source": "TABLE_HEADER",
-      "evidence_id": "uuid",
-      "raw_text": "BERT-base 83.1 79.0",
-      "table_id": "uuid",
-      "row_index": 2
-    }
-  ]
-}
-```
-
-## 7. 实验数据文件
-
-### POST /papers/{paper_id}/experiment-files/upload
-上传实验数据文件（CSV/Excel）。
-
-**请求**：`multipart/form-data`
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| file | File | 是 | CSV/XLSX/XLS 文件，最大 20MB |
-
-**响应** `201`：
-```json
-{
-  "id": "uuid",
-  "filename": "experiment_results.csv",
-  "file_type": "CSV",
-  "row_count": 50,
-  "column_count": 8,
-  "columns_info": {
-    "model": "string",
-    "accuracy": "float",
-    "f1_score": "float"
-  }
-}
-```
-
-### GET /papers/{paper_id}/experiment-files
-获取论文关联的实验数据文件列表。
+| checkpoint_type | String | FINAL / MAX / MEAN / BEST / LAST / UNKNOWN |
+| page | Integer | 页码，默认 1 |
+| page_size | Integer | 1～100，默认 20 |
 
 **响应** `200`：
 ```json
@@ -439,52 +539,131 @@
   "items": [
     {
       "id": "uuid",
+      "paper_id": "uuid",
+      "task_id": "uuid",
+      "model_name": "BERT-base",
+      "dataset_name": "SQuAD 2.0",
+      "metric_name": "F1",
+      "metric_value": 0.831,
+      "checkpoint_type": "BEST",
+      "checkpoint_source": "caption",
+      "evidence_id": null,
+      "table_id": "uuid",
+      "row_index": 2,
+      "raw_text": "F1: 83.1%",
+      "created_at": "2026-07-14T00:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+百分号统一序列化为 0～1。Checkpoint 没有明确证据时返回 UNKNOWN。每条记录只能存在表格行来源或 Evidence 来源之一。
+
+### GET /metrics/{metric_id}
+
+返回单条同结构指标详情。不存在或跨用户访问返回 404；ADMIN 默认也不能越过普通资源所有权。
+
+## 7. 实验数据文件
+
+### POST /papers/{paper_id}/experiment-files/upload
+✅ P5.1 CURRENT。上传 CSV/XLSX/XLS；仅当前用户自己的 PARSED 论文可用。
+
+**请求**：`multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| file | File | 是 | CSV/XLSX/XLS 文件，最大 20MB |
+
+新建返回 `201`；同一 user/paper/SHA-256 重复上传返回已有资源和 `200`。公开响应不包含完整 file_hash、storage_key、样本或数据行。
+
+**响应** `201` 或 `200`：
+
+```json
+{
+  "id": "uuid",
+  "paper_id": "uuid",
+  "filename": "experiment_results.csv",
+  "file_type": "CSV",
+  "file_size": 1024,
+  "row_count": 50,
+  "column_count": 2,
+  "columns_info": {
+    "version": 1,
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "sheet_name": null,
+    "columns": [
+      {"name": "model", "dtype": "string", "nullable": false, "null_count": 0},
+      {"name": "accuracy", "dtype": "float", "nullable": false, "null_count": 0}
+    ]
+  },
+  "duplicate": false,
+  "created_at": "2026-07-14T00:00:00Z"
+}
+```
+
+错误：无 token 401；不存在/跨用户 404；非 PARSED 409；扩展名或 magic 415；实际字节/容器安全上限 413；内容结构不可解析 422；内部上传失败为固定安全 500。
+
+### GET /papers/{paper_id}/experiment-files
+✅ P5.1 CURRENT。查询参数 `page` 默认 1，`page_size` 默认 20、最大 100；按 `created_at DESC, id DESC` 稳定排序。
+
+**响应** `200`：
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "paper_id": "uuid",
       "filename": "experiment_results.csv",
       "file_type": "CSV",
+      "file_size": 1024,
       "row_count": 50,
+      "column_count": 2,
       "created_at": "2026-07-12T11:00:00Z"
     }
-  ]
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+### GET /experiment-files/{file_id}
+✅ P5.1 CURRENT。返回单条结构元数据；不存在、跨用户和 ADMIN 访问他人资源统一 404。
+
+**响应** `200`：
+
+```json
+{
+  "id": "uuid",
+  "paper_id": "uuid",
+  "filename": "experiment_results.xlsx",
+  "file_type": "XLSX",
+  "file_size": 4096,
+  "row_count": 50,
+  "column_count": 1,
+  "columns_info": {
+    "version": 1,
+    "encoding": null,
+    "delimiter": null,
+    "sheet_name": "Sheet1",
+    "columns": [
+      {"name": "accuracy", "dtype": "float", "nullable": false, "null_count": 0}
+    ]
+  },
+  "created_at": "2026-07-14T00:00:00Z"
 }
 ```
 
 ### GET /experiment-files/{file_id}/result
-获取实验数据分析结果。
-
-**响应** `200`：
-```json
-{
-  "id": "uuid",
-  "summary_stats": {
-    "columns": {
-      "accuracy": {
-        "count": 10,
-        "mean": 0.852,
-        "std": 0.023,
-        "min": 0.810,
-        "max": 0.891,
-        "median": 0.855
-      }
-    }
-  },
-  "metric_comparisons": [
-    {
-      "metric_name": "accuracy",
-      "dataset": "SQuAD",
-      "paper_value": 0.891,
-      "experiment_value": 0.855,
-      "diff": -0.036,
-      "checkpoint_type": "MAX",
-      "status": "MISMATCH"
-    }
-  ]
-}
-```
+📋 PLANNED。P5.2 只返回确定性统计摘要；P5.3 才增加指标交叉验证，当前未注册。
 
 ### DELETE /experiment-files/{file_id}
-删除实验数据文件及其分析结果。
-
-**响应** `204`：无内容
+📋 PLANNED。当前未注册。
 
 ## 8. 报告导出
 

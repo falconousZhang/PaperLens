@@ -7,7 +7,7 @@
 | 项目名称 | PaperLens |
 | 文档版本 | v1.0 |
 | 创建日期 | 2026-07-13 |
-| 最后更新 | 2026-07-13 |
+| 最后更新 | 2026-07-14 |
 
 ## 1. API 设计规范
 
@@ -64,9 +64,9 @@
 
 ### 1.4 认证方式
 
-> 📋 **PLANNED**: Bearer/JWT 认证尚未实现。当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权。
+> ✅ **P3.5 CURRENT**：所有现有业务路由使用 Bearer JWT + sid/AuthSession/User 数据库校验。
 
-规划 Bearer Token 认证: `Authorization: Bearer <token>`
+当前 Bearer Token 认证: `Authorization: Bearer <token>`
 
 ### 1.5 通用约定
 
@@ -230,7 +230,7 @@
 
 ### 4.1 创建分析任务
 
-✅ **CURRENT**: `POST /api/v1/papers/{paper_id}/tasks`（P3.1 仅支持 REVIEW）
+✅ **CURRENT**: `POST /api/v1/papers/{paper_id}/tasks`（P3.3 仍仅支持 REVIEW）
 
 **请求参数**:
 
@@ -317,7 +317,7 @@
 
 ✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/reviews`
 
-P3.1 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离的结果。公开 findings 仅包含 VERIFIED 项；UNVERIFIED 项不展示。Evidence 候选为确定性 Top-K，语义检索和真实云模型仍为 PLANNED。
+P3.3 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离的结果。公开 findings 仅包含 VERIFIED 项；UNVERIFIED 项不展示。Evidence 使用按维度语义 Top-K；LLM 默认使用 MockLLMClient，也可配置 HuaweiMaaSLLMClient，二者输出均经过同一严格解析与 Evidence 绑定流程。
 
 **响应** `200`:
 
@@ -396,70 +396,17 @@ P3.1 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 
 ### 7.1 获取指标记录
 
-📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/metrics`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/metrics`
 
 **查询参数**:
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| model_name | String | 按模型名过滤 |
+| task_id | UUID | 按任务过滤 |
+| metric_name | String | 按规范指标名精确过滤 |
 | dataset_name | String | 按数据集过滤 |
-| checkpoint_type | String | FINAL / MAX / MEAN / BEST / UNKNOWN |
-
-**响应** `200`:
-
-```json
-{
-  "metrics": [
-    {
-      "id": "uuid",
-      "model_name": "BERT-base",
-      "dataset_name": "SQuAD 2.0",
-      "metric_name": "F1",
-      "metric_value": 83.1,
-      "checkpoint_type": "BEST",
-      "checkpoint_source": "TABLE_HEADER",
-      "evidence_id": "uuid",
-      "raw_text": "BERT-base 83.1 79.0",
-      "table_id": "uuid",
-      "row_index": 2
-    }
-  ]
-}
-```
-
-## 8. 实验数据文件 API
-
-### 8.1 上传实验数据文件
-
-📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
-
-**请求类型**: `multipart/form-data`
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| file | File | 是 | CSV/XLSX/XLS 文件，最大 20MB |
-
-**响应** `201`:
-
-```json
-{
-  "id": "uuid",
-  "filename": "experiment_results.csv",
-  "file_type": "CSV",
-  "row_count": 50,
-  "column_count": 8,
-  "columns_info": {
-    "model": "string",
-    "accuracy": "float",
-    "f1_score": "float"
-  }
-}
-```
-
-### 8.2 获取实验数据文件列表
-
-📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/experiment-files`
+| checkpoint_type | String | FINAL / MAX / MEAN / BEST / LAST / UNKNOWN |
+| page / page_size | Integer | 分页，page_size 最大 100 |
 
 **响应** `200`:
 
@@ -468,49 +415,128 @@ P3.1 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
   "items": [
     {
       "id": "uuid",
-      "filename": "experiment_results.csv",
-      "file_type": "CSV",
-      "row_count": 50,
-      "created_at": "2026-07-12T11:00:00Z"
+      "paper_id": "uuid",
+      "task_id": "uuid",
+      "model_name": "BERT-base",
+      "dataset_name": "SQuAD 2.0",
+      "metric_name": "F1",
+      "metric_value": 0.831,
+      "checkpoint_type": "BEST",
+      "checkpoint_source": "caption",
+      "evidence_id": null,
+      "raw_text": "F1: 83.1%",
+      "table_id": "uuid",
+      "row_index": 2,
+      "created_at": "2026-07-14T00:00:00Z"
     }
-  ]
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
-### 8.3 获取实验数据分析结果
+✅ **CURRENT**: `GET /api/v1/metrics/{metric_id}` 返回单条同结构详情。创建任务使用 `POST /papers/{paper_id}/tasks` 和 `task_type=METRIC_EXTRACTION`；options 只能省略或为空对象。百分号统一返回 0～1，跨用户详情返回 404。P4.2 页面查询始终携带已选成功任务的 `task_id`，空筛选不序列化，分页限制为 1～100。
 
-📋 **PLANNED**: `GET /api/v1/experiment-files/{file_id}/result`
+## 8. 实验数据文件 API
+
+### 8.1 上传实验数据文件
+
+✅ **CURRENT (P5.1)**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
+
+**请求类型**: `multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| file | File | 是 | CSV/XLSX/XLS 文件，最大 20MB |
+
+仅当前用户自己的 PARSED 论文可上传。新建返回 `201`；同一 user/paper/SHA-256 重复返回已有资源和 `200`。类型/magic 不符为 415，实际字节或安全解析上限为 413，结构不可解析为 422，非 PARSED 为 409，不存在/跨用户为 404。
+
+**响应** `201` 或幂等 `200`:
+
+```json
+{
+  "id": "uuid",
+  "paper_id": "uuid",
+  "filename": "experiment_results.csv",
+  "file_type": "CSV",
+  "file_size": 1024,
+  "row_count": 50,
+  "column_count": 2,
+  "columns_info": {
+    "version": 1,
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "sheet_name": null,
+    "columns": [
+      {"name": "model", "dtype": "string", "nullable": false, "null_count": 0},
+      {"name": "accuracy", "dtype": "float", "nullable": false, "null_count": 0}
+    ]
+  },
+  "duplicate": false,
+  "created_at": "2026-07-14T00:00:00Z"
+}
+```
+
+完整 `file_hash`、`storage_key`、样本值和数据行不公开。
+
+### 8.2 获取实验数据文件列表
+
+✅ **CURRENT (P5.1)**: `GET /api/v1/papers/{paper_id}/experiment-files?page=1&page_size=20`
+
+**响应** `200`:
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "paper_id": "uuid",
+      "filename": "experiment_results.csv",
+      "file_type": "CSV",
+      "file_size": 1024,
+      "row_count": 50,
+      "column_count": 2,
+      "created_at": "2026-07-12T11:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+按 `created_at DESC, id DESC` 稳定排序，page 从 1 开始，page_size 为 1～100。论文不存在和跨用户统一 404。
+
+### 8.3 获取实验文件结构详情
+
+✅ **CURRENT (P5.1)**: `GET /api/v1/experiment-files/{file_id}`
 
 **响应** `200`:
 
 ```json
 {
   "id": "uuid",
-  "summary_stats": {
-    "columns": {
-      "accuracy": {
-        "count": 10,
-        "mean": 0.852,
-        "std": 0.023,
-        "min": 0.810,
-        "max": 0.891,
-        "median": 0.855
-      }
-    }
+  "paper_id": "uuid",
+  "filename": "experiment_results.xlsx",
+  "file_type": "XLSX",
+  "file_size": 4096,
+  "row_count": 50,
+  "column_count": 1,
+  "columns_info": {
+    "version": 1,
+    "encoding": null,
+    "delimiter": null,
+    "sheet_name": "Sheet1",
+    "columns": [
+      {"name": "accuracy", "dtype": "float", "nullable": false, "null_count": 0}
+    ]
   },
-  "metric_comparisons": [
-    {
-      "metric_name": "accuracy",
-      "dataset": "SQuAD",
-      "paper_value": 0.891,
-      "experiment_value": 0.855,
-      "diff": -0.036,
-      "checkpoint_type": "MAX",
-      "status": "MISMATCH"
-    }
-  ]
+  "created_at": "2026-07-14T00:00:00Z"
 }
 ```
+
+不存在和跨用户统一 404。`GET /api/v1/experiment-files/{file_id}/result` 属 P5.2，当前未实现。
 
 ### 8.4 删除实验数据文件
 
@@ -613,4 +639,4 @@ P3.1 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 
 **文档版本**: v1.0
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-13
+**最后更新**: 2026-07-14

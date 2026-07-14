@@ -17,7 +17,7 @@ _SessionLocal = None
 def _ensure_engine():
     global _engine, _SessionLocal
     if _engine is None:
-        _engine = create_engine(settings.database_url, echo=settings.debug)
+        _engine = create_engine(settings.database_url, echo=False, hide_parameters=True)
         _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
 
@@ -25,7 +25,7 @@ def configure_engine(database_url: str) -> None:
     global _engine, _SessionLocal
     if _engine is not None:
         _engine.dispose()
-    _engine = create_engine(database_url, echo=settings.debug)
+    _engine = create_engine(database_url, echo=False, hide_parameters=True)
     _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
 

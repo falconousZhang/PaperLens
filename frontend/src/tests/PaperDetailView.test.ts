@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PaperDetailView from '../views/PaperDetailView.vue'
+import ReviewResultView from '../views/ReviewResultView.vue'
 import * as api from '../api'
 
 vi.mock('../api', () => ({
@@ -9,6 +10,10 @@ vi.mock('../api', () => ({
   getPage: vi.fn(),
   listSections: vi.fn(),
   listEvidences: vi.fn(),
+  listTasks: vi.fn(),
+  createTask: vi.fn(),
+  getTask: vi.fn(),
+  listReviews: vi.fn(),
 }))
 
 const mockPaper = {
@@ -55,8 +60,10 @@ function createTestRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/papers/:id', component: PaperDetailView },
-      { path: '/papers', component: { template: '<div/>' } },
+      { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+      { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
+      { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+      { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],
   })
 }
@@ -99,6 +106,15 @@ describe('PaperDetailView', () => {
     expect(api.getPaper).toHaveBeenCalledWith('test-uuid-1')
     expect(api.listSections).toHaveBeenCalledWith('test-uuid-1')
     expect(api.listEvidences).toHaveBeenCalledWith('test-uuid-1')
+  })
+
+  it('shows review and metric navigation for a parsed paper', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const links = wrapper.findAll('.tabs .tab-link')
+    expect(links.map(link => link.text())).toEqual(['审阅', '指标'])
+    expect(links[0]!.attributes('href')).toBe('/papers/test-uuid-1/review')
+    expect(links[1]!.attributes('href')).toBe('/papers/test-uuid-1/metrics')
   })
 
   it('clicking page-2 evidence loads page 2 and highlights', async () => {
@@ -442,11 +458,91 @@ describe('PaperDetailView', () => {
     vi.advanceTimersByTime(4000)
     await flushPromises()
 
-    const getPaperCalls = vi.mocked(api.getPaper).mock.calls.length
+
+    const getPaperCallsAfter = vi.mocked(api.getPaper).mock.calls.length
     vi.advanceTimersByTime(10000)
     await flushPromises()
-    const getPaperCallsAfter = vi.mocked(api.getPaper).mock.calls.length
-    expect(getPaperCallsAfter).toBe(getPaperCalls)
+    expect(vi.mocked(api.getPaper).mock.calls.length).toBe(getPaperCallsAfter)
 
+  })
+
+  it('evidence query: navigates to page and highlights on initial load', async () => {
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+        { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
+        { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers', name: 'papers', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/papers/test-uuid-1?evidence=ev-2')
+    await router.isReady()
+    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    expect(api.getPage).toHaveBeenCalledWith('test-uuid-1', 2)
+    expect(wrapper.find('.highlight').exists()).toBe(true)
+    expect(wrapper.find('.highlight').text()).toBe('Evidence on page two')
+  })
+
+  it('evidence query: unknown evidence id shows not found message', async () => {
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+        { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
+        { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers', name: 'papers', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/papers/test-uuid-1?evidence=nonexistent-id')
+    await router.isReady()
+    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    expect(wrapper.find('.evidence-not-found').exists()).toBe(true)
+    expect(wrapper.text()).toContain('未找到对应证据')
+  })
+
+  it('evidence query: array query shows warning and does not call page API', async () => {
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+        { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
+        { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers', name: 'papers', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push({ path: '/papers/test-uuid-1', query: { evidence: ['ev-1', 'ev-2'] } })
+    await router.isReady()
+    const wrapper = mount(PaperDetailView, { global: { plugins: [router] } })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    expect(api.getPage).not.toHaveBeenCalled()
+    expect(wrapper.find('.evidence-not-found').exists()).toBe(true)
+    expect(wrapper.text()).toContain('未找到对应证据')
+  })
+
+  it('evidence query change within component navigates to new evidence', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await router.push({ path: '/papers/test-uuid-1', query: { evidence: 'ev-1' } })
+    await flushPromises()
+
+    expect(api.getPage).toHaveBeenCalledWith('test-uuid-1', 1)
+    expect(wrapper.find('.highlight').exists()).toBe(true)
+
+
+    await router.push({ path: '/papers/test-uuid-1', query: { evidence: 'ev-2' } })
+    await flushPromises()
+
+    expect(api.getPage).toHaveBeenCalledWith('test-uuid-1', 2)
+    expect(wrapper.find('.highlight').text()).toBe('Evidence on page two')
   })
 })

@@ -19,26 +19,47 @@ def _json_safe(value):
 
 
 class AppError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400, details=None):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = 400,
+        details=None,
+        headers: dict[str, str] | None = None,
+    ):
         self.code = code
         self.message = message
         self.status_code = status_code
         self.details = details
+        self.headers = headers
 
 
-def _error_response(code: str, message: str, status_code: int, details=None) -> JSONResponse:
+def _error_response(
+    code: str,
+    message: str,
+    status_code: int,
+    details=None,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "details": details}},
+        headers=headers,
     )
 
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
-    return _error_response(exc.code, exc.message, exc.status_code, exc.details)
+    return _error_response(exc.code, exc.message, exc.status_code, exc.details, exc.headers)
 
 
 async def http_exception_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    return _error_response(str(exc.status_code), str(exc.detail), exc.status_code, None)
+    return _error_response(
+        str(exc.status_code),
+        str(exc.detail),
+        exc.status_code,
+        None,
+        exc.headers,
+    )
 
 
 async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:

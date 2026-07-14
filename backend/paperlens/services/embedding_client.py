@@ -1,6 +1,9 @@
 import hashlib
 import math
+import re
 from abc import ABC, abstractmethod
+
+from paperlens.core.config import settings
 
 
 class EmbeddingError(Exception):
@@ -33,6 +36,7 @@ _MOCK_VOCAB = {
 }
 
 _MOCK_DIM = 10
+_TOKEN_PATTERN = re.compile(r"[a-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff]+", re.IGNORECASE)
 
 
 def _stable_hash_token(token: str) -> float:
@@ -44,6 +48,8 @@ def _stable_hash_token(token: str) -> float:
 
 class MockEmbeddingClient(EmbeddingClient):
     def __init__(self, dim: int = _MOCK_DIM):
+        if isinstance(dim, bool) or not isinstance(dim, int) or dim < 1:
+            raise EmbeddingError("dim must be a positive integer")
         self._dim = dim
 
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -61,7 +67,7 @@ class MockEmbeddingClient(EmbeddingClient):
 
     def _make_vector(self, text: str) -> list[float]:
         vec = [0.0] * self._dim
-        tokens = text.split()
+        tokens = _tokenize(text)
         if not tokens:
             vec[0] = 1.0
             return self._normalize(vec)
@@ -87,6 +93,17 @@ class MockEmbeddingClient(EmbeddingClient):
         if norm == 0.0:
             raise EmbeddingError("zero-norm vector produced")
         return [v / norm for v in vec]
+
+
+def _tokenize(text: str) -> list[str]:
+    tokens: list[str] = []
+    for part in _TOKEN_PATTERN.findall(text.lower()):
+        if any("\u3400" <= char <= "\u9fff" for char in part):
+            tokens.extend(part)
+            tokens.extend(part[i : i + 2] for i in range(len(part) - 1))
+        else:
+            tokens.append(part)
+    return tokens
 
 
 def validate_embeddings(vectors: list[list[float]], expected_count: int) -> None:
@@ -122,8 +139,10 @@ def validate_embeddings(vectors: list[list[float]], expected_count: int) -> None
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    if len(a) != len(b):
-        raise EmbeddingError("vector dimension mismatch in cosine_similarity")
+    try:
+        validate_embeddings([a, b], 2)
+    except EmbeddingError as exc:
+        raise EmbeddingError(f"invalid cosine vectors: {exc}") from None
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(x * x for x in b))
@@ -133,3 +152,13 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     if math.isnan(sim) or math.isinf(sim):
         raise EmbeddingError("invalid cosine similarity result")
     return sim
+
+
+def get_embedding_client() -> EmbeddingClient:
+    if settings.embedding_provider == "mock":
+        return MockEmbeddingClient()
+    if settings.embedding_provider == "huawei_maas":
+        from paperlens.services.huawei_maas_embedding import HuaweiMaaSEmbeddingClient
+
+        return HuaweiMaaSEmbeddingClient()
+    raise EmbeddingError(f"Unknown embedding provider: {settings.embedding_provider}")

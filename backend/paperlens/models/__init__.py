@@ -1,5 +1,6 @@
 from paperlens.models.models import (  # noqa: F401
     AnalysisTask,
+    AuthSession,
     Evidence,
     ExperimentFile,
     ExperimentResult,
@@ -11,6 +12,8 @@ from paperlens.models.models import (  # noqa: F401
     PaperPage,
     PaperSection,
     PaperTable,
+    PasswordResetToken,
     ReviewFinding,
     ReviewResult,
+    User,
 )

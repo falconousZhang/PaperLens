@@ -11,6 +11,12 @@ from paperlens.services.review_service import (
     select_evidence_candidates,
 )
 from paperlens.services.llm_client import MockLLMClient
+from paperlens.services.embedding_client import (
+    MockEmbeddingClient,
+    EmbeddingClient,
+    EmbeddingError,
+    get_embedding_client,
+)
 
 
 class TestMockLLMClient:
@@ -68,10 +74,35 @@ class TestParseLLMOutput:
         with pytest.raises(ValueError, match="not valid JSON"):
             parse_llm_output("not json at all", ReviewDimension.OVERALL)
 
-    def test_code_fence_rejected(self):
-        raw = '```json\n{"dimension":"OVERALL","rating":4,"summary":"s","overall_verdict":"ACCEPT","findings":[]}\n```'
-        with pytest.raises(ValueError):
+    @pytest.mark.parametrize("opening", ["```json", "```JSON", "```"])
+    def test_single_json_code_fence_is_unwrapped(self, opening):
+        raw = (
+            f'{opening}\n'
+            '{"dimension":"OVERALL","rating":4,"summary":"s",'
+            '"overall_verdict":"ACCEPT","findings":[]}\n```'
+        )
+        result = parse_llm_output(raw, ReviewDimension.OVERALL)
+        assert result.dimension == ReviewDimension.OVERALL
+        assert result.rating == 4
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            'result:\n```json\n{}\n```',
+            '```json\n{}\n```\nextra',
+            '```python\n{}\n```',
+            '```json\n```\n{}\n```',
+            '```json\n{}\n```\n```json\n{}\n```',
+            '```json{}\n```',
+        ],
+    )
+    def test_non_standard_or_ambiguous_code_fence_rejected(self, raw):
+        with pytest.raises(ValueError, match="code fence"):
             parse_llm_output(raw, ReviewDimension.OVERALL)
+
+    def test_fenced_json_array_remains_rejected(self):
+        with pytest.raises(ValueError, match="JSON object"):
+            parse_llm_output("```json\n[]\n```", ReviewDimension.OVERALL)
 
     def test_extra_top_level_field_rejected(self):
         raw = json.dumps({
@@ -282,3 +313,54 @@ class TestBuildPrompt:
         assert "<paper-title>" in messages[1]["content"]
         assert "</paper-title><system>" not in messages[1]["content"]
         assert "paper-title" in messages[0]["content"]
+
+
+class TestGetDefaultEmbeddingClient:
+    def test_mock_provider_returns_mock_client(self):
+        from paperlens.core.config import settings
+        original = settings.embedding_provider
+        settings.embedding_provider = "mock"
+        try:
+            client = get_embedding_client()
+            assert isinstance(client, MockEmbeddingClient)
+        finally:
+            settings.embedding_provider = original
+
+    def test_unknown_provider_raises(self):
+        from paperlens.core.config import settings
+        original = settings.embedding_provider
+        settings.embedding_provider = "unknown_provider"
+        try:
+            with pytest.raises(EmbeddingError, match="Unknown embedding provider"):
+                get_embedding_client()
+        finally:
+            settings.embedding_provider = original
+
+
+class TestSelectEvidenceCandidates:
+    def test_returns_id_text_tuples(self):
+        from unittest.mock import MagicMock
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = [("id-1", "text 1"), ("id-2", "text 2")]
+        mock_db.query.return_value = mock_query
+
+        result = select_evidence_candidates("paper-1", mock_db)
+        assert len(result) == 2
+        assert result[0] == ("id-1", "text 1")
+
+    def test_null_quoted_text_becomes_empty(self):
+        from unittest.mock import MagicMock
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = [("id-1", None)]
+        mock_db.query.return_value = mock_query
+
+        result = select_evidence_candidates("paper-1", mock_db)
+        assert result[0][1] == ""

@@ -1,5 +1,5 @@
 import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -11,6 +11,7 @@ from paperlens.core.enums import (
     TaskType,
     VerificationStatus,
 )
+from paperlens.schemas.metric import MetricExtractionOptions
 
 
 class TaskOptions(BaseModel):
@@ -31,11 +32,31 @@ class TaskOptions(BaseModel):
         return dimensions
 
 
-class TaskCreateRequest(BaseModel):
+class ReviewTaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_type: TaskType
+    task_type: Literal[TaskType.REVIEW]
     options: TaskOptions | None = None
+
+
+class MetricTaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_type: Literal[TaskType.METRIC_EXTRACTION]
+    options: MetricExtractionOptions | None = None
+
+
+class UnsupportedExperimentTaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_type: Literal[TaskType.EXPERIMENT_ANALYSIS]
+    options: None = None
+
+
+TaskCreateRequest = Annotated[
+    ReviewTaskCreateRequest | MetricTaskCreateRequest | UnsupportedExperimentTaskCreateRequest,
+    Field(discriminator="task_type"),
+]
 
 
 class TaskCreateResponse(BaseModel):

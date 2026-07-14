@@ -8,6 +8,12 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from paperlens.main import app
+from paperlens.core.database import SessionLocal
+from paperlens.core.deps import get_current_user_id
+from paperlens.core.enums import UserRole, UserStatus
+from paperlens.models.models import User
+from paperlens.services.password_service import hash_password
+from paperlens.services.auth_service import create_session_for_user
 from tests.db_helpers import (
     get_test_db_url,
     db_available,
@@ -28,12 +34,19 @@ requires_db = pytest.mark.skipif(
     reason="需要 PAPERLENS_TEST_DATABASE_URL 且 PostgreSQL 可连接",
 )
 
+_test_user_id: str | None = None
+
 
 @pytest_asyncio.fixture
 async def client():
+    _mock_user_id = "mock-test-user"
+    app.dependency_overrides[get_current_user_id] = lambda: _mock_user_id
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_current_user_id, None)
 
 
 @pytest_asyncio.fixture
@@ -54,10 +67,41 @@ async def db_client():
     assert "paperlens_test" in actual_url, (
         f"Engine URL must point to paperlens_test, got: {actual_url}"
     )
+    assert get_engine().echo is False
+    assert get_engine().hide_parameters is True
+
+    db = SessionLocal()
+    test_user_id = None
+    access_token = None
+    try:
+        test_user = User(
+            id=str(uuid.uuid4()),
+            email="test-health@example.com",
+            email_normalized="test-health@example.com",
+            display_name="Test Health User",
+            password_hash=hash_password("TestHealthPass123!@#"),
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+            failed_login_count=0,
+        )
+        db.add(test_user)
+        db.flush()
+        test_user_id = test_user.id
+        access_token, _ = create_session_for_user(db, test_user)
+        db.commit()
+    finally:
+        db.close()
+
+    global _test_user_id
+    _test_user_id = test_user_id
 
     try:
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {access_token}"},
+        ) as c:
             yield c
     finally:
         truncate_test_tables(test_url)
@@ -269,7 +313,7 @@ async def test_evidence_nullable_fields(db_client: AsyncClient):
             file_size=123,
             file_hash="0" * 64,
             status=PaperStatus.PARSED,
-            user_id="demo-user",
+            user_id=_test_user_id,
         ))
         db.add(EvidenceModel(
             id=evidence_id,
@@ -474,7 +518,7 @@ async def test_table_savepoint_degradation(db_client: AsyncClient, tmp_path, cap
             file_size=100,
             file_hash="abc123",
             status=PaperStatus.PROCESSING,
-            user_id="demo-user",
+            user_id=_test_user_id,
         )
         db.add(paper)
         db.commit()

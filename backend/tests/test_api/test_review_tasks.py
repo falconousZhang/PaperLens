@@ -3,21 +3,34 @@ import uuid
 import datetime
 import pytest
 import pytest_asyncio
+import httpx
 from httpx import ASGITransport, AsyncClient
 
 from paperlens.main import app
 from paperlens.core.database import configure_engine, get_engine, SessionLocal
-from paperlens.core.enums import PaperStatus, EvidenceType
+from paperlens.core.enums import PaperStatus, EvidenceType, ReviewDimension, UserRole, UserStatus
 from paperlens.models.models import (
     AnalysisTask,
+    AuthSession,
     Evidence,
     FindingEvidence,
     Paper,
     ReviewFinding,
     ReviewResult,
+    User,
 )
+from paperlens.services.password_service import hash_password
+from paperlens.services.auth_service import create_session_for_user
 from paperlens.services.llm_client import LLMClient, get_llm_client
+from paperlens.services.huawei_maas_llm import HuaweiMaaSLLMClient
+import paperlens.services.review_service as review_service_module
 from paperlens.services.review_service import select_evidence_candidates
+from paperlens.services.embedding_client import (
+    EmbeddingClient,
+    EmbeddingError,
+    MockEmbeddingClient,
+    get_embedding_client,
+)
 from tests.db_helpers import (
     db_available,
     ensure_test_database,
@@ -99,6 +112,109 @@ class FakeSecondDimensionBadLLM(FakeLLMClient):
         return {"role": "assistant", "content": "secret-second-dimension is not json"}
 
 
+class FakeFailingEmbeddingClient(EmbeddingClient):
+    def __init__(self, fail_on_call: int):
+        self.fail_on_call = fail_on_call
+        self.call_count = 0
+        self.delegate = MockEmbeddingClient()
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.call_count += 1
+        if self.call_count == self.fail_on_call:
+            raise EmbeddingError("secret-embedding-failure")
+        return self.delegate.embed(texts)
+
+
+class HuaweiReviewTransport(httpx.BaseTransport):
+    def __init__(
+        self,
+        fail_on_call: int | None = None,
+        session_holder: dict | None = None,
+        wrap_json_fence: bool = False,
+    ):
+        self.fail_on_call = fail_on_call
+        self.session_holder = session_holder
+        self.wrap_json_fence = wrap_json_fence
+        self.call_count = 0
+        self.transaction_states: list[bool] = []
+        self.urls: list[str] = []
+        self.authorization_headers: list[str] = []
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.call_count += 1
+        self.urls.append(str(request.url))
+        self.authorization_headers.append(request.headers.get("authorization", ""))
+
+        if self.session_holder is not None:
+            session = self.session_holder.get("session")
+            assert session is not None
+            self.transaction_states.append(session.in_transaction())
+
+        if self.call_count == self.fail_on_call:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": "secret-upstream-partial-response",
+                            },
+                            "finish_reason": "length",
+                        }
+                    ]
+                },
+                request=request,
+            )
+
+        body = json.loads(request.content)
+        user_content = body["messages"][-1]["content"]
+        dimension = next(
+            (
+                candidate.value
+                for candidate in ReviewDimension
+                if f"on the {candidate.value} dimension" in user_content
+            ),
+            None,
+        )
+        assert dimension is not None
+        review_output = {
+            "dimension": dimension,
+            "rating": 4,
+            "summary": f"Huawei transport summary for {dimension}",
+            "overall_verdict": "WEAK_ACCEPT" if dimension == "OVERALL" else None,
+            "findings": [
+                {
+                    "finding_type": "STRENGTH",
+                    "content": f"Huawei transport finding for {dimension}",
+                    "confidence": 0.9,
+                    "evidence_refs": ["E1"],
+                }
+            ],
+        }
+        response_content = json.dumps(review_output)
+        if self.wrap_json_fence:
+            response_content = f"```json\n{response_content}\n```"
+
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": response_content,
+                        },
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
+            request=request,
+        )
+
+
 @pytest_asyncio.fixture
 async def db_client():
     test_url = get_test_db_url()
@@ -114,19 +230,55 @@ async def db_client():
     assert "paperlens_test" in actual_url, f"Engine must point to test DB, got: {actual_url}"
 
     default_llm = FakeLLMClient()
+    default_emb = MockEmbeddingClient()
     app.dependency_overrides[get_llm_client] = lambda: default_llm
+    app.dependency_overrides[get_embedding_client] = lambda: default_emb
+
+    db = SessionLocal()
+    test_user_id = None
+    access_token = None
+    try:
+        test_user = User(
+            id=str(uuid.uuid4()),
+            email="test-review@example.com",
+            email_normalized="test-review@example.com",
+            display_name="Test Review User",
+            password_hash=hash_password("TestReviewPass123!@#"),
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+            failed_login_count=0,
+        )
+        db.add(test_user)
+        db.flush()
+        test_user_id = test_user.id
+        access_token, _ = create_session_for_user(db, test_user)
+        db.commit()
+    finally:
+        db.close()
 
     transport = ASGITransport(app=app)
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {access_token}"},
+        ) as c:
+            c._test_user_id = test_user_id
             yield c
     finally:
         app.dependency_overrides.pop(get_llm_client, None)
+        app.dependency_overrides.pop(get_embedding_client, None)
         truncate_test_tables(test_url)
         verify_no_test_residuals(test_url)
 
 
-def _create_parsed_paper_with_evidence(db, user_id="demo-user", evidence_count=2):
+def _get_test_user_id(client: AsyncClient) -> str:
+    return getattr(client, "_test_user_id", "demo-user")
+
+
+def _create_parsed_paper_with_evidence(db, user_id=None, evidence_count=2):
+    if user_id is None:
+        user_id = "demo-user"
     paper_id = str(uuid.uuid4())
     paper = Paper(
         id=paper_id,
@@ -159,7 +311,7 @@ def _create_parsed_paper_with_evidence(db, user_id="demo-user", evidence_count=2
 async def test_create_review_task_success(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -189,7 +341,7 @@ async def test_create_review_task_success(db_client: AsyncClient):
 async def test_get_reviews_returns_verified_findings(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -221,7 +373,7 @@ async def test_get_reviews_returns_verified_findings(db_client: AsyncClient):
 async def test_multi_dimension_review(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db, evidence_count=3)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=3)
     finally:
         db.close()
 
@@ -255,6 +407,162 @@ async def test_multi_dimension_review(db_client: AsyncClient):
 
 @requires_db
 @pytest.mark.asyncio
+@pytest.mark.parametrize("wrap_json_fence", [False, True])
+async def test_huawei_maas_review_success_is_strict_bound_and_transaction_free(
+    db_client: AsyncClient,
+    monkeypatch,
+    wrap_json_fence: bool,
+):
+    session_holder: dict = {}
+    original_session_factory = review_service_module.SessionLocal
+
+    def tracking_session_factory():
+        session = original_session_factory()
+        session_holder["session"] = session
+        return session
+
+    monkeypatch.setattr(review_service_module, "SessionLocal", tracking_session_factory)
+    transport = HuaweiReviewTransport(
+        session_holder=session_holder,
+        wrap_json_fence=wrap_json_fence,
+    )
+    huawei_client = HuaweiMaaSLLMClient(
+        base_url="https://mock.test/v2",
+        model="glm-5.2",
+        api_key="sentinel-huawei-review-key",
+        transport=transport,
+    )
+    app.dependency_overrides[get_llm_client] = lambda: huawei_client
+
+    db = SessionLocal()
+    try:
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=2)
+    finally:
+        db.close()
+
+    response = await db_client.post(
+        f"/api/v1/papers/{paper_id}/tasks",
+        json={
+            "task_type": "REVIEW",
+            "options": {"dimensions": ["SOUNDNESS", "OVERALL"], "language": "zh"},
+        },
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    task_response = await db_client.get(f"/api/v1/tasks/{task_id}")
+    assert task_response.json()["status"] == "SUCCEEDED"
+    assert transport.call_count == 2
+    assert transport.transaction_states == [False, False]
+    assert transport.urls == [
+        "https://mock.test/v2/chat/completions",
+        "https://mock.test/v2/chat/completions",
+    ]
+    assert transport.authorization_headers == [
+        "Bearer sentinel-huawei-review-key",
+        "Bearer sentinel-huawei-review-key",
+    ]
+
+    db = SessionLocal()
+    try:
+        assert db.query(ReviewResult).filter(ReviewResult.task_id == task_id).count() == 2
+        assert (
+            db.query(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 2
+        )
+        assert (
+            db.query(FindingEvidence)
+            .join(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 2
+        )
+    finally:
+        db.close()
+
+
+@requires_db
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_on_call", [1, 2])
+async def test_huawei_maas_failure_rolls_back_entire_result_batch(
+    db_client: AsyncClient,
+    monkeypatch,
+    fail_on_call: int,
+):
+    session_holder: dict = {}
+    original_session_factory = review_service_module.SessionLocal
+
+    def tracking_session_factory():
+        session = original_session_factory()
+        session_holder["session"] = session
+        return session
+
+    monkeypatch.setattr(review_service_module, "SessionLocal", tracking_session_factory)
+    transport = HuaweiReviewTransport(
+        fail_on_call=fail_on_call,
+        session_holder=session_holder,
+    )
+    huawei_client = HuaweiMaaSLLMClient(
+        base_url="https://mock.test/v2",
+        model="glm-5.2",
+        api_key="sentinel-huawei-review-key",
+        transport=transport,
+    )
+    app.dependency_overrides[get_llm_client] = lambda: huawei_client
+
+    db = SessionLocal()
+    try:
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=2)
+    finally:
+        db.close()
+
+    response = await db_client.post(
+        f"/api/v1/papers/{paper_id}/tasks",
+        json={
+            "task_type": "REVIEW",
+            "options": {"dimensions": ["SOUNDNESS", "OVERALL"], "language": "zh"},
+        },
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    task_response = await db_client.get(f"/api/v1/tasks/{task_id}")
+    task_data = task_response.json()
+    assert task_data["status"] == "FAILED"
+    assert "sentinel-huawei-review-key" not in task_data["error_message"]
+    assert "secret-upstream-partial-response" not in task_data["error_message"]
+    assert "Authorization" not in task_data["error_message"]
+    assert transport.call_count == fail_on_call
+    assert transport.transaction_states == [False] * fail_on_call
+
+    db = SessionLocal()
+    try:
+        assert db.query(ReviewResult).filter(ReviewResult.task_id == task_id).count() == 0
+        assert (
+            db.query(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 0
+        )
+        assert (
+            db.query(FindingEvidence)
+            .join(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 0
+        )
+    finally:
+        db.close()
+
+
+@requires_db
+@pytest.mark.asyncio
 async def test_processing_paper_cannot_create_task(db_client: AsyncClient):
     db = SessionLocal()
     try:
@@ -267,7 +575,7 @@ async def test_processing_paper_cannot_create_task(db_client: AsyncClient):
             file_size=1000,
             file_hash="b" * 64,
             status=PaperStatus.PROCESSING,
-            user_id="demo-user",
+            user_id=_get_test_user_id(db_client),
         )
         db.add(paper)
         db.commit()
@@ -281,40 +589,14 @@ async def test_processing_paper_cannot_create_task(db_client: AsyncClient):
 
 @requires_db
 @pytest.mark.asyncio
-async def test_no_evidence_paper_cannot_create_task(db_client: AsyncClient):
-    db = SessionLocal()
-    try:
-        paper_id = str(uuid.uuid4())
-        paper = Paper(
-            id=paper_id,
-            title="No Evidence",
-            filename="test.pdf",
-            storage_key=f"papers/{paper_id}/source.pdf",
-            file_size=1000,
-            file_hash="c" * 64,
-            status=PaperStatus.PARSED,
-            user_id="demo-user",
-        )
-        db.add(paper)
-        db.commit()
-    finally:
-        db.close()
-
-    resp = await db_client.post(f"/api/v1/papers/{paper_id}/tasks", json={"task_type": "REVIEW"})
-    assert resp.status_code == 409
-    assert "NO_EVIDENCE" in resp.json()["error"]["code"]
-
-
-@requires_db
-@pytest.mark.asyncio
 async def test_invalid_task_type_rejected(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
-    resp = await db_client.post(f"/api/v1/papers/{paper_id}/tasks", json={"task_type": "METRIC_EXTRACTION"})
+    resp = await db_client.post(f"/api/v1/papers/{paper_id}/tasks", json={"task_type": "EXPERIMENT_ANALYSIS"})
     assert resp.status_code == 422
     assert "TASK_TYPE_NOT_SUPPORTED" in resp.json()["error"]["code"]
 
@@ -324,7 +606,7 @@ async def test_invalid_task_type_rejected(db_client: AsyncClient):
 async def test_invalid_dimensions_rejected(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -340,7 +622,7 @@ async def test_invalid_dimensions_rejected(db_client: AsyncClient):
 async def test_duplicate_dimensions_rejected(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -359,7 +641,7 @@ async def test_unknown_alias_finding_unverified(db_client: AsyncClient):
 
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db, evidence_count=2)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=2)
     finally:
         db.close()
 
@@ -399,7 +681,7 @@ async def test_bad_json_llm_task_fails(db_client: AsyncClient):
 
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db, evidence_count=2)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=2)
     finally:
         db.close()
 
@@ -432,10 +714,60 @@ async def test_bad_json_llm_task_fails(db_client: AsyncClient):
 
 @requires_db
 @pytest.mark.asyncio
+@pytest.mark.parametrize("fail_on_call", [1, 2])
+async def test_embedding_failure_rolls_back_entire_result_batch(
+    db_client: AsyncClient,
+    fail_on_call: int,
+):
+    failing_embedding = FakeFailingEmbeddingClient(fail_on_call)
+    app.dependency_overrides[get_embedding_client] = lambda: failing_embedding
+
+    db = SessionLocal()
+    try:
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client), evidence_count=2)
+    finally:
+        db.close()
+
+    response = await db_client.post(
+        f"/api/v1/papers/{paper_id}/tasks",
+        json={"task_type": "REVIEW", "options": {"dimensions": ["OVERALL"]}},
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    task_response = await db_client.get(f"/api/v1/tasks/{task_id}")
+    task_data = task_response.json()
+    assert task_data["status"] == "FAILED"
+    assert "secret-embedding-failure" not in task_data["error_message"]
+
+    db = SessionLocal()
+    try:
+        assert db.query(ReviewResult).filter(ReviewResult.task_id == task_id).count() == 0
+        assert (
+            db.query(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 0
+        )
+        assert (
+            db.query(FindingEvidence)
+            .join(ReviewFinding)
+            .join(ReviewResult)
+            .filter(ReviewResult.task_id == task_id)
+            .count()
+            == 0
+        )
+    finally:
+        db.close()
+
+
+@requires_db
+@pytest.mark.asyncio
 async def test_list_tasks_for_paper(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -456,7 +788,7 @@ async def test_second_dimension_failure_rolls_back_entire_result_batch(db_client
 
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -492,7 +824,7 @@ async def test_second_dimension_failure_rolls_back_entire_result_batch(db_client
 async def test_invalid_review_options_rejected(db_client: AsyncClient):
     db = SessionLocal()
     try:
-        paper_id = _create_parsed_paper_with_evidence(db)
+        paper_id = _create_parsed_paper_with_evidence(db, user_id=_get_test_user_id(db_client))
     finally:
         db.close()
 
@@ -513,6 +845,18 @@ async def test_invalid_review_options_rejected(db_client: AsyncClient):
 async def test_other_user_resources_are_isolated(db_client: AsyncClient):
     db = SessionLocal()
     try:
+        other_user = User(
+            id="other-user",
+            email="other@example.com",
+            email_normalized="other@example.com",
+            display_name="Other User",
+            password_hash=hash_password("OtherUserPass123!@#"),
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+            failed_login_count=0,
+        )
+        db.add(other_user)
+        db.flush()
         paper_id = _create_parsed_paper_with_evidence(db, user_id="other-user")
         task = AnalysisTask(
             paper_id=paper_id,
@@ -575,7 +919,7 @@ async def test_evidence_candidate_order_and_top_k(db_client: AsyncClient):
                 file_size=1000,
                 file_hash="d" * 64,
                 status=PaperStatus.PARSED,
-                user_id="demo-user",
+                user_id=_get_test_user_id(db_client),
             )
         )
         base_time = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)

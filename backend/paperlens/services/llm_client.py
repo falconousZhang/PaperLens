@@ -3,6 +3,11 @@ from abc import ABC, abstractmethod
 
 from paperlens.core.config import settings
 
+
+class LLMError(Exception):
+    pass
+
+
 class LLMClient(ABC):
     @abstractmethod
     def chat(self, messages: list[dict], **kwargs) -> dict:
@@ -49,25 +54,33 @@ class MockLLMClient(LLMClient):
         return {"role": "assistant", "content": content}
 
 
-_llm_client: LLMClient | None = None
+def validate_llm_config() -> dict:
+    backend = settings.llm_backend
+    result = {
+        "backend": backend,
+        "api_key_configured": False,
+    }
+    if backend == "mock":
+        return result
+    if backend == "huawei_maas":
+        from paperlens.services.huawei_maas_llm import HuaweiMaaSLLMClient
+
+        HuaweiMaaSLLMClient()
+        result["base_url"] = settings.llm_base_url
+        result["model"] = settings.llm_model
+        result["timeout_seconds"] = settings.llm_timeout_seconds
+        result["max_completion_tokens"] = settings.llm_max_completion_tokens
+        result["api_key_configured"] = settings.llm_api_key is not None
+        return result
+    raise LLMError(f"Unknown LLM backend: {backend}")
 
 
 def get_llm_client() -> LLMClient:
-    global _llm_client
-    if _llm_client is None:
-        backend = settings.llm_backend
-        if backend == "mock":
-            _llm_client = MockLLMClient()
-        else:
-            raise ValueError(f"Unknown LLM backend: {backend}")
-    return _llm_client
+    backend = settings.llm_backend
+    if backend == "mock":
+        return MockLLMClient()
+    if backend == "huawei_maas":
+        from paperlens.services.huawei_maas_llm import HuaweiMaaSLLMClient
 
-
-def set_llm_client(client: LLMClient):
-    global _llm_client
-    _llm_client = client
-
-
-def reset_llm_client():
-    global _llm_client
-    _llm_client = None
+        return HuaweiMaaSLLMClient()
+    raise LLMError(f"Unknown LLM backend: {backend}")

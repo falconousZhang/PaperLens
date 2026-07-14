@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from paperlens.core.config import settings
 from paperlens.core.database import get_db
+from paperlens.core.deps import get_current_user, get_current_user_id
 from paperlens.core.enums import PaperStatus
 from paperlens.core.errors import AppError
 from paperlens.models.models import (
@@ -20,6 +21,7 @@ from paperlens.models.models import (
     PaperChunk,
     PaperTable,
     Evidence,
+    User,
 )
 from paperlens.schemas.paper import (
     PaperUploadResponse,
@@ -54,9 +56,6 @@ def _safe_error_message(exc: Exception) -> str:
     return "论文解析失败，请稍后重试或重新上传"
 
 
-def _get_user_id() -> str:
-    return settings.demo_user_id
-
 
 def _check_paper_owner(paper: Paper | None, user_id: str) -> Paper:
     if paper is None:
@@ -71,6 +70,7 @@ async def upload_paper(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
     tmp_path: str | None = None
     tmp_transferred = False
@@ -80,7 +80,7 @@ async def upload_paper(
     storage_transferred = False
     paper_added = False
     try:
-        user_id = _get_user_id()
+
         raw_filename = file.filename or "unknown.pdf"
         filename = _sanitize_filename(raw_filename)
 
@@ -294,8 +294,9 @@ async def list_papers(
     page_size: int = Query(20, ge=1, le=100),
     status: PaperStatus | None = None,
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
+
     query = db.query(Paper).filter(Paper.user_id == user_id)
     if status:
         query = query.filter(Paper.status == status)
@@ -316,8 +317,9 @@ async def list_papers(
 async def get_paper(
     paper_id: UUID4 = Path(...),
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
+
     paper = _check_paper_owner(db.get(Paper, str(paper_id)), user_id)
     return PaperDetail(
         id=paper.id, title=paper.title, filename=paper.filename,
@@ -332,8 +334,8 @@ async def get_page(
     paper_id: UUID4 = Path(...),
     page_number: int = Path(..., ge=1),
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
     _check_paper_owner(db.get(Paper, str(paper_id)), user_id)
     page = db.query(PaperPage).filter(
         PaperPage.paper_id == str(paper_id), PaperPage.page_number == page_number
@@ -351,8 +353,8 @@ async def get_page(
 async def list_sections(
     paper_id: UUID4 = Path(...),
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
     _check_paper_owner(db.get(Paper, str(paper_id)), user_id)
     sections = db.query(PaperSection).filter(
         PaperSection.paper_id == str(paper_id)
@@ -370,8 +372,8 @@ async def list_sections(
 async def list_evidences(
     paper_id: UUID4 = Path(...),
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
     _check_paper_owner(db.get(Paper, str(paper_id)), user_id)
     evidences = db.query(Evidence).filter(
         Evidence.paper_id == str(paper_id)
@@ -390,8 +392,9 @@ async def list_evidences(
 async def get_evidence(
     evidence_id: UUID4 = Path(...),
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _get_user_id()
+
     evidence = db.get(Evidence, str(evidence_id))
     if evidence is None:
         raise AppError("NOT_FOUND", "证据不存在", 404)

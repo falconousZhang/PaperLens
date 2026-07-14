@@ -30,6 +30,14 @@ def _sanitize_filename(filename: str) -> str:
     return basename
 
 
+def _experiment_storage_key(namespace: str, file_id: str, filename: str) -> str:
+    extension = os.path.splitext(filename)[1].casefold()
+    allowed = {".csv": "csv", ".xlsx": "xlsx", ".xls": "xls"}
+    if extension not in allowed:
+        raise ValueError("unsupported experiment file extension")
+    return f"{namespace}/{file_id}/source.{allowed[extension]}"
+
+
 class LocalStorage(StorageBackend):
 
     def __init__(self, root: str | None = None):
@@ -52,7 +60,11 @@ class LocalStorage(StorageBackend):
         return resolved
 
     def build_key(self, namespace: str, file_id: str, filename: str) -> str:
-        return f"{namespace}/{file_id}/source.pdf"
+        if namespace == "papers":
+            return f"{namespace}/{file_id}/source.pdf"
+        if namespace == "experiment-files":
+            return _experiment_storage_key(namespace, file_id, filename)
+        return f"{namespace}/{file_id}/{_sanitize_filename(filename)}"
 
     def save(self, storage_key: str, src_path: str) -> None:
         target = self._resolve(storage_key)
@@ -88,7 +100,11 @@ class OBSStorage(StorageBackend):
         raise NotImplementedError("OBS 存储尚未实现")
 
     def build_key(self, namespace: str, file_id: str, filename: str) -> str:
-        return f"{namespace}/{file_id}/source.pdf"
+        if namespace == "papers":
+            return f"{namespace}/{file_id}/source.pdf"
+        if namespace == "experiment-files":
+            return _experiment_storage_key(namespace, file_id, filename)
+        return f"{namespace}/{file_id}/{_sanitize_filename(filename)}"
 
 
 def get_storage() -> StorageBackend:

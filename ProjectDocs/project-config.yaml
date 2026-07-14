@@ -1,14 +1,14 @@
 # 项目配置文件
-# 由 dev-process-framework 初始化，P3.1 收口更新
+# 由 dev-process-framework 初始化，P5.1 Codex 独立验收收口更新
 
 project:
   name: "PaperLens"
   type: "Web应用"
   created_at: "2026-07-13T14:26:03.660203"
-  updated_at: "2026-07-13"
+  updated_at: "2026-07-14"
 
 workflow:
-  current_stage: "P3.1 MockLLM 结构化审阅后端闭环已完成，P3.2 华为云优先的语义检索待开始"
+  current_stage: "P5.1 CSV/Excel 安全上传与结构解析已完成，下一阶段 P5.2"
   completed_docs:
     - 01-需求细化与决策发现.md
     - 02-架构设计.md
@@ -31,9 +31,8 @@ design:
     - 08-测试设计.md
 
 next_steps:
-  - "P3.2: 设计 EmbeddingClient，并优先接入华为云 MaaS/ModelArts 可用的 Embedding 服务"
-  - "P3.2: 实现可替换的 Evidence 语义检索；本地确定性候选保留为开发回退"
-  - "P3.3: 实现 HuaweiMaaSLLMClient，MockLLMClient 继续用于测试"
-  - "P4: 实现实验指标提取与 checkpoint 口径判断"
-  - "P5: 实现 CSV/Excel 实验数据分析"
+  - "P5.2: 实现实验数据确定性统计摘要后端闭环"
+  - "P5.3: 实现论文指标交叉验证与实验数据前端"
   - "P6: 实现审稿报告导出"
+  - "P7: 完成管理员 API、管理后台和管理员操作审计"
+  - "P8: 完成云端部署、可观测性和浏览器 E2E"

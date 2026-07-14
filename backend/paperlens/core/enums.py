@@ -86,3 +86,19 @@ class OverallVerdict(StrEnum):
     BORDERLINE = "BORDERLINE"
     WEAK_REJECT = "WEAK_REJECT"
     REJECT = "REJECT"
+
+
+class UserRole(StrEnum):
+    USER = "USER"
+    ADMIN = "ADMIN"
+
+
+class ExperimentFileType(StrEnum):
+    CSV = "CSV"
+    XLSX = "XLSX"
+    XLS = "XLS"
+
+
+class UserStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"

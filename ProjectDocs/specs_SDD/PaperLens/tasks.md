@@ -7,7 +7,7 @@
 | 项目名称 | PaperLens |
 | 文档版本 | v1.0 |
 | 创建日期 | 2026-07-13 |
-| 最后更新 | 2026-07-13 |
+| 最后更新 | 2026-07-14 |
 | 文档状态 | 已完成 |
 
 ## 文档引用说明
@@ -33,21 +33,23 @@
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/sections |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤） |
 | ✅ CURRENT | GET /api/v1/evidences/{evidence_id} |
-| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（仅 REVIEW） |
+| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（REVIEW / METRIC_EXTRACTION） |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/tasks |
 | ✅ CURRENT | GET /api/v1/tasks/{task_id} |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/reviews（仅 VERIFIED Finding） |
+| ✅ CURRENT | 10 个 `/api/v1/auth` 端点、真实用户依赖与 USER/ADMIN RBAC 基础（P3.5） |
 | 📋 PLANNED | DELETE /api/v1/papers/{paper_id} |
 | 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
 | 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
-| 📋 PLANNED | GET /api/v1/papers/{paper_id}/metrics |
-| 📋 PLANNED | POST/GET/DELETE /api/v1/papers/{paper_id}/experiment-files/* |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/metrics、GET /api/v1/metrics/{metric_id} |
+| ✅ CURRENT | POST upload、GET list、GET `/api/v1/experiment-files/{file_id}` 结构详情（P5.1） |
+| 📋 PLANNED | ExperimentResult/result API、DELETE 和实验前端（P5.2+） |
 | 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
 | 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
 
 **关键实现细节:**
 - SHA-256 哈希已计算并存储，去重/复用逻辑 📋 PLANNED
-- 认证: `_get_user_id()` 返回 `settings.demo_user_id`，Bearer/JWT 📋 PLANNED
+- 认证: 统一 Bearer JWT + AuthSession/User 数据库校验（✅ P3.5 CURRENT）
 - Swagger: `/api/docs`，OpenAPI: `/api/openapi.json`
 
 ---
@@ -540,7 +542,7 @@
 
 ---
 
-## 3. 审阅生成（P3.1 后端已实现）
+## 3. 审阅生成（P3.3 后端已实现）
 
 ### 3.1 结构化论文审阅
 
@@ -567,7 +569,7 @@
 - 审阅结果 API 返回含 Evidence 的结构化结果
 - UNVERIFIED Finding 不展示
 
-#### 任务 3.1.1: 审阅生成后端服务 ✅ DONE（P3.1 MockLLM）
+#### 任务 3.1.1: 审阅生成后端服务 ✅ DONE（P3.1 MockLLM，P3.2 语义检索，P3.3 Huawei MaaS LLM）
 
 **任务描述**: 实现审阅生成服务，基于 Evidence 和 LLM 生成结构化审阅结果。
 
@@ -583,18 +585,41 @@
 - analysis_tasks, review_results, review_findings, finding_evidences
 
 **实现要点:**
-- 同论文 Evidence 按 page_number/created_at/id 稳定排序，Top-K=8；FAISS 仍为 P3.2 PLANNED
+- 同论文 Evidence 稳定加载后结束只读事务；通过 EmbeddingClient 执行按维度精确 cosine Top-K，平分按 page_number/created_at/id 排序
 - E1/E2 alias、安全 Prompt、严格 JSON 类型和维度校验
 - Evidence 全有或全无绑定；UNVERIFIED Finding 公开过滤
 - 多维度结果批次与 SUCCEEDED 状态原子提交，任一失败全部回滚
-- MockLLMClient 开发测试；HuaweiMaaSLLMClient 为 P3.3 PLANNED
+- MockLLMClient 作为默认离线实现；可配置 HuaweiMaaSLLMClient 使用 MaaS 标准 API V2 非流式推理
 
 **验收标准:**
 - 审阅结果含 Evidence 绑定
 - UNVERIFIED Finding 不返回
 - 无效 UUID、非法 options、跨用户资源与第二维失败路径均有 PostgreSQL API 测试
 
-#### 任务 3.1.2: 审阅结果前端页面（规划）
+#### 任务 3.1.1b: Embedding 抽象与语义 Evidence 检索 ✅ DONE（P3.2）
+
+**实现要点:**
+- `EmbeddingClient.embed(texts)` 统一契约，严格验证数量、维度、有限数值和非零范数
+- 默认 MockEmbeddingClient 离线确定性支持中英文词项；HuaweiMaaSEmbeddingClient 通过 HTTPS、Bearer、批处理和严格响应校验接入
+- DB 候选加载与外部推理解耦；Evidence 每任务只向量化一次，各维度 query 保持请求顺序
+- 任一批次、查询或外部推理失败时任务安全 FAILED，所有审阅结果、发现和关联均为 0
+- 当前无 FAISS/pgvector、持久化缓存或 `PaperChunk.embedding_id` 回填
+
+**验收结果:** P3.2 定向 `142 passed`；Docker 后端全量 `205 passed, 0 skipped`。
+
+#### 任务 3.1.1c: Huawei MaaS 生成式模型适配器 ✅ DONE（P3.3）
+
+**实现要点:**
+- `LLMError` 统一配置、网络、HTTP、JSON 和响应结构错误，公开任务错误保持安全文案
+- `HuaweiMaaSLLMClient` 仅允许绝对 HTTPS base URL，SecretStr 正确解包，发送 Bearer、`stream=false` 和 `max_completion_tokens`
+- messages、单 choice/index 0、assistant/content 和 `finish_reason=stop` 严格校验；不接受多 choice、截断或工具调用响应
+- 默认工厂保持 Mock，可按 `PAPERLENS_LLM_BACKEND=huawei_maas` 切换；无进程级可变测试单例
+- Huawei MockTransport 成功结果经过既有严格审阅解析和真实 Evidence 绑定；首维/第二维失败均整批回滚，且 transport 调用点无活动 SQLAlchemy 事务
+- 自动测试不访问公网，不代表用户账号、区域、模型质量或费用已经完成真实验收
+
+**验收结果:** P3.3 定向 `73 passed`；Docker 后端全量 `277 passed, 0 skipped`。
+
+#### 任务 3.1.2: 审阅结果前端页面（已完成）
 
 **任务描述**: 实现审阅结果页面（P05），按维度展示 Finding，Evidence 追溯。
 
@@ -603,8 +628,8 @@
 - FR-03.1.5: 评分 1-5，含 overall_verdict
 
 **设计引用:**
-- [design/07-前端展示.md#35-p05-审阅结果-reviewresultview--规划](design/07-前端展示.md#35-p05-审阅结果-reviewresultview--规划)
-- [design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--规划](design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--规划)
+- [design/07-前端展示.md#35-p05-审阅结果-reviewresultview--已实现](design/07-前端展示.md#35-p05-审阅结果-reviewresultview--已实现)
+- [design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--已实现](design/10-前端详细设计.md#45-p05-审阅结果-reviewresultview--已实现)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/reviews
@@ -615,15 +640,18 @@
 - Finding 类型标签颜色
 - 证据链接跳转高亮
 - 审阅任务轮询
+- 历史结果按 task_id 归组，新任务完成前保留旧结果
+- 轮询失败重试、timer 清理和旧响应失效
 
 **验收标准:**
 - 审阅结果按维度展示
 - Finding 类型标签正确
 - 证据链接跳转正常
+- 前端 45 项组件测试通过，生产构建成功
 
 ---
 
-## 4. 指标提取与口径判断（规划）
+## 4. 指标提取与口径判断（P4.1 后端已完成）
 
 ### 4.1 实验指标提取
 
@@ -633,7 +661,7 @@
 - FR-04.1.3: 关联来源 Evidence 和表格行号
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#21-指标提取服务](design/04-指标提取与口径判断.md#21-指标提取服务)
+- [design/04-指标提取与口径判断.md#2-执行流程](design/04-指标提取与口径判断.md#2-执行流程)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/metrics
@@ -644,7 +672,7 @@
 **验收标准:**
 - 指标记录 API 返回结构化数据
 
-#### 任务 4.1.1: 指标提取后端服务（规划）
+#### 任务 4.1.1: 指标提取后端服务（已完成）
 
 **任务描述**: 从论文表格和正文中提取实验指标。
 
@@ -654,21 +682,22 @@
 - FR-04.1.3: 关联来源 Evidence 和表格行号
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#21-指标提取服务](design/04-指标提取与口径判断.md#21-指标提取服务)
+- [design/04-指标提取与口径判断.md#2-执行流程](design/04-指标提取与口径判断.md#2-执行流程)
 
 **数据模型引用:**
 - metric_records
 
 **实现要点:**
 - 从 structured_data 按行列提取
-- 规则引擎 + LLM 辅助识别
-- Evidence 关联和表格行号
+- 完全离线的确定性规则；百分号统一为 0～1
+- 每条记录只关联 Evidence 或表格行之一，写入前校验同论文来源
+- 来源快照结束读事务后解析，记录与任务成功状态原子提交
 
 **验收标准:**
 - 指标可提取并查询
 - 关联 Evidence 和表格行号
 
-#### 任务 4.1.2: Checkpoint 口径判断（规划）
+#### 任务 4.1.2: Checkpoint 口径判断（已完成）
 
 **任务描述**: 识别 final/max/mean/best 等统计口径并标注来源。
 
@@ -678,21 +707,23 @@
 - FR-04.2.3: LLM 仅辅助歧义消解
 
 **设计引用:**
-- [design/04-指标提取与口径判断.md#22-checkpoint-口径判断服务](design/04-指标提取与口径判断.md#22-checkpoint-口径判断服务)
+- [design/04-指标提取与口径判断.md#34-checkpoint](design/04-指标提取与口径判断.md#34-checkpoint)
 
 **数据模型引用:**
 - metric_records (checkpoint_type, checkpoint_source)
 
 **实现要点:**
 - 关键词匹配 + 上下文分析
-- EXPLICIT_TEXT / TABLE_HEADER / IMPLICIT_CONTEXT / UNKNOWN
-- LLM 不参与数值计算
+- caption / row_header / context 完整关键词匹配
+- 冲突或无证据统一 UNKNOWN，不按数值最大推断
+- LLM 不参与候选、数值或口径生成
 
 **验收标准:**
 - 口径类型和来源正确标注
 - LLM 不参与数值计算
+- P4.1 定向 67 passed；Docker 后端 385 passed、0 skipped；Alembic 007 head
 
-#### 任务 4.1.3: 指标分析前端页面（规划）
+#### 任务 4.2.1: 指标分析前端页面（已完成）
 
 **任务描述**: 实现指标分析页面（P06），指标表格，口径标注，筛选。
 
@@ -700,74 +731,81 @@
 - FR-04.1.2: 记录模型名、数据集名、指标名、指标值
 
 **设计引用:**
-- [design/07-前端展示.md#36-p06-指标分析-metricanalysisview--规划](design/07-前端展示.md#36-p06-指标分析-metricanalysisview--规划)
-- [design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--规划](design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--规划)
+- [design/07-前端展示.md#36-p06-指标分析-metricanalysisview--已实现](design/07-前端展示.md#36-p06-指标分析-metricanalysisview--已实现)
+- [design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--已实现](design/10-前端详细设计.md#46-p06-指标分析-metricanalysisview--已实现)
 
 **API 引用:**
 - GET /api/v1/papers/{paper_id}/metrics
 - POST /api/v1/papers/{paper_id}/tasks
 
 **实现要点:**
-- 筛选栏: 模型名、数据集、口径
-- 指标表格: 口径标签颜色
-- 行展开详情
-- 证据链接跳转
+- 最新成功任务和历史成功任务均按 `task_id` 隔离
+- 创建/恢复/轮询任务，活动期间保留上一轮成功结果
+- 指标名、数据集、Checkpoint 后端筛选与分页
+- 百分比显示、存储值、六类 Checkpoint 和原文展开
+- Evidence 深链、表格来源信息和异常来源降级
+- generation/request id 防止旧异步回写
 
 **验收标准:**
 - 指标表格正确渲染
 - 筛选功能正常
 - 证据链接跳转正常
+- 快速交互不会发生旧响应覆盖，路由变化和卸载后 timer 已清理
 
 ---
 
-## 5. 实验数据分析（规划）
+## 5. 实验数据分析（P5.1 部分实现）
 
 ### 5.1 CSV/Excel 实验数据分析
 
 **需求引用:**
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传
-- FR-05.1.2: 使用 pandas 解析数据列
+- FR-05.1.2: 使用路径型确定性解析器识别数据结构
 - FR-05.1.3: 使用确定性 Python 代码计算统计摘要
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **设计引用:**
-- [design/05-实验数据分析.md#21-实验数据上传服务](design/05-实验数据分析.md#21-实验数据上传服务)
-- [design/05-实验数据分析.md#22-统计摘要计算服务](design/05-实验数据分析.md#22-统计摘要计算服务)
+- [design/05-实验数据分析.md#1-p51-实验数据上传服务](design/05-实验数据分析.md#1-p51-实验数据上传服务)
+- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/experiment-files/upload
 - GET /api/v1/papers/{paper_id}/experiment-files
-- GET /api/v1/experiment-files/{file_id}/result
-- DELETE /api/v1/experiment-files/{file_id}
+- GET /api/v1/experiment-files/{file_id}
+- GET result 与 DELETE 仍为后续规划
 
 **数据模型引用:**
-- experiment_files, experiment_results
+- experiment_files（CURRENT）；experiment_results（PLANNED）
 
 **验收标准:**
 - 实验数据文件可上传并解析
-- 统计摘要由确定性代码计算
+- P5.1 不计算统计摘要；P5.2 必须由确定性代码计算
 
-#### 任务 5.1.1: 实验数据上传与解析（规划）
+#### 任务 5.1.1: 实验数据上传与结构解析（✅ DONE）
 
 **任务描述**: 实现 CSV/XLSX/XLS 文件上传和解析。
 
 **需求引用:**
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传
-- FR-05.1.2: 使用 pandas 解析数据列
+- FR-05.1.2: 使用路径型确定性解析器识别列结构
 
 **设计引用:**
-- [design/05-实验数据分析.md#21-实验数据上传服务](design/05-实验数据分析.md#21-实验数据上传服务)
+- [design/05-实验数据分析.md#1-p51-实验数据上传服务](design/05-实验数据分析.md#1-p51-实验数据上传服务)
 
 **数据模型引用:**
 - experiment_files
 
 **实现要点:**
-- 文件类型校验和大小限制（20MB）
-- pandas 解析数据列
-- columns_info JSONB 存储
+- 固定块临时落盘和实际字节限制（20MB）
+- CSV 确定性编码/分隔符解析、XLSX ZIP 安全、XLS OLE 校验
+- version=1 `columns_info` JSONB、严格 Pydantic 响应和公开哈希隐藏
+- 同用户/论文/哈希幂等及数据库并发收口
+- storage/flush/commit 回滚补偿和离线保证
 
 **验收标准:**
 - CSV/XLSX/XLS 可上传并解析
+- 新建 201、重复 200；并发最终一行一对象
+- 结构列表和详情只允许资源所属用户访问
 
 #### 任务 5.1.2: 统计摘要计算（规划）
 
@@ -778,7 +816,7 @@
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **设计引用:**
-- [design/05-实验数据分析.md#22-统计摘要计算服务](design/05-实验数据分析.md#22-统计摘要计算服务)
+- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
 
 **数据模型引用:**
 - experiment_results (summary_stats)
@@ -800,7 +838,7 @@
 - FR-05.2.3: 标记验证状态（MATCH / MISMATCH）
 
 **设计引用:**
-- [design/05-实验数据分析.md#23-指标交叉验证服务](design/05-实验数据分析.md#23-指标交叉验证服务)
+- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
@@ -818,7 +856,7 @@
 - FR-05.2.3: 标记验证状态
 
 **设计引用:**
-- [design/05-实验数据分析.md#23-指标交叉验证服务](design/05-实验数据分析.md#23-指标交叉验证服务)
+- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
@@ -959,6 +997,18 @@
 
 ---
 
-**文档版本**: v1.0
+## P4.3 华为云 MaaS LLM 运行配置任务
+
+| 任务 | 状态 |
+|------|------|
+| Compose 安全开关和 LLM 单项透传 | ✅ DONE |
+| Embedding 费用隔离 | ✅ DONE |
+| 离线 config-check | ✅ DONE |
+| 显式付费确认烟测 | ✅ DONE |
+| 配置/CLI/Compose/Huawei LLM 离线测试 | ✅ 110 passed / 0 skipped |
+| 全量回归和运行验收 | ✅ 后端 435/0 skipped；前端 106；构建成功 |
+| 用户真实 MaaS 小额烟测 | ✅ 第二次且最后一次授权请求成功，35 字符；首轮安全失败后未自动重试 |
+
+**文档版本**: v1.1
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-13
+**最后更新**: 2026-07-14

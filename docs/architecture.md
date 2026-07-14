@@ -58,7 +58,7 @@ frontend/
 │   ├── views/            # 页面视图
 │   │   ├── HomeView      # 首页
 │   │   ├── UploadView    # 论文上传
-│   │   ├── ReviewView    # 审阅结果
+│   │   ├── ReviewResultView # 审阅结果
 │   │   ├── MetricsView   # 指标分析
 │   │   └── ExportView    # 报告导出
 │   ├── stores/           # Pinia 状态管理
@@ -69,7 +69,7 @@ frontend/
 前端职责：
 - 文件上传（multipart 流式上传，最大 50MB）
 - 展示论文解析结果与 Evidence 定位（当前基于 `normalized_text_content` 字符区间高亮，不是 PDF.js/bbox 覆盖层）
-- 展示审阅结果、指标表格与统计口径标注（规划，尚未实现）
+- 展示审阅结果、任务进度、Finding 筛选与 Evidence 深链；指标表格和统计口径标注仍在规划
 - 触发报告导出并下载（规划，尚未实现）
 - 后端不可用时显示明确错误
 
@@ -89,7 +89,7 @@ backend/
 │   │   ├── retriever     # 证据检索服务
 │   │   ├── reviewer      # 审阅生成服务
 │   │   ├── metric_extractor  # 指标提取服务
-│   │   ├── experiment_analyzer  # 实验数据分析服务
+│   │   ├── experiment_file_parser/service  # P5.1 安全上传与结构解析
 │   │   └── exporter      # 报告导出服务
 │   ├── tasks/            # 后台任务定义
 │   └── utils/            # 工具函数
@@ -99,8 +99,10 @@ backend/
 - 文件接收与校验
 - PDF 解析与结构化
 - 文本分块与 page-local Evidence 提取（已实现）
-- 向量索引与语义检索（规划，尚未实现）
-- 调用 LLM 生成审阅意见、指标提取、实验分析和报告导出（规划，尚未实现）
+- Embedding 抽象与语义 Evidence 检索（已实现，默认 MockEmbedding，华为云 MaaS 适配器已就绪）
+- 向量索引与持久化（规划，FAISS/pgvector，尚未实现）
+- 通过可替换 LLMClient 生成结构化审阅意见（已实现，默认 Mock、可配置华为 MaaS）
+- 可追溯指标提取后端（P4.1 已实现，完全离线）；指标前端、实验分析和报告导出仍为规划
 
 ### 2.3 LLM 调用抽象
 
@@ -109,20 +111,38 @@ LLM 必须通过统一 `LLMClient` 接口调用：
 ```python
 class LLMClient(ABC):
     @abstractmethod
-    async def chat(self, messages: list[dict], **kwargs) -> dict: ...
+    def chat(self, messages: list[dict], **kwargs) -> dict: ...
 
 class MockLLMClient(LLMClient):
     """默认实现，返回固定结构化响应，无需云端密钥即可演示"""
 
-class MaaSLLMClient(LLMClient):
-    """华为云 MaaS / ModelArts 推理端点实现（后续版本）"""
+class HuaweiMaaSLLMClient(LLMClient):
+    """华为云 MaaS 标准 API V2 适配器，httpx 同步调用，非流式，transport 可注入"""
 ```
 
-当前仅支持 `PAPERLENS_LLM_BACKEND=mock`；华为云 MaaS/ModelArts 适配器将在 P3.3 开放。
+当前默认 `PAPERLENS_LLM_BACKEND=mock`；华为云 MaaS 适配器已实现但需配置 API Key 启用。所有配置/网络/HTTP/JSON/响应错误统一转为安全 LLMError，不泄漏 Key 或上游响应。
+
+### 2.4 Embedding 调用抽象
+
+Embedding 必须通过统一 `EmbeddingClient` 接口调用：
+
+```python
+class EmbeddingClient(ABC):
+    @abstractmethod
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+class MockEmbeddingClient(EmbeddingClient):
+    """默认实现，基于词项 hashing/bag-of-words，确定性、归一化"""
+
+class HuaweiMaaSEmbeddingClient(EmbeddingClient):
+    """华为云 MaaS Embedding 适配器，httpx 同步调用，batch 分割，transport 可注入"""
+```
+
+当前默认 `PAPERLENS_EMBEDDING_PROVIDER=mock`；华为云 MaaS 适配器已实现但需配置 API Key 启用。FAISS/pgvector 向量数据库为 PLANNED。
 
 ## 3. 后台任务处理流程
 
-> 当前已完成 PDF 解析、page-local Evidence 提取，以及基于确定性 Evidence Top-K + MockLLM 的结构化审阅后端闭环。FAISS/Embedding 语义检索、真实华为云模型、指标分析和报告导出尚未实现。
+> 当前已完成 PDF 解析、page-local Evidence 提取、基于 MockLLM 的结构化审阅后端闭环、基于 Embedding 抽象的语义 Evidence 检索，以及华为云 MaaS 标准 API V2 的 LLM 适配器。FAISS/pgvector 向量数据库、指标分析和报告导出尚未实现。
 
 ```
 用户上传 PDF
@@ -244,10 +264,11 @@ PENDING → RUNNING → SUCCEEDED
 | 8 | ECS | ModelArts | Prompt + Evidence | Chat 推理生成审阅 |
 | 9 | ECS | RDS | ReviewResult + ReviewFinding + Evidence | 审阅结果与证据绑定 |
 | 10 | ECS | RDS | MetricRecord | 指标提取结果 |
-| 11 | 用户 | ECS | CSV/Excel | 实验数据上传 |
-| 12 | ECS | OBS | 实验数据文件 | 存储原始文件 |
-| 13 | ECS | RDS | ExperimentResult | 确定性代码计算统计结果 |
-| 14 | ECS | 用户 | 导出报告 | 报告下载 |
+| 11 | 用户 | ECS | CSV/XLSX/XLS | P5.1 固定块临时落盘和认证校验 |
+| 12 | ECS worker | ECS | 临时路径 | magic/ZIP/OLE 安全、SHA-256、确定性结构解析 |
+| 13 | ECS | LocalStorage/OBS 抽象 + RDS | source.ext + ExperimentFile | 幂等保存和失败补偿；OBS 实现仍规划 |
+| 14 | ECS | RDS | ExperimentResult | P5.2 确定性统计结果，尚未实现 |
+| 15 | ECS | 用户 | 导出报告 | 报告下载（规划） |
 
 ## 5. 本地开发与云端部署的差异
 
@@ -255,8 +276,8 @@ PENDING → RUNNING → SUCCEEDED
 |------|---------|---------|
 | 文件存储 | 本地文件系统 `./data/uploads/` | 华为云 OBS（OBSStorage 未实现，后续版本） |
 | 数据库 | 本地 PostgreSQL（Docker Compose） | 华为云 RDS PostgreSQL |
-| 向量存储 | 规划使用 FAISS（尚未实现） | 规划使用 FAISS 索引（ECS 本地）+ OBS 备份 |
-| LLM 推理 | 仅有 LLMClient/MockLLMClient 骨架，审阅流程尚未实现 | 规划使用华为云 ModelArts 推理端点 |
+| Evidence 检索 | MockEmbeddingClient + 任务内精确余弦 Top-K | 可配置华为云 MaaS Embedding；持久化 FAISS/pgvector 仍为规划 |
+| LLM 推理 | MockLLMClient 结构化审阅闭环；HuaweiMaaSLLMClient 已实现需配置 API Key 启用 | 华为云 MaaS 标准 API V2 |
 | PDF 解析 | 本地 PyMuPDF / pdfplumber | 同左（ECS 上运行） |
 | 任务队列 | FastAPI BackgroundTasks（MVP，非生产级） | Celery + Redis（后续版本） |
 | 前端 | Vite dev server | Nginx 静态托管 |
@@ -269,7 +290,7 @@ PENDING → RUNNING → SUCCEEDED
 - 通过环境变量 `PAPERLENS_ENV=local|cloud` 切换
 - 存储层抽象：`StorageBackend` 接口，`LocalStorage` 为当前实现，`OBSStorage` 为后续云端部署实现（未实现）
 - 数据库：SQLAlchemy 统一 ORM，通过 `DATABASE_URL` 切换，统一使用 PostgreSQL
-- LLM：统一 `LLMClient` 接口，通过 `LLM_BACKEND` 切换（mock / maas）
+- LLM：统一 `LLMClient` 接口，通过 `LLM_BACKEND` 切换（mock / huawei_maas）
 
 ## 6. 关键设计决策
 
@@ -285,20 +306,25 @@ PENDING → RUNNING → SUCCEEDED
 ### 6.2 审阅生成的 Evidence 绑定机制
 
 ```
-1. 根据审阅维度构造检索 query
-2. 从向量索引中检索 Top-K 相关 PaperChunk
-3. 将 PaperChunk 内容作为 Evidence 传入 Prompt
-4. 要求 LLM 在输出中标注引用的 Evidence ID
-5. 后处理验证：每条 ReviewFinding 必须关联至少一个 Evidence
-6. 未关联 Evidence 的 Finding 标记为 verification_status=UNVERIFIED，不展示给用户
+1. 根据审阅维度构造检索 query（build_dimension_query，含中英文维度术语）
+2. 使用 EmbeddingClient 将 query 和 Evidence 文本向量化
+3. 计算 cosine similarity 排序，取 Top-K 相关 Evidence
+4. 将 Evidence 内容以别名（E1/E2/…）传入 Prompt
+5. 要求 LLM 在输出中标注引用的 Evidence 别名
+6. 后处理验证：每条 ReviewFinding 必须关联至少一个 Evidence 别名
+7. 未关联 Evidence 的 Finding 标记为 verification_status=UNVERIFIED，不展示给用户
 ```
+
+当前使用 MockEmbeddingClient（词项 hashing/bag-of-words），华为云 MaaS Embedding 适配器已就绪（需配置 API Key）。
+当前实现直接读取同论文 Evidence，在一次任务中将 Evidence 文本只向量化一次，再对各维度查询分别排序；没有写入 `PaperChunk.embedding_id`，也没有持久化向量索引。
 
 ### 6.3 指标提取的确定性保证
 
-- 表格数值提取：使用 pdfplumber 结构化解析，不依赖 LLM
-- 统计计算（mean、max、std 等）：使用 pandas/numpy 确定性计算
-- 口径判断：基于规则引擎（关键词匹配 + 上下文分析），LLM 仅辅助歧义消解
-- LLM 不参与任何数值计算，仅负责语义理解和文本生成
+- 从已持久化 PaperTable 与 Evidence 创建来源快照，结束读事务后执行纯 Python 解析，不依赖 LLM
+- 百分号统一存 0～1；非百分比指标允许有限负数，范围、均值±误差和非有限值拒绝
+- Checkpoint 只按完整关键词及当前 caption/行标签/Evidence 判断；冲突或无证据为 UNKNOWN
+- 每条记录绑定表格行或 Evidence，并在原子写入前复核 task/paper/user/source
+- P4.1 不使用 pandas/numpy，也不调用 LLMClient、EmbeddingClient 或外部网络
 
 ### 6.4 MVP 范围约束
 
@@ -306,3 +332,10 @@ PENDING → RUNNING → SUCCEEDED
 - 文件上传使用普通 multipart 流式上传，暂不实现分片上传
 - 任务进度通知使用 HTTP 轮询，暂不实现 WebSocket
 - 后台任务使用 FastAPI BackgroundTasks（仅 MVP 阶段，非生产级方案），暂不引入 Celery + Redis
+
+### 6.5 P4.3 MaaS 运行开关
+
+- Compose 默认使用 MockLLMClient，只逐项透传 LLM backend/base URL/model/API Key/timeout/max tokens。
+- Embedding 在 LLM 首次真实验收前强制为 mock，避免意外双重计费。
+- `maas-config-check` 只验证配置；`maas-smoke --confirm-billable` 才允许一次最多 32 completion token 的真实请求。
+- Compose 源文件只读挂载到 backend，仅供 Docker 测试核对实际配置，文件中不含展开后的 secret。

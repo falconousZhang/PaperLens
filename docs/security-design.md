@@ -44,8 +44,8 @@ MAGIC_NUMBERS = {
 
 ### 多层限制
 1. **反向代理层**（Nginx）：`client_max_body_size 60m`
-2. **应用层**（FastAPI）：中间件检查 Content-Length
-3. **业务层**：根据文件类型校验具体大小
+2. **应用层**（FastAPI）：Content-Length 只能作快速拒绝，不能作为可信大小
+3. **业务层**：P5.1 对 UploadFile 按固定块累计实际字节，超过 20MB 立即 413
 
 ### 超限处理
 - 返回 413 Payload Too Large
@@ -71,7 +71,15 @@ MAGIC_NUMBERS = {
 2. **存储路径构造**：
    - 使用 paper UUID 作为存储路径，不使用用户提供的文件名
    - 存储路径格式：`papers/{paper_uuid}/source.pdf`
+   - 实验文件格式：`experiment-files/{uuid}/source.csv|source.xlsx|source.xls`
    - 不允许用户直接指定存储路径
+
+### P5.1 CSV/Excel 容器安全
+
+- CSV 仅完整解码 UTF-8/BOM/GB18030，分隔符必须在逗号/分号/Tab 中唯一确定；拒绝 NUL、坏语法和行宽不一致。
+- XLSX 在 openpyxl 前限制 ZIP entry 数、单项/总压缩比和总解压量，拒绝正反斜杠穿越、绝对/盘符路径、重复/加密 entry、宏、外链、嵌入对象、多个非空 sheet 和公式。
+- XLS 同时验证扩展名、OLE magic 和 xlrd 解析成功；解析器不执行宏、DDE、外链或网络。
+- 解析/校验失败不进入持久存储；storage、flush、commit 失败 rollback 并补偿对象。错误响应和日志不包含文件内容、用户文件名、本机临时路径、SQL 参数或 secret。
 
 3. **文件读取**：
    - 读取存储文件时仅使用数据库中记录的 storage_key
@@ -175,6 +183,14 @@ MAGIC_NUMBERS = {
    - 日志中不记录完整 Prompt 模板
    - 不记录 API Key
 
+### 5.1 P3.3 Huawei MaaS LLM 出站边界
+
+- `PAPERLENS_LLM_BASE_URL` 是部署配置而不是用户输入；客户端只接受无凭据、query 和 fragment 的绝对 HTTPS URL，并固定请求相对路径 `/chat/completions`。
+- `PAPERLENS_LLM_API_KEY` 使用 SecretStr，从环境或云端密钥服务注入；请求异常、任务错误和测试日志不得包含 Key、Authorization Header 或完整上游响应体。
+- 输入 messages 只允许 system/user/assistant 和非空字符串 content；PaperLens 内部的 dimension、evidence_aliases 等参数不得发送给上游。
+- 响应只接受单一 `choices[index=0]`、`role=assistant`、非空 content 和 `finish_reason=stop`；多 choice、截断、工具调用、非法 JSON 或歧义结构全部安全失败。
+- 本轮不自动重试，避免超时边界重复计费；自动测试只使用 MockTransport，不访问真实华为云，也不代表用户账号、区域、模型质量或费用已经验收。
+
 ## 6. 密钥管理
 
 ### 密钥清单
@@ -237,6 +253,7 @@ MAGIC_NUMBERS = {
 - 日志中不记录论文原文内容
 - 日志中不记录用户文件名（使用 paper_id 替代）
 - 日志中不记录 LLM 完整响应（仅记录 token 使用量）
+- SQLAlchemy engine 固定关闭 `echo` 并启用 `hide_parameters`；`PAPERLENS_DEBUG=true` 不能重新开启包含论文、认证或任务数据的 SQL 参数日志
 
 ## 8. 错误信息安全
 
@@ -255,3 +272,42 @@ MAGIC_NUMBERS = {
 2. **验证**：
    - `test_error_message_is_safe`：断言 error_message 不包含 `/`、`Traceback`、`SELECT` 等内部信息模式
    - `test_error_message_safe_with_injected_exception`：注入包含 `/tmp/`、`Traceback`、`SELECT *` 的异常，验证返回消息中不含这些模式
+
+## 9. 用户认证、RBAC 与管理员系统
+
+P3.5 已完成产品账号认证和 USER/ADMIN RBAC 基础；完整管理员业务 API、审计日志和管理控制台仍在 P7。所有论文、Evidence、任务和审阅业务路由都从统一 Bearer 依赖取得真实用户，不再使用 `demo_user_id` 作为运行时后门。
+
+### 用户认证
+
+- 邮箱大小写无关唯一；密码为 15～128 个可打印 Unicode code point，使用 pwdlib Argon2id，不 trim、不截断、不强制字符组合。当前只使用内置弱口令集合，尚未接入完整泄露口令语料库。
+- JWT access 默认 15 分钟，固定 HS256，强制校验全部 claims、issuer、audience、typ、签名和 sid；secret 无仓库默认值且至少 32 字节。
+- refresh 是至少 256 bit 的不透明随机值，只存在于 `paperlens_refresh` HttpOnly/SameSite=Lax cookie；数据库只存 SHA-256。每次刷新单次轮换并记录 replaced_by，旧 token 重放会撤销整个 family。
+- access 鉴权同时查询 AuthSession 与 User，因此 logout、logout-all、密码修改/重置、账号禁用和有效锁定会立即拒绝旧 access。
+- 登录不存在、密码错误、禁用和锁定账号均走 Argon2 dummy 检查并返回相同 401；账号失败计数通过数据库行锁串行化。当前尚无分布式 IP 限流，需由部署层补齐。
+- reset token 单次、15 分钟有效且只存摘要；默认 NullPasswordResetNotifier 不联网、不记录或响应明文 token。生产通知适配器尚未实现，后续优先可替换的华为云能力。
+- 所有业务资源的 user_id 只来自服务端认证上下文，不接受客户端自报。
+
+### RBAC 与管理员安全
+
+- 基础角色为 USER、ADMIN；前端菜单/路由守卫只用于体验，所有权限必须由后端逐接口校验。
+- 当前只提供数据库角色校验依赖和 `python -m paperlens.cli promote-admin --email <email> [--claim-legacy-data]`；无默认管理员、无命令行密码、无自动提升。
+- 管理员业务 API/页面、用户启停/角色管理、最后管理员保护和管理员操作审计尚未实现，统一留到 P7；ADMIN 当前也不会绕过普通资源所有权。
+- 华为云 IAM 负责云资源访问身份，不代替 PaperLens 产品用户与管理员账号。
+
+## 10. P4.1 指标完整性与隔离
+
+- MetricRecord 的 `user_id/paper_id/task_id` 在任务写入和公开查询时交叉校验；ADMIN 不默认绕过所有权。
+- 每条公开记录必须且只能绑定 `table_id + row_index` 或 `evidence_id`，并验证来源属于同一论文；来源外键使用 RESTRICT，避免记录失去证据。
+- 指标值写入前使用 `math.isfinite`，数据库同时拒绝 NaN/Infinity；百分比指标统一为 0～1。
+- Checkpoint 无证据或冲突时保存 UNKNOWN；不根据数值最大猜测 BEST/MAX。
+- 同一用户/论文的活动指标任务由部分唯一索引防止竞态重复；任务失败时记录整批回滚，只返回固定安全错误。
+- 指标提取完全离线，不调用 LLM 或华为云；日志只记录 task_id 和异常类型，不记录论文原文、候选值或数据库参数。
+
+## 11. P4.3 MaaS Secret 与计费边界
+
+- API Key 只从本机 `.env` 或部署平台 secret 注入，Pydantic 使用 SecretStr；仓库、前端、文档和 CLI 参数均不保存真实值。
+- 空白值、常见占位文本、非 HTTPS URL、URL credentials/query/fragment 和完整 `/chat/completions` endpoint 在联网前拒绝。
+- config-check 不联网，只输出 scheme/host/path、model、超时、token 上限和 Key 是否已配置。
+- smoke 必须显式提供 `--confirm-billable`，每次命令只发一次固定短提示，最多请求 32 completion token；GLM smoke 专用发送 `thinking.type=disabled`，正常审阅保持模型默认；成功不打印模型原文，失败仅打印固定类别。
+- 自动测试只用 `.invalid` 域名、fake client 或 MockTransport。2026-07-14 的真实云端烟测仅在用户明确授权后执行，第二次且最后一次请求成功；未读取、输出或记录本地 Key。
+- pytest 的 conftest 在导入 Settings 前覆盖两类 provider 为 mock，并从测试进程环境移除继承的 LLM/Embedding API Key，避免运行容器切换到真实 MaaS 后回归测试产生费用。

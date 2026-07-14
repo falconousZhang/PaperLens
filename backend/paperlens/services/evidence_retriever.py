@@ -1,5 +1,6 @@
 import logging
-import math
+from dataclasses import dataclass
+from datetime import datetime
 
 from paperlens.core.config import settings
 from paperlens.core.enums import ReviewDimension
@@ -8,9 +9,18 @@ from paperlens.services.embedding_client import (
     EmbeddingClient,
     EmbeddingError,
     cosine_similarity,
+    validate_embeddings,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EvidenceCandidate:
+    id: str
+    text: str
+    page_number: int
+    created_at: datetime
 
 _DIMENSION_QUERIES: dict[ReviewDimension, dict[str, str]] = {
     ReviewDimension.SOUNDNESS: {
@@ -64,50 +74,83 @@ def retrieve_evidence_by_dimension(
     embedding_client: EmbeddingClient,
     top_k: int | None = None,
 ) -> dict[ReviewDimension, list[tuple[str, str]]]:
-    if top_k is None:
-        top_k = settings.review_evidence_top_k
+    evidence_candidates = load_evidence_candidates(paper_id, db)
+    return rank_evidence_by_dimension(
+        evidence_candidates,
+        dimensions,
+        language,
+        paper_title,
+        embedding_client,
+        top_k,
+    )
 
+
+def load_evidence_candidates(paper_id: str, db) -> list[EvidenceCandidate]:
     rows = (
-        db.query(Evidence.id, Evidence.quoted_text, Evidence.page_number, Evidence.created_at, Evidence.id)
+        db.query(Evidence.id, Evidence.quoted_text, Evidence.page_number, Evidence.created_at)
         .filter(Evidence.paper_id == paper_id)
         .order_by(Evidence.page_number.asc(), Evidence.created_at.asc(), Evidence.id.asc())
         .all()
     )
+    return [
+        EvidenceCandidate(
+            id=str(row[0]),
+            text=row[1] or "",
+            page_number=row[2],
+            created_at=row[3],
+        )
+        for row in rows
+    ]
 
-    if not rows:
+
+def rank_evidence_by_dimension(
+    evidence_candidates: list[EvidenceCandidate],
+    dimensions: list[ReviewDimension],
+    language: str,
+    paper_title: str,
+    embedding_client: EmbeddingClient,
+    top_k: int | None = None,
+) -> dict[ReviewDimension, list[tuple[str, str]]]:
+    if top_k is None:
+        top_k = settings.review_evidence_top_k
+    if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
+        raise EmbeddingError("top_k must be a positive integer")
+    if not dimensions:
+        raise EmbeddingError("dimensions must be non-empty")
+    if not evidence_candidates:
         return {d: [] for d in dimensions}
 
-    evidence_data = []
-    for r in rows:
-        evidence_data.append({
-            "id": str(r[0]),
-            "text": r[1] or "",
-            "page_number": r[2],
-            "created_at": r[3],
-            "raw_id": r[4],
-        })
-
-    evidence_texts = [e["text"] for e in evidence_data]
+    evidence_texts = [candidate.text for candidate in evidence_candidates]
     evidence_vectors = embedding_client.embed(evidence_texts)
+    validate_embeddings(evidence_vectors, len(evidence_texts))
 
     query_texts = [
         build_dimension_query(paper_title, d, language) for d in dimensions
     ]
     query_vectors = embedding_client.embed(query_texts)
+    validate_embeddings(query_vectors, len(query_texts))
 
     results: dict[ReviewDimension, list[tuple[str, str]]] = {}
 
     for dim_idx, dimension in enumerate(dimensions):
         query_vec = query_vectors[dim_idx]
         scored = []
-        for ev_idx, ev in enumerate(evidence_data):
+        for ev_idx, candidate in enumerate(evidence_candidates):
             ev_vec = evidence_vectors[ev_idx]
             sim = cosine_similarity(query_vec, ev_vec)
-            scored.append((sim, ev["page_number"], ev["created_at"], ev["raw_id"], ev["id"], ev["text"]))
+            scored.append(
+                (
+                    sim,
+                    candidate.page_number,
+                    candidate.created_at,
+                    candidate.id,
+                    candidate.text,
+                )
+            )
 
-        scored.sort(key=lambda x: (-x[0], x[1], x[2], x[3]))
+        scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
 
         top_items = scored[:top_k]
-        results[dimension] = [(item[4], item[5]) for item in top_items]
+        results[dimension] = [(item[3], item[4]) for item in top_items]
 
     return results

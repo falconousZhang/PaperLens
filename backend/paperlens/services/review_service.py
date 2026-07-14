@@ -20,12 +20,17 @@ from paperlens.models.models import (
     AnalysisTask,
     Evidence,
     FindingEvidence,
+    Paper,
     ReviewFinding,
     ReviewResult,
 )
 from paperlens.services.llm_client import LLMClient, get_llm_client
-from paperlens.services.embedding_client import EmbeddingClient, EmbeddingError
-from paperlens.services.evidence_retriever import retrieve_evidence_by_dimension
+from paperlens.services.embedding_client import EmbeddingClient, get_embedding_client
+from paperlens.services.evidence_retriever import (
+    load_evidence_candidates,
+    rank_evidence_by_dimension,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +151,17 @@ def build_prompt(
 def parse_llm_output(raw_content: str, expected_dimension: ReviewDimension) -> LLMReviewOutput:
     content = raw_content.strip()
     if content.startswith("```") or content.endswith("```"):
-        raise ValueError("LLM output must not be wrapped in markdown code fences")
+        lines = content.splitlines()
+        opening = lines[0].strip().lower() if lines else ""
+        has_single_fence = (
+            len(lines) >= 3
+            and opening in {"```", "```json"}
+            and lines[-1].strip() == "```"
+            and all("```" not in line for line in lines[1:-1])
+        )
+        if not has_single_fence:
+            raise ValueError("LLM output contains an invalid or ambiguous code fence")
+        content = "\n".join(lines[1:-1]).strip()
     if content.startswith("`") and content.endswith("`") and len(content) > 2:
         raise ValueError("LLM output must not be wrapped in inline code")
 
@@ -205,6 +220,7 @@ def run_review_task(
     task_id: str,
     options: dict | None = None,
     llm_client: LLMClient | None = None,
+    embedding_client: EmbeddingClient | None = None,
 ):
     if options is None:
         options = {}
@@ -226,18 +242,7 @@ def run_review_task(
             if task.task_type != TaskType.REVIEW.value:
                 raise ValueError(f"Unsupported task_type: {task.task_type}")
 
-            candidates = select_evidence_candidates(task.paper_id, db)
-            if not candidates:
-                raise ValueError("No evidence candidates found")
-
-            alias_to_evidence_id: dict[str, str] = {}
-            evidence_aliases: dict[str, str] = {}
-            for i, (ev_id, text) in enumerate(candidates, 1):
-                alias = f"E{i}"
-                alias_to_evidence_id[alias] = ev_id
-                evidence_aliases[alias] = text
-
-            from paperlens.models.models import Paper
+            paper_id = task.paper_id
             paper = db.get(Paper, task.paper_id)
             paper_title = paper.title if paper else "Unknown"
 
@@ -248,19 +253,58 @@ def run_review_task(
             for d in dimensions_str:
                 dimensions.append(ReviewDimension(d))
 
+            evidence_candidates = load_evidence_candidates(paper_id, db)
+            if not evidence_candidates:
+                raise ValueError("No evidence candidates found")
+
+            db.rollback()
+            if db.in_transaction():
+                raise RuntimeError("database transaction remained open before external inference")
+
+            emb = embedding_client or get_embedding_client()
+            dim_candidates = rank_evidence_by_dimension(
+                evidence_candidates,
+                dimensions,
+                language,
+                paper_title,
+                emb,
+            )
+
             llm = llm_client or get_llm_client()
             result_timestamp = datetime.datetime.now(datetime.timezone.utc)
+            staged_results = []
 
             for dimension_index, dimension in enumerate(dimensions):
+                candidates = dim_candidates.get(dimension, [])
+                if not candidates:
+                    raise ValueError(f"No evidence candidates for dimension {dimension.value}")
+
+                alias_to_evidence_id: dict[str, str] = {}
+                evidence_aliases: dict[str, str] = {}
+                for i, (ev_id, text) in enumerate(candidates, 1):
+                    alias = f"E{i}"
+                    alias_to_evidence_id[alias] = ev_id
+                    evidence_aliases[alias] = text
+
                 messages = build_prompt(paper_title, dimension, language, evidence_aliases)
                 response = llm.chat(messages, dimension=dimension.value, evidence_aliases=list(evidence_aliases.keys()))
 
                 raw_content = response.get("content", "")
                 parsed = parse_llm_output(raw_content, dimension)
+                bound = bind_findings(parsed.findings, alias_to_evidence_id)
+                staged_results.append((dimension_index, parsed, bound))
 
+            if db.in_transaction():
+                raise RuntimeError("database transaction opened during external inference")
+
+            task = db.get(AnalysisTask, task_id)
+            if not task:
+                raise ValueError("Task disappeared before persistence")
+
+            for dimension_index, parsed, bound in staged_results:
                 review = ReviewResult(
                     task_id=task_id,
-                    paper_id=task.paper_id,
+                    paper_id=paper_id,
                     dimension=parsed.dimension.value,
                     rating=parsed.rating,
                     summary=parsed.summary,
@@ -269,8 +313,6 @@ def run_review_task(
                 )
                 db.add(review)
                 db.flush()
-
-                bound = bind_findings(parsed.findings, alias_to_evidence_id)
 
                 for seq, (finding, vstatus, ev_ids) in enumerate(bound, 1):
                     rf = ReviewFinding(

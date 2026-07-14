@@ -73,3 +73,18 @@ def test_build_key_ignores_user_filename(tmp_path):
     storage = LocalStorage(root=str(tmp_path / "store"))
     key = storage.build_key("papers", "uuid-123", "malicious../../../etc.pdf")
     assert key == "papers/uuid-123/source.pdf"
+
+
+@pytest.mark.parametrize("filename", ["data.csv", "DATA.XLSX", "legacy.xls"])
+def test_experiment_build_key_uses_internal_filename(tmp_path, filename):
+    storage = LocalStorage(root=str(tmp_path / "store"))
+    extension = filename.rsplit(".", 1)[-1].lower()
+    key = storage.build_key("experiment-files", "uuid-456", filename)
+    assert key == f"experiment-files/uuid-456/source.{extension}"
+    assert filename not in key
+
+
+def test_experiment_build_key_rejects_unconfirmed_extension(tmp_path):
+    storage = LocalStorage(root=str(tmp_path / "store"))
+    with pytest.raises(ValueError, match="unsupported"):
+        storage.build_key("experiment-files", "uuid-456", "data.xlsm")

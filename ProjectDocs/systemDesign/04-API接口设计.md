@@ -97,9 +97,9 @@
 
 ### 1.4 认证方式
 
-> 📋 **PLANNED**: Bearer/JWT 认证尚未实现。当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权。
+> ✅ **P3.5 CURRENT**：所有现有论文、Evidence、任务和审阅路由使用统一 Bearer JWT + AuthSession 鉴权；user_id 只来自认证依赖。
 
-规划使用 Bearer Token 认证：
+当前使用 Bearer Token 认证：
 ```
 Authorization: Bearer <token>
 ```
@@ -464,41 +464,55 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 7.1 获取指标记录
 
-📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/metrics`
+✅ **CURRENT**: `GET /api/v1/papers/{paper_id}/metrics`
 
 **查询参数**：
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| model_name | String | 按模型名过滤 |
+| task_id | UUID | 按任务过滤 |
+| metric_name | String | 按规范指标名精确过滤 |
 | dataset_name | String | 按数据集过滤 |
-| checkpoint_type | String | 按口径过滤：FINAL / MAX / MEAN / BEST / UNKNOWN |
+| checkpoint_type | String | FINAL / MAX / MEAN / BEST / LAST / UNKNOWN |
+| page / page_size | Integer | 分页；page_size 最大 100 |
 
 **响应** `200`：
 ```json
 {
-  "metrics": [
+  "items": [
     {
       "id": "uuid",
+      "paper_id": "uuid",
+      "task_id": "uuid",
       "model_name": "BERT-base",
       "dataset_name": "SQuAD 2.0",
       "metric_name": "F1",
-      "metric_value": 83.1,
+      "metric_value": 0.831,
       "checkpoint_type": "BEST",
-      "checkpoint_source": "TABLE_HEADER",
-      "evidence_id": "uuid",
-      "raw_text": "BERT-base 83.1 79.0",
+      "checkpoint_source": "caption",
+      "evidence_id": null,
+      "raw_text": "F1: 83.1%",
       "table_id": "uuid",
-      "row_index": 2
+      "row_index": 2,
+      "created_at": "2026-07-14T00:00:00Z"
     }
-  ]
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
+✅ `GET /api/v1/metrics/{metric_id}` 返回单条详情。两个接口都要求 Bearer 并执行真实用户隔离；跨用户详情按 404 处理。指标任务通过现有 `POST /papers/{paper_id}/tasks` 创建，`task_type=METRIC_EXTRACTION` 且 options 只能省略或为空对象。
+
+P4.2 前端只发送 `task_id`、`metric_name`、`dataset_name`、`checkpoint_type`、`page` 和 `page_size`。页面必须先选择一个成功指标任务并始终携带 `task_id`；空筛选值不发送，`page_size` 在前端限制为 1～100，后端继续执行最终校验。
+
 ## 8. 实验数据文件API
+
+P5.1 当前只提供安全上传、分页列表和结构详情。公开 schema 为严格 version=1 `columns_info`，不返回完整文件哈希、storage_key、样本值或数据行；result、DELETE、下载和预览均仍规划。
 
 ### 8.1 上传实验数据文件
 
-📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
+✅ **CURRENT (P5.1)**: `POST /api/v1/papers/{paper_id}/experiment-files/upload`
 
 **请求类型**：`multipart/form-data`
 
@@ -524,7 +538,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 
 ### 8.2 获取实验数据文件列表
 
-📋 **PLANNED**: `GET /api/v1/papers/{paper_id}/experiment-files`
+✅ **CURRENT (P5.1)**: `GET /api/v1/papers/{paper_id}/experiment-files`
 
 **响应** `200`：
 ```json
@@ -541,7 +555,13 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 }
 ```
 
-### 8.3 获取实验数据分析结果
+### 8.3 获取实验文件结构详情
+
+✅ **CURRENT (P5.1)**: `GET /api/v1/experiment-files/{file_id}`
+
+返回 id、paper_id、filename、file_type、file_size、row_count、column_count、严格 columns_info 和 created_at；不存在和跨用户统一 404。
+
+### 8.4 获取实验数据分析结果
 
 📋 **PLANNED**: `GET /api/v1/experiment-files/{file_id}/result`
 
@@ -575,7 +595,7 @@ Evidence 为页内定位（page-local），基于 PyMuPDF block 提取。
 }
 ```
 
-### 8.4 删除实验数据文件
+### 8.5 删除实验数据文件
 
 📋 **PLANNED**: `DELETE /api/v1/experiment-files/{file_id}`
 
@@ -706,6 +726,10 @@ FastAPI 自动生成以下文档：
 
 ---
 
-**文档版本**：v1.0
+## P4.3 接口影响
+
+本阶段不新增或修改公开 HTTP API。新增的 `maas-config-check` 与 `maas-smoke --confirm-billable` 是容器内运维 CLI；现有 `/api/v1` 鉴权、论文、审阅和指标契约保持不变。默认 mock 模式下，health、认证与非 LLM 业务不依赖 MaaS 配置。
+
+**文档版本**：v1.2
 **创建日期**：2026-07-13
-**最后更新**：2026-07-13
+**最后更新**：2026-07-14

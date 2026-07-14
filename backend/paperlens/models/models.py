@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,6 +26,11 @@ from paperlens.core.enums import (
     FindingType,
     VerificationStatus,
     ExportStatus,
+    UserRole,
+    UserStatus,
+    CheckpointType,
+    TaskType,
+    ExperimentFileType,
 )
 
 
@@ -40,6 +46,85 @@ def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    email_normalized: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="USER")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE")
+    failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    password_changed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"role IN {_enum_in_sql(UserRole)}",
+            name="ck_user_role_values",
+        ),
+        CheckConstraint(
+            f"status IN {_enum_in_sql(UserStatus)}",
+            name="ck_user_status_values",
+        ),
+    )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    sid: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    family_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_used_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoke_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    replaced_by_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("auth_sessions.sid", ondelete="SET NULL"), nullable=True)
+
+    __table_args__ = (
+        Index("idx_auth_session_family", "family_id"),
+        Index("idx_auth_session_user", "user_id"),
+        Index("idx_auth_session_token_hash", "token_hash", unique=True),
+        Index("idx_auth_session_expires_at", "expires_at"),
+    )
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    used_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_password_reset_user", "user_id"),
+        Index("idx_password_reset_token_hash", "token_hash", unique=True),
+        Index("idx_password_reset_expires_at", "expires_at"),
+    )
+
+
 class Paper(Base):
     __tablename__ = "papers"
 
@@ -52,7 +137,9 @@ class Paper(Base):
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="UPLOADING")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -213,11 +300,17 @@ class AnalysisTask(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
 
     review_results: Mapped[list["ReviewResult"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
     __table_args__ = (
+        CheckConstraint(
+            f"task_type IN {_enum_in_sql(TaskType)}",
+            name="ck_analysis_task_type_values",
+        ),
         CheckConstraint(
             f"status IN {_enum_in_sql(TaskStatus)}",
             name="ck_analysis_task_status_values",
@@ -226,6 +319,15 @@ class AnalysisTask(Base):
         Index("idx_task_paper_id", "paper_id"),
         Index("idx_task_status", "status"),
         Index("idx_task_user_id", "user_id"),
+        Index(
+            "uq_active_metric_task_per_user_paper",
+            "user_id",
+            "paper_id",
+            unique=True,
+            postgresql_where=text(
+                "task_type = 'METRIC_EXTRACTION' AND status IN ('PENDING', 'RUNNING')"
+            ),
+        ),
     )
 
 
@@ -306,23 +408,47 @@ class MetricRecord(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     paper_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("papers.id", ondelete="CASCADE"), nullable=False)
     task_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("analysis_tasks.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     model_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     dataset_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     metric_name: Mapped[str] = mapped_column(String(100), nullable=False)
     metric_value: Mapped[float] = mapped_column(Float, nullable=False)
-    checkpoint_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    checkpoint_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=CheckpointType.UNKNOWN
+    )
     checkpoint_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    evidence_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("evidences.id", ondelete="SET NULL"), nullable=True)
+    evidence_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("evidences.id", ondelete="RESTRICT"), nullable=True
+    )
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    table_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("paper_tables.id", ondelete="SET NULL"), nullable=True)
+    table_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("paper_tables.id", ondelete="RESTRICT"), nullable=True
+    )
     row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
+        CheckConstraint(
+            f"checkpoint_type IN {_enum_in_sql(CheckpointType)}",
+            name="ck_metric_checkpoint_type_values",
+        ),
+        CheckConstraint(
+            "metric_value > '-Infinity'::float8 AND metric_value < 'Infinity'::float8",
+            name="ck_metric_value_finite",
+        ),
+        CheckConstraint(
+            "(table_id IS NOT NULL AND evidence_id IS NULL AND row_index IS NOT NULL AND row_index >= 0) "
+            "OR (table_id IS NULL AND evidence_id IS NOT NULL AND row_index IS NULL)",
+            name="ck_metric_exactly_one_source",
+        ),
         Index("idx_metric_paper_id", "paper_id"),
         Index("idx_metric_task_id", "task_id"),
+        Index("idx_metric_user_id", "user_id"),
+        Index("idx_metric_name", "metric_name"),
         Index("idx_metric_checkpoint_type", "checkpoint_type"),
     )
 
@@ -337,10 +463,12 @@ class ExperimentFile(Base):
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_type: Mapped[str] = mapped_column(String(10), nullable=False)
-    row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    column_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    columns_info: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    column_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    columns_info: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -348,6 +476,18 @@ class ExperimentFile(Base):
     result: Mapped["ExperimentResult | None"] = relationship(back_populates="file", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
+        CheckConstraint(
+            f"file_type IN {_enum_in_sql(ExperimentFileType)}",
+            name="ck_exp_file_type_values",
+        ),
+        CheckConstraint("file_size > 0", name="ck_exp_file_size_positive"),
+        CheckConstraint(
+            "file_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_exp_file_hash_hex64",
+        ),
+        CheckConstraint("row_count >= 1 AND row_count <= 100000", name="ck_exp_file_row_count_range"),
+        CheckConstraint("column_count >= 1 AND column_count <= 256", name="ck_exp_file_column_count_range"),
+        UniqueConstraint("user_id", "paper_id", "file_hash", name="uq_exp_file_user_paper_hash"),
         Index("idx_exp_file_paper_id", "paper_id"),
         Index("idx_exp_file_user_id", "user_id"),
     )
@@ -382,7 +522,9 @@ class ExportReport(Base):
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -69,7 +69,7 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 - 论文 PDF 上传与解析（文本、页面、章节、表格）
 - 文本分块与 Evidence 提取（page-local 定位）
-- 向量索引与语义检索（FAISS）
+- 任务内 Evidence 语义检索（当前）与持久化向量索引（FAISS/pgvector，规划）
 - 结构化论文审阅（按维度生成 Finding，绑定 Evidence）
 - 实验指标提取与 Checkpoint 口径判断
 - CSV/Excel 实验数据上传与统计分析
@@ -117,10 +117,10 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 **设计约束:**
 
-- LLM 必须通过统一 LLMClient 接口调用，默认提供 MockLLMClient
+- LLM 必须通过统一 LLMClient 接口调用，默认提供 MockLLMClient，并可配置 HuaweiMaaSLLMClient
 - 存储层通过 StorageBackend 接口抽象，LocalStorage 为当前实现
 - Evidence 采用 page-local 定位，不涉及跨页 span
-- 向量索引使用 FAISS，后续可迁移至 Milvus
+- 当前审阅链路通过 EmbeddingClient 对 Evidence 做任务内精确余弦检索；持久化索引计划使用 FAISS/pgvector，后续可迁移至 Milvus
 
 ## 3. 功能需求
 
@@ -232,9 +232,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 **验收标准:**
 - P3.1 已实现 REVIEW 任务创建/查询、MockLLM 结构化结果和 VERIFIED Evidence 绑定
 - UNVERIFIED Finding 保留审计但不通过公开 API 返回
-- P3.2 语义检索和 P3.3 华为云真实模型仍为规划
+- P3.2 语义 Evidence 检索和 P3.3 华为云 MaaS 非流式生成式模型适配器均已实现
 
-### 3.4 指标提取与口径判断 (P1, 规划)
+### 3.4 指标提取与口径判断（P4.1 后端、P4.2 前端已实现）
 
 #### 3.4.1 实验指标提取 (F08)
 
@@ -246,7 +246,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - FR-04.1.3: 关联来源 Evidence 和表格行号
 
 **验收标准:**
-- 指标记录 API 返回结构化数据
+- 指标记录 API 返回带 task、paper、来源和创建时间的分页结构化数据
+- 每条记录且仅绑定表格行或 Evidence；百分号统一存 0～1
+- 当前确定性后端不调用 LLM 或真实华为云
 
 #### 3.4.2 Checkpoint 口径判断 (F09)
 
@@ -254,26 +256,29 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 **功能需求:**
 - FR-04.2.1: 基于规则引擎判断 checkpoint_type（关键词匹配 + 上下文分析）
-- FR-04.2.2: 标注口径来源（EXPLICIT_TEXT / IMPLICIT_CONTEXT / TABLE_HEADER / UNKNOWN）
-- FR-04.2.3: LLM 仅辅助歧义消解，不参与数值计算
+- FR-04.2.2: 标注实际命中来源；冲突和无证据均降级 UNKNOWN
+- FR-04.2.3: P4.1 完全离线，LLM 不参与候选、数值或口径生成
 
 **验收标准:**
 - 指标记录含 checkpoint_type 和 checkpoint_source
+- 不按数值最大推断 BEST/MAX
 
-### 3.5 实验数据分析 (P2, 规划)
+### 3.5 实验数据分析（P5.1 部分实现）
 
 #### 3.5.1 CSV/Excel 实验数据分析 (F11)
 
-**功能描述:** 上传 CSV/Excel 文件，解析数据列，计算统计摘要。
+**功能描述:** P5.1 已实现 CSV/XLSX/XLS 安全上传和可信结构解析；统计摘要属于 P5.2，尚未实现。
 
 **功能需求:**
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传（最大 20MB）
-- FR-05.1.2: 使用 pandas 解析数据列，自动识别指标列与条件列
+- FR-05.1.2: 使用只接收服务端路径和确认类型的确定性解析器识别列结构
 - FR-05.1.3: 使用确定性 Python 代码计算统计摘要（mean、std、min、max、median）
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **验收标准:**
-- 实验数据文件可上传并解析
+- [x] 实验数据文件可安全上传并得到 version=1 `columns_info`
+- [x] 资源按真实用户隔离，重复上传幂等，并发最终一行一对象
+- [ ] 统计摘要由确定性代码计算（P5.2）
 
 #### 3.5.2 指标交叉验证 (F12)
 
@@ -338,8 +343,11 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - 错误信息不泄露内部异常（_safe_error_message()）
 
 **认证安全:**
-- Bearer Token（JWT）认证（📋 PLANNED: 当前 `_get_user_id()` 返回 `settings.demo_user_id`，无实际鉴权）
-- MVP 阶段使用简单 Token，后续集成 IAM
+- Bearer JWT access + 数据库 AuthSession 认证（✅ P3.5 CURRENT）
+- P3.5 已实现注册、登录、退出、短时访问令牌、刷新令牌轮换/撤销、密码修改/找回、个人资料和账号状态
+- 密码使用可靠自适应哈希，登录和密码流程具备限流、失败锁定与防账号枚举
+- USER/ADMIN RBAC 由后端逐接口校验，管理员敏感操作写入审计日志
+- 禁止硬编码默认管理员凭据；华为云 IAM 不代替 PaperLens 产品用户系统
 
 ### 4.3 可用性需求
 
@@ -376,14 +384,16 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 ### 5.2 流程规则
 
 - 当前上传接口创建 Paper 时直接进入 PROCESSING，随后状态流转为 PROCESSING → PARSED / FAILED；UPLOADING 是允许的枚举值，但当前上传路径未使用
-- P3.1 审阅生成流程: 同论文 Evidence 稳定排序取 Top-K → E1/E2 alias → MockLLM → 严格 JSON 解析 → 全有或全无 Evidence 绑定 → 原子存储结果与任务成功状态
-- P3.2/P3.3 规划: 华为云优先的 Embedding 语义检索 → HuaweiMaaSLLMClient
+- P3.3 审阅生成流程: 同论文 Evidence 稳定加载 → 结束只读事务 → Evidence/维度 query Embedding → 精确余弦 Top-K → E1/E2 alias → 根据配置调用 MockLLMClient 或 HuaweiMaaSLLMClient → 严格 JSON 解析 → 全有或全无 Evidence 绑定 → 原子存储结果与任务成功状态
 - 指标提取流程: 从 structured_data 提取 → 规则引擎判断口径 → LLM 辅助歧义消解 → 存储记录
 
 ### 5.3 权限规则
 
 - 不同用户的论文和审阅结果严格隔离（user_id 过滤）
-- MVP 阶段使用配置项 `demo_user_id` 做数据隔离；Token/JWT 认证尚未实现
+- `demo_user_id` 仅保留为 disabled legacy 数据占位，不参与运行时认证
+- 所有业务资源 user_id 只从认证上下文取得，不接受客户端自报
+- 普通用户不能访问管理员 API；管理员数据管理操作必须通过服务端 RBAC 并记录审计
+- 不允许删除或降级最后一个有效管理员；首个管理员通过受控初始化流程创建
 
 ## 6. 约束条件
 
@@ -406,8 +416,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 ### 6.3 时间约束
 
 - P2.5（历史）: 论文上传与解析、Evidence 提取已实现
-- P3.1（当前）: MockLLM 结构化审阅后端闭环已实现
-- P3.2/P3.3（规划）: 华为云优先的语义检索和真实模型接入
+- P3.1（已完成）: MockLLM 结构化审阅后端闭环
+- P3.2（已完成）: 华为云优先、接口可替换的 Embedding 与语义 Evidence 检索
+- P3.3（当前已完成）: 华为云 MaaS 标准 API V2 非流式生成式模型适配器
 - P4.0（规划）: 实验数据分析、报告导出
 
 ## 7. 验收标准
@@ -433,33 +444,42 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/sections |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/evidences（无 page_number/evidence_type 过滤） |
 | ✅ CURRENT | GET /api/v1/evidences/{evidence_id} |
-| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（仅 REVIEW） |
+| ✅ CURRENT | POST /api/v1/papers/{paper_id}/tasks（REVIEW / METRIC_EXTRACTION） |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/tasks |
 | ✅ CURRENT | GET /api/v1/tasks/{task_id} |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/reviews（仅 VERIFIED Finding） |
 | 📋 PLANNED | DELETE /api/v1/papers/{paper_id} |
 | 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
 | 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
-| 📋 PLANNED | GET /api/v1/papers/{paper_id}/metrics |
-| 📋 PLANNED | POST/GET/DELETE /api/v1/papers/{paper_id}/experiment-files/* |
+| ✅ CURRENT | GET /api/v1/papers/{paper_id}/metrics、GET /api/v1/metrics/{metric_id} |
+| ✅ CURRENT | POST upload、GET list、GET `/api/v1/experiment-files/{file_id}` 结构详情（P5.1） |
+| 📋 PLANNED | ExperimentResult/result API、DELETE 和 P07 实验前端 |
 | 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
 | 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
+| ✅ CURRENT | 注册/登录/刷新/退出、密码重置、个人资料和会话管理 API（P3.5） |
+| 📋 PLANNED | 管理员用户/角色、账号状态、资源任务管理和审计日志 API（P7 细化） |
 
 **关键实现细节:**
 - SHA-256 哈希已计算并存储，去重/复用逻辑 📋 PLANNED
-- 认证: `_get_user_id()` 返回 `settings.demo_user_id`，Bearer/JWT 📋 PLANNED
+- 认证: 统一 Bearer JWT + sid/AuthSession/User 校验，refresh 为 HttpOnly cookie（✅ P3.5）
 - Swagger: `/api/docs`，OpenAPI: `/api/openapi.json`
 
-**已实现（P3.1）:**
+**已实现（P3.1～P3.5）:**
 - [x] F07 结构化论文审阅后端基础闭环
+- [x] F06 按审阅维度的语义 Evidence 检索（Mock/Huawei Embedding、精确余弦 Top-K）
+- [x] F07 HuaweiMaaSLLMClient（非流式、严格响应校验、MockTransport 集成与原子失败）
+- [x] F07 审阅结果前端与完整任务交互（ReviewResultView、轮询恢复、历史结果归组、Evidence 深链）
+- [x] F21 完整用户认证、密码/资料流程、真实资源隔离和 USER/ADMIN RBAC 基础
+- [x] F08 可追溯实验指标提取后端、任务闭环与查询 API（P4.1）
+- [x] F09 确定性 Checkpoint 口径判断与 UNKNOWN 降级（P4.1）
 
 **待实现:**
 - [ ] F05 向量索引（FAISS）
-- [ ] F07 真实华为云模型、语义检索和审阅前端
-- [ ] F08 实验指标提取
-- [ ] F09 Checkpoint 口径判断
+- [x] F08/F09 指标分析前端页面与交互（P4.2）
 - [ ] F10 审稿报告导出
-- [ ] F11 CSV/Excel 实验数据分析
+- [ ] F22 管理员系统
+- [x] F11/P5.1 CSV/Excel 安全上传与结构解析
+- [ ] F11/P5.2 统计摘要
 - [ ] F12 指标交叉验证
 - [ ] F13 PDF/DOCX 报告导出
 
@@ -472,12 +492,22 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 ### 7.3 安全验收
 
 - [ ] 文件安全校验通过
-- [ ] 用户数据隔离验证通过
+- [x] 用户数据隔离验证通过
 - [ ] 错误信息不泄露内部异常
 - [ ] 路径穿越防护有效
 
 ---
 
-**文档版本**: v1.0
+## P4.3 华为云 MaaS LLM 运行配置规格
+
+- Compose 默认 `PAPERLENS_LLM_BACKEND=mock`，只透传六个 LLM 变量，Embedding 固定为 mock。
+- `maas-config-check` 只验证配置与 client 可构造性，输出非敏感摘要，不访问网络或数据库。
+- `maas-smoke` 必须显式确认计费，只允许 huawei_maas，固定一次短提示并限制 completion 上限。
+- SecretStr 不得通过 repr、异常、stdout/stderr 或测试输出泄露；常见占位 Key 必须拒绝。
+- 真实账号与计费验收不属于自动测试完成状态。
+
+详细设计见 [design/12-华为云MaaS运行配置.md](design/12-华为云MaaS运行配置.md)。
+
+**文档版本**: v1.1
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-13
+**最后更新**: 2026-07-14

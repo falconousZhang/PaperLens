@@ -2,6 +2,19 @@ import os
 import pytest
 import fitz
 
+os.environ.setdefault(
+    "PAPERLENS_JWT_SECRET",
+    "paperlens-test-only-secret-never-use-outside-tests-2026",
+)
+os.environ["PAPERLENS_LLM_BACKEND"] = "mock"
+os.environ["PAPERLENS_LLM_BASE_URL"] = "https://api.example.invalid/v2"
+os.environ["PAPERLENS_LLM_MODEL"] = "offline-test-model"
+os.environ.pop("PAPERLENS_LLM_API_KEY", None)
+os.environ["PAPERLENS_EMBEDDING_PROVIDER"] = "mock"
+os.environ["PAPERLENS_EMBEDDING_BASE_URL"] = "https://api.example.invalid/v1"
+os.environ["PAPERLENS_EMBEDDING_MODEL"] = "offline-test-embedding"
+os.environ.pop("PAPERLENS_EMBEDDING_API_KEY", None)
+
 from tests.db_helpers import get_test_db_url, parse_db_name, assert_test_database
 
 _test_db_url = get_test_db_url()
