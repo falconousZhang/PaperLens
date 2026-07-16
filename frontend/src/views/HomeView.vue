@@ -2,7 +2,7 @@
   <div class="home">
     <header class="hero">
       <h1>PaperLens</h1>
-      <p class="subtitle">AI 驱动的学术论文审阅助手</p>
+      <p class="subtitle">AI 驱动的个人论文阅读学习助手</p>
     </header>
 
     <section class="status-section">
@@ -21,7 +21,7 @@
 
     <section class="actions">
       <router-link to="/upload" class="action-btn primary">上传论文</router-link>
-      <router-link to="/papers" class="action-btn">论文列表</router-link>
+      <router-link to="/papers" class="action-btn">论文库</router-link>
     </section>
   </div>
 </template>

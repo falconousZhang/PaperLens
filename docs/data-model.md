@@ -272,7 +272,7 @@ ExperimentFile 1──1 ExperimentResult
 
 ## 12. ExperimentResult
 
-实验数据分析结果模型骨架。P5.1 不写入该表；P5.2 确定性统计与 P5.3 指标交叉验证当前均未实现。
+P5.2 原子写入确定性 version=1 `summary_stats`；P5.3a 在同一结果行原子写入单一指标任务来源的严格 `metric_comparisons` 数组，`column_analysis` 仍保持 null。P5.3a 不新增迁移。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -287,16 +287,24 @@ ExperimentFile 1──1 ExperimentResult
 JSONB 结构示例（summary_stats）：
 ```json
 {
-  "columns": {
-    "accuracy": {
+  "version": 1,
+  "row_count": 10,
+  "column_count": 1,
+  "columns": [
+    {
+      "name": "accuracy",
+      "dtype": "float",
       "count": 10,
+      "null_count": 0,
+      "stats": {
       "mean": 0.852,
-      "std": 0.023,
+      "stddev": 0.023,
       "min": 0.810,
       "max": 0.891,
       "median": 0.855
+      }
     }
-  }
+  ]
 }
 ```
 
@@ -304,13 +312,20 @@ JSONB 结构示例（metric_comparisons）：
 ```json
 [
   {
+    "metric_record_id": "uuid",
+    "metric_task_id": "uuid",
     "metric_name": "accuracy",
-    "dataset": "SQuAD",
+    "checkpoint_type": "MAX",
+    "column_name": "accuracy",
+    "statistic": "MAX",
     "paper_value": 0.891,
     "experiment_value": 0.855,
     "diff": -0.036,
-    "checkpoint_type": "MAX",
-    "status": "MISMATCH"
+    "absolute_diff": 0.036,
+    "relative_diff": 0.0404,
+    "allowed_diff": 0.00891,
+    "status": "MISMATCH",
+    "reason": null
   }
 ]
 ```
@@ -327,6 +342,11 @@ JSONB 结构示例（metric_comparisons）：
 | id | UUID | PK | 主键 |
 | paper_id | UUID | FK → Paper.id | 关联论文 |
 | report_type | VARCHAR(20) | NOT NULL | MARKDOWN / PDF / DOCX |
+| language | VARCHAR(2) | NOT NULL DEFAULT zh | 模板语言 zh / en |
+| include_metrics | BOOLEAN | NOT NULL DEFAULT true | 是否包含论文指标 |
+| include_experiment_analysis | BOOLEAN | NOT NULL DEFAULT true | 是否包含实验分析 |
+| source_snapshot | JSONB | | 只含 review/metric/experiment 来源 id；历史骨架行为空 |
+| source_hash | VARCHAR(64) | | source_snapshot 规范 JSON 的 SHA-256；历史骨架行为空 |
 | status | VARCHAR(20) | NOT NULL DEFAULT PENDING | PENDING / GENERATING / READY / FAILED |
 | storage_key | VARCHAR(1024) | | 导出文件存储路径 |
 | content_hash | VARCHAR(64) | | 内容哈希 |
@@ -340,6 +360,9 @@ JSONB 结构示例（metric_comparisons）：
 - `idx_export_paper_id` ON (paper_id)
 - `idx_export_user_id` ON (user_id)
 - `idx_export_status` ON (status)
+- `uq_active_export_source`：user/paper/type/language/include 选项/source_hash/content_hash 的部分唯一索引，仅覆盖 PENDING/GENERATING/READY 的来源行
+
+010 新增 language、两个 include 选项和 source_snapshot。011 新增 source_hash，并约束非 FAILED 来源行在创建 PENDING 前已有 content_hash；READY 必须有 storage_key/file_size/completed_at，FAILED 必须有固定安全 error_message/completed_at，非 READY 不得声明存储对象。012 将来源行扩展为 MARKDOWN/PDF/DOCX，不新增表列；历史 source_snapshot=null 骨架行保持兼容，PDF/DOCX downgrade 无损中止。
 
 ## 数据库约束
 
@@ -356,3 +379,21 @@ JSONB 结构示例（metric_comparisons）：
 | Evidence | ck_evidence_type | evidence_type IN ('TEXT','TABLE','FIGURE_CAPTION','EQUATION') | 证据类型枚举约束 |
 | ReviewFinding | ck_finding_type | finding_type IN ('STRENGTH','WEAKNESS','SUGGESTION') | 发现类型枚举约束 |
 | ExportReport | ck_export_status | status IN ('PENDING','GENERATING','READY','FAILED') | 导出状态枚举约束 |
+
+## P7.1 学习模型（COMPLETED）
+
+013 新增 `learning_explanations` 与 `learning_citations`，不修改或复用 ReviewResult 的评分语义。Explanation 保存服务端确认的 SECTION/PAGE/EVIDENCE scope、SUMMARY/EXPLAIN/TRANSLATE mode、zh/en、非空 request_hash、状态和严格结构化结果；Citation 保存有序 Evidence 外键。
+
+成功结果至少一个 Citation，所有 Evidence 必须属于同一 paper；活动同 request_hash 由部分唯一索引收口。模型 prompt、正文快照、原始响应、token、密钥和底层异常都不入库。因码道已把初版 013 应用到开发库并留下 1 条记录，014 以纯 DDL 无损收紧 request_hash、终态 JSON 和固定错误约束；没有删除或回填业务行。当前为 19 张 ORM 应用表、20 张物理表。
+
+## P7.2 问答模型（COMPLETED）
+
+015 新增 `paper_qa_conversations`、`paper_qa_turns`、`paper_qa_citations`。Turn 保存 conversation/user/paper 全图、sequence、UUID 幂等键、问题、语言、状态、context_hash 和严格终态；数据库强制问题非空且最多 2000 字、活动 conversation 部分唯一、成功 hash/answer/grounded 完整、失败固定错误且无 hash/结果。Citation 用 turn+evidence 复合主键和有序 sequence。
+
+跨表 grounded/Citation 数量与五实体所有权由成功事务复核。prompt、完整上下文、向量、原始响应、token 和 secret 不入库。空表支持 014→015→014→015，非空降级在任何 DDL 前中止。当前为 22 张 ORM 应用表、23 张含 alembic_version 的物理表。
+
+## P7.3 个人学习模型（COMPLETED）
+
+016 新增 `paper_library_entries`、`paper_highlights`、`paper_bookmarks`、`paper_notes` 和 `paper_knowledge_cards`。阅读状态为 TO_READ/READING/COMPLETED/ARCHIVED；高亮颜色为 YELLOW/GREEN/BLUE/PINK；笔记锚点为 PAPER/PAGE/HIGHLIGHT；知识卡掌握状态为 NEW/LEARNING/MASTERED。
+
+五表均以 user_id/paper_id 归属收口，页码、非空文本、长度、source hash、锚点互斥和卡片来源互斥由数据库 CHECK/FK/UQ 约束。高亮/书签重复创建幂等返回既有对象；被 Note/Card 引用的来源使用 RESTRICT 和应用层 409。五表为空可往返 015/016，任一非空时 downgrade 在任何 DDL 前拒绝。当前为 27 张 ORM 应用表、28 张含 alembic_version 的物理表。

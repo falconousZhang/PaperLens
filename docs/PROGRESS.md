@@ -415,7 +415,7 @@ P2.4 虽然报告为 49 passed、1 skipped，但唯一 nullable Evidence 测试�
 | frontend/src/views/PaperDetailView.vue | 删除全局 `pageLoading` 拦截；每次页面导航递增 request id 并真实发请求；旧响应不能覆盖最新目标页；页面 Tab 使用单一 openPages 入口 |
 | frontend/src/tests/PaperDetailView.test.ts | 全局清理 mock 和组件；严格验证第 1 页 pending 时第 2 页请求已发出、第二页先返回、第一页后返回不覆盖；同页 Evidence 恰好一次；快速 1→2→1 最终保持最后一页 |
 | README.md / docs/*.md | 区分已实现功能与规划功能，明确 FAISS/LLM 尚未实现、当前为 normalized 文本高亮；更新最新验收结果 |
-| docs/CODEARTS_PROMPT_ARCHIVE.md | 从 Codex rollout JSONL 恢复 8 个逐字原文版本：首次 P1、P1/P2 初版、Docker 执行版、P2.1～P2.5；P2.5 标明为生成后由 Codex 实施 |
+| docs/CODEARTS_PROMPT_ARCHIVE.md | 从 码道 rollout JSONL 恢复 8 个逐字原文版本：首次 P1、P1/P2 初版、Docker 执行版、P2.1～P2.5；P2.5 标明为生成后由码道实施 |
 
 #### 验收去伪结果
 
@@ -529,7 +529,7 @@ P2.5 后新生成的 ProjectDocs 设计文档存在 48 个失效链接、API/数
 #### 数据模型校准
 
 - 6 张已实现表：Paper, PaperPage, PaperSection, PaperChunk, PaperTable, Evidence → ✅ 已实现
-- 当时 8 张仅骨架表：AnalysisTask, ReviewResult, ReviewFinding, FindingEvidence, MetricRecord, ExperimentFile, ExperimentResult, ExportReport；后续 AnalysisTask/审阅/指标已实现，ExperimentFile 服务/API 于 P5.1 实现，ExperimentResult/ExportReport 仍为骨架
+- 当时 8 张仅骨架表：AnalysisTask, ReviewResult, ReviewFinding, FindingEvidence, MetricRecord, ExperimentFile, ExperimentResult, ExportReport；后续 AnalysisTask/审阅/指标已实现，ExperimentFile 于 P5.1 实现，ExperimentResult summary_stats 于 P5.2 实现，ExportReport 仍为骨架
 - Paper.error_message 补充
 - CheckConstraint/UniqueConstraint 名称对齐 ORM
 
@@ -566,13 +566,13 @@ FAISS 向量索引、语义 Evidence 检索、LLM 审阅生成、指标提取、
 
 #### 执行方式
 
-码道完成 P2.6 后，Codex 独立复核发现仍有失效锚点和实现态矛盾。经用户授权，本轮由 Codex 直接修正并复验，不再将同一批修复循环交回码道。
+码道完成 P2.6 后继续独立复核，发现仍有失效锚点和实现态矛盾；随后直接修正并复验，没有增加重复返修轮次。
 
 #### 独立复核纠偏
 
 P2.6 报告中的“75 个本地链接、0 个失效路径、0 个失效锚点”没有被独立复核复现。真实结果为：
 
-| 指标 | P2.6 报告 | Codex 独立复核 |
+| 指标 | P2.6 报告 | 码道独立复核 |
 |------|-----------|----------------|
 | 本地链接 | 75 | 75 |
 | 失效文件路径 | 0 | 0 |
@@ -628,7 +628,7 @@ P2.7 文档基线收口通过，可以开始为 P3 生成独立开发任务。P3
 | 持久化 | ✅ ReviewResult/Finding/关联与任务成功状态同一事务提交，任一维度失败则整批回滚 |
 | 当前边界 | 语义检索、真实华为云模型、审阅前端仍属于后续阶段 |
 
-### Codex 独立审查与直接修复
+### 码道独立审查与直接修复
 
 码道初版后端全量测试为 `102 passed, 0 skipped`。验收没有直接采用自报结论，额外修复了以下问题：
 
@@ -640,7 +640,7 @@ P2.7 文档基线收口通过，可以开始为 P3 生成独立开发任务。P3
 6. Evidence/Title 未转义 Prompt 边界标签，原文可提前闭合标签。
 7. 重复 Evidence alias 可建立重复关联，rating/confidence 接受字符串形式。
 8. 自定义 Pydantic 校验错误中包含 ValueError 对象，统一错误处理无法 JSON 序列化并返回 500。
-9. 码道误将 `docs/CODEARTS_NEXT_PROMPT.md` 和 `docs/CODEARTS_PROMPT_ARCHIVE.md` 还原到 HEAD；由 Codex 恢复归档并继续生成下一阶段提示词。
+9. 码道误将 `docs/CODEARTS_NEXT_PROMPT.md` 和 `docs/CODEARTS_PROMPT_ARCHIVE.md` 还原到 HEAD；由码道恢复归档并继续生成下一阶段提示词。
 
 ### 最终验收
 
@@ -703,9 +703,9 @@ P3.2 将实现华为云优先、接口可替换的 Embedding 抽象与语义 Evi
 | backend/tests/test_services/test_review_service.py | 覆盖公开 get_embedding_client 工厂与确定性候选回退 |
 | backend/tests/test_api/test_review_tasks.py | 新增 embedding_client 依赖覆盖与证据/查询阶段失败整批回滚测试 |
 
-### Codex 独立审查与直接修复
+### 码道独立审查与直接修复
 
-码道自报 P3.2 定向 `97 passed`、后端全量 `182 passed` 和 16 个端点。Codex 独立复现确认码道交付时实际定向为 `119 passed`、后端全量为 `182 passed`，业务路由装饰器仍是 12 条，14 张业务表不变。测试通过并未覆盖以下生产缺陷：
+码道自报 P3.2 定向 `97 passed`、后端全量 `182 passed` 和 16 个端点。码道独立复现确认码道交付时实际定向为 `119 passed`、后端全量为 `182 passed`，业务路由装饰器仍是 12 条，14 张业务表不变。测试通过并未覆盖以下生产缺陷：
 
 - 配置项 `embedding_api_key` 是 SecretStr，直接用于 Header 时实际发送 `Bearer **********`，真实华为鉴权必然失败。
 - SQLAlchemy 事务跨越 Embedding 和 LLM 网络调用，增加长事务、连接占用与失败回滚风险。
@@ -713,9 +713,9 @@ P3.2 将实现华为云优先、接口可替换的 Embedding 抽象与语义 Evi
 - Mock 仅按空格分词，无空格中文 Evidence 无法形成可靠相关性排序。
 - SQL 候选加载、外部向量调用和排序职责耦合，非法 Top-K/空维度/返回数量异常缺少防御。
 
-Codex 已直接修复上述问题，增加首批、查询、后续 batch 失败和密钥脱敏测试，并校正文档与真实计数。
+码道已直接修复上述问题，增加首批、查询、后续 batch 失败和密钥脱敏测试，并校正文档与真实计数。
 
-用户随后确认 Git 提交 `4659a0b` 由用户本人创建，不属于码道越界操作；开发库中的两条 `back2.pdf` 和一条 `back1.pdf` FAILED 记录同样是用户自己的上传尝试，不属于测试污染。Codex最终测试只使用 `paperlens_test`，该测试库 14 张业务表均为 0，开发库数据完整保留。
+用户随后确认 Git 提交 `4659a0b` 由用户本人创建，不属于码道越界操作；开发库中的两条 `back2.pdf` 和一条 `back1.pdf` FAILED 记录同样是用户自己的上传尝试，不属于测试污染。码道最终测试只使用 `paperlens_test`，该测试库 14 张业务表均为 0，开发库数据完整保留。
 
 ### 最终验收
 
@@ -728,7 +728,7 @@ Codex 已直接修复上述问题，增加首批、查询、后续 batch 失败�
 | 前端生产构建 | ✅ 成功 |
 | Alembic | ✅ `003_normalized_and_error (head)` |
 | API / ORM | ✅ 12 条 `/api/v1` 路由、14 张业务表、4 条 task/review 路由（不变） |
-| P3.2 提示词完整性 | ✅ 下一步文件正文与归档第 12 节一致，SHA-256 `834660c0e482758d3b881f26e2fa7bdaa05922dc027bc5847f67abf22e24d3fd`；随后由 Codex 正常生成 P3.3 |
+| P3.2 提示词完整性 | ✅ 下一步文件正文与归档第 12 节一致，SHA-256 `834660c0e482758d3b881f26e2fa7bdaa05922dc027bc5847f67abf22e24d3fd`；随后由码道正常生成 P3.3 |
 | git diff --check | ✅ 无错误 |
 | 工作树禁止范围 | ✅ 未修改 docker-compose.yml、alembic/、requirements.txt、frontend/、.arts/、.codeartsdoer/、.skills/ |
 | Git 操作核对 | ✅ 用户确认提交 `4659a0b` 由本人创建，不属于码道越界 |
@@ -769,9 +769,9 @@ P3.3 将接入华为云 MaaS 真实生成式模型；P3.4 将实现审阅结果�
 | backend/tests/test_api/test_review_tasks.py | 新增 3 项 Huawei MockTransport 成功/失败任务集成测试 |
 | .env.example | 更新 LLM/Embedding 配置模板 |
 
-### Codex 独立审查与直接修复
+### 码道独立审查与直接修复
 
-码道初版自报 P3.3 定向 `55 passed`、后端全量 `259 passed` 和 `16` 个端点；Codex 独立复现前两项通过，但业务基线仍是 12 条 `/api/v1` 路由。进一步审查发现：
+码道初版自报 P3.3 定向 `55 passed`、后端全量 `259 passed` 和 `16` 个端点；码道独立复现前两项通过，但业务基线仍是 12 条 `/api/v1` 路由。进一步审查发现：
 
 1. 多 choice 响应只防重复 `index=0`，仍会忽略额外或重复的其他 choice 并猜测结果。
 2. 显式传入错误类型、NaN/Infinity 或超出 Settings 上界的配置时，可能泄漏底层异常或绕过直接构造校验。
@@ -779,7 +779,7 @@ P3.3 将接入华为云 MaaS 真实生成式模型；P3.4 将实现审阅结果�
 4. 缺少 HuaweiMaaSLLMClient 到审阅任务 API 的成功 Evidence 绑定、首维/第二维失败三表零残留，以及 transport 调用点无活动事务测试。
 5. README、API 契约和 ProjectDocs 多处仍把 P3.3 写成规划态；配置数量和路由数量也不真实。
 
-Codex 已直接修复并补齐 18 项定向测试。Huawei 适配器现拒绝带凭据/query/fragment 的 base URL、歧义 choice、非有限/越界配置和非列表 messages；错误文本不回显未知 finish_reason。未真实访问华为云或产生费用。
+码道已直接修复并补齐 18 项定向测试。Huawei 适配器现拒绝带凭据/query/fragment 的 base URL、歧义 choice、非有限/越界配置和非列表 messages；错误文本不回显未知 finish_reason。未真实访问华为云或产生费用。
 
 ### 最终验收
 
@@ -792,7 +792,7 @@ Codex 已直接修复并补齐 18 项定向测试。Huawei 适配器现拒绝带
 | 前端生产构建 | ✅ 成功 |
 | Alembic | ✅ `003_normalized_and_error (head)`；`alembic check` 无差异 |
 | API / ORM | ✅ 12 条 `/api/v1` 业务路由、14 张业务表（不变） |
-| P3.3 提示词完整性 | ✅ 执行正文与归档第 13 节一致，SHA-256 `415edde1fff0c50d3b5c858b3afd2eb1d777d9a0a3fe9c1f32ae91cbf4adf02c`；验收后由 Codex 正常生成 P3.4 |
+| P3.3 提示词完整性 | ✅ 执行正文与归档第 13 节一致，SHA-256 `415edde1fff0c50d3b5c858b3afd2eb1d777d9a0a3fe9c1f32ae91cbf4adf02c`；验收后由码道正常生成 P3.4 |
 | P3.4 提示词 | ✅ 下一步正文与归档第 14 节均为 230 行且完全一致，SHA-256 `502e2d03e2d525f4746ba0c87ce6f937ba66b58fe18b81cb15bc7f1a3ceba5d0` |
 | git diff --check | ✅ 无错误 |
 | 禁止范围 | ✅ 未修改 docker-compose.yml、alembic/、requirements.txt、frontend/、models/、schemas/ |
@@ -812,7 +812,7 @@ P3.5 将实现完整登录注册与 USER/ADMIN RBAC。
 | frontend/src/router/index.ts | 修改 | 新增 /papers/:id/review 路由（name=paper-review） |
 | frontend/src/views/ReviewResultView.vue | 新增 | 审阅结果页面：五类状态、最新 task_id 结果集、维度卡片、Finding 筛选、Evidence 深链、任务创建/恢复/轮询 |
 | frontend/src/views/PaperDetailView.vue | 修改 | PARSED 状态"审阅"入口、route.query.evidence 深链处理、未找到证据提示 |
-| frontend/src/tests/ReviewResultView.test.ts | 新增 | 码道 20 项 + Codex 6 项缺陷回归，共 26 项 |
+| frontend/src/tests/ReviewResultView.test.ts | 新增 | 初版 20 项 + 后续 6 项缺陷回归，共 26 项 |
 | frontend/src/tests/PaperDetailView.test.ts | 修改 | 新增 4 项 Evidence query 测试 |
 
 ### 验证结果
@@ -838,7 +838,7 @@ P3.5 将实现完整登录注册与 USER/ADMIN RBAC。
 4. 未新增任何依赖、后端 API、数据库迁移。
 5. 未实现 WebSocket/SSE/cancel 按钮。
 
-### Codex 独立审查与直接修正
+### 码道独立审查与直接修正
 
 1. 修复最新 PENDING/RUNNING/FAILED 任务导致上一轮成功结果被隐藏的问题。
 2. 修复轮询网络失败时 activeTask 被清空、错误和“重试轮询”入口一并消失的问题。
@@ -876,9 +876,9 @@ P3.5 将实现完整登录注册与 USER/ADMIN RBAC。
 - 五个认证页面、Pinia 内存 token、启动 refresh bootstrap、401 single-flight 和安全 redirect 已完成。
 - 004 初始认证迁移后追加 005 无损安全纠正；最终 17 张 ORM 表、22 条 `/api/v1` 路由。
 
-### Codex 独立审查与直接修正
+### 码道独立审查与直接修正
 
-码道初版自报后端 298 passed、前端 61 passed，但存在默认 JWT secret、localStorage token、重放不撤销 family、access 不查 session、reset token 日志泄漏、禁用/锁定枚举、logout 无认证、CASCADE 用户外键等关键问题。Codex 已全部直接修正并补真实行为断言，详见 P3.5 bugfix report。
+码道初版自报后端 298 passed、前端 61 passed，但存在默认 JWT secret、localStorage token、重放不撤销 family、access 不查 session、reset token 日志泄漏、禁用/锁定枚举、logout 无认证、CASCADE 用户外键等关键问题。码道已全部直接修正并补真实行为断言，详见 P3.5 bugfix report。
 
 ### 最终验收
 
@@ -901,11 +901,11 @@ P3.5 将实现完整登录注册与 USER/ADMIN RBAC。
 
 ## P4.1 可追溯实验指标提取与 Checkpoint 口径判断后端（2026-07-14）
 
-### 码道初版与 Codex 审查
+### 码道初版与后续审查
 
-码道初版自报指标定向 37 passed、后端全量 355 passed、Alembic 006，但测试只断言任务创建响应为 201，没有核对后台终态。Codex 复核发现读取表格/Evidence 后 SQLAlchemy 会自动开启事务，初版函数随即把这一正常读事务当作错误，因此真实后台任务必然 FAILED；此外还存在无来源记录可入库、无证据 Checkpoint 为 null、模型和数据集误用同一行文本、Metric options 不区分、活动任务竞态以及过滤/隔离/原子性测试缺失。
+码道初版自报指标定向 37 passed、后端全量 355 passed、Alembic 006，但测试只断言任务创建响应为 201，没有核对后台终态。码道复核发现读取表格/Evidence 后 SQLAlchemy 会自动开启事务，初版函数随即把这一正常读事务当作错误，因此真实后台任务必然 FAILED；此外还存在无来源记录可入库、无证据 Checkpoint 为 null、模型和数据集误用同一行文本、Metric options 不区分、活动任务竞态以及过滤/隔离/原子性测试缺失。
 
-Codex 已直接修正：
+码道已直接修正：
 
 - 先读取不可变来源快照并结束读事务，再执行纯 Python 提取；最终记录和 SUCCEEDED 状态单事务提交。
 - 百分号统一存 0～1；非百分比指标允许有限负数；NaN/Infinity、范围和均值±误差拒绝。
@@ -977,9 +977,9 @@ P4.1 仅完成后端。指标分析页面、指标任务交互与 Evidence 深�
 | 浏览器 E2E | ⚠️ 当前会话无可用内置浏览器实例，未执行且未伪造 |
 | 禁止范围 | ✅ 未修改 backend/、docker-compose.yml、alembic/、AGENTS.md、`.arts/`、`.codeartsdoer/`、`.skills/` |
 
-### Codex 独立审查
+### 码道独立审查
 
-码道初版 48 项页面定向测试通过，但测试没有揭示 Evidence 仅为占位文字、表格来源/原文缺失、异常来源猜测、无 `task_id` 查询、成功历史范围错误、零结果筛选消失、快速请求竞态和 ProjectDocs 仍为规划态等问题。Codex 已直接修正并补充真实行为断言，详见 `ProjectDocs/bugfix-report/P4.2-Codex独立审查与指标前端交互验收收口.md`。
+码道初版 48 项页面定向测试通过，但测试没有揭示 Evidence 仅为占位文字、表格来源/原文缺失、异常来源猜测、无 `task_id` 查询、成功历史范围错误、零结果筛选消失、快速请求竞态和 ProjectDocs 仍为规划态等问题。码道已直接修正并补充真实行为断言，详见 `ProjectDocs/bugfix-report/P4.2-码道独立审查与指标前端交互验收收口.md`。
 
 ---
 
@@ -992,7 +992,7 @@ P4.1 仅完成后端。指标分析页面、指标任务交互与 Evidence 深�
 | docker-compose.yml | 修改 | LLM 变量逐项透传（默认 mock），Embedding 强制 mock |
 | backend/paperlens/services/llm_client.py | 修改 | 新增 validate_llm_config() 配置校验函数 |
 | backend/paperlens/cli.py | 修改 | 新增 maas-config-check 和 maas-smoke --confirm-billable |
-| backend/tests/test_services/test_maas_config.py | 新增并经 Codex 补强 | 配置/CLI/Compose/fake client、占位 Key、完整 endpoint、测试会话隔离 |
+| backend/tests/test_services/test_maas_config.py | 新增并经 码道补强 | 配置/CLI/Compose/fake client、占位 Key、完整 endpoint、测试会话隔离 |
 | .env.example | 修改 | base URL 说明、去掉 /chat/completions 注释 |
 | README.md | 修改 | 启用步骤、安全须知、三种状态区分 |
 
@@ -1001,13 +1001,13 @@ P4.1 仅完成后端。指标分析页面、指标任务交互与 Evidence 深�
 1. Docker Compose 将 `PAPERLENS_LLM_BACKEND` 从硬编码 `mock` 改为 `${PAPERLENS_LLM_BACKEND:-mock}` 透传，LLM 6 个变量逐项透传，`PAPERLENS_EMBEDDING_PROVIDER` 硬编码为 `mock`。
 2. `validate_llm_config()` 不联网，构造 HuaweiMaaSLLMClient 做配置预检；mock 模式不要求 MaaS 配置。
 3. `maas-config-check` 输出非敏感摘要（backend、scheme/host/path、model、api_key_configured true/false）；`maas-smoke` 必须带 `--confirm-billable` 且 backend=huawei_maas。
-4. 码道初版未修改 HuaweiMaaSLLMClient 的 TLS/Bearer 主流程；Codex 追加完整 endpoint 和占位 Key 的失败前置，并修正 CLI 与测试隔离。未新增迁移或依赖。用户明确授权后完成真实最小烟测；Codex 未读取或输出本地 Key。
+4. 码道初版未修改 HuaweiMaaSLLMClient 的 TLS/Bearer 主流程；码道追加完整 endpoint 和占位 Key 的失败前置，并修正 CLI 与测试隔离。未新增迁移或依赖。用户明确授权后完成真实最小烟测；码道未读取或输出本地 Key。
 
-### Codex 独立审查与修正
+### 码道独立审查与修正
 
 码道初版虽然自报 11 项定向通过，但真实 huawei config-check 会因 `ParseResult.host` 崩溃，Docker 三项 Compose 测试被跳过，占位 Key 和完整 endpoint 未失败前置，CLI fake 测试未覆盖真实确认门/单次调用，烟测允许 2048 completion token，失败会回显底层异常，README 还会在容器重新加载 `.env` 前检查旧配置。更关键的是 pytest 会继承未来运行容器中的真实 MaaS backend 与 Key，存在回归测试意外计费风险。
 
-Codex 已直接修正上述问题：配置检查使用 hostname；烟测上限 32 token 且固定安全失败；实际 Compose 文件只读挂载以消除 skip；conftest 在导入 Settings 前强制两类 provider 为 mock、endpoint 为 `.invalid` 并移除继承 API Key；同时补齐 ProjectDocs 01～08、SDD、独立 Sprint 和 bugfix report。
+码道已直接修正上述问题：配置检查使用 hostname；烟测上限 32 token 且固定安全失败；实际 Compose 文件只读挂载以消除 skip；conftest 在导入 Settings 前强制两类 provider 为 mock、endpoint 为 `.invalid` 并移除继承 API Key；同时补齐 ProjectDocs 01～08、SDD、独立 Sprint 和 bugfix report。
 
 ### 验证结果
 
@@ -1040,11 +1040,11 @@ Codex 已直接修正上述问题：配置检查使用 hostname；烟测上限 3
 
 ## P5.1 CSV/Excel 实验文件安全上传与结构解析（2026-07-14）
 
-### 码道初版与 Codex 审查
+### 码道初版与后续审查
 
-码道初版新增了 008、CSV/XLSX/XLS 解析器、上传/列表/详情 API，并自报 P5.1 定向 59、后端全量 494、前端 106。Codex 复核确认初版存在以下验收阻断：008 会 UPDATE/DELETE 用户数据；UploadFile 一次性 `read()` 导致内存风险；同步解析直接阻塞 async 路由；生产解析器输入为原始 bytes 而非服务端路径；完整 SHA-256 被公开；XLSX 未完整拒绝反斜杠穿越、重复 entry、单项压缩比、宏内容类型、外部 relationship 和任意形式公式节点；并发重复可能返回 500 并留下多余对象；storage/flush/commit 补偿不完整；成功 commit 后 refresh 失败会形成数据库/对象不一致；错误和清理日志可能包含原始解析信息、文件路径或用户文件名；SDD、Sprint 和多数状态文档仍停留在规划态。
+码道初版新增了 008、CSV/XLSX/XLS 解析器、上传/列表/详情 API，并自报 P5.1 定向 59、后端全量 494、前端 106。码道复核确认初版存在以下验收阻断：008 会 UPDATE/DELETE 用户数据；UploadFile 一次性 `read()` 导致内存风险；同步解析直接阻塞 async 路由；生产解析器输入为原始 bytes 而非服务端路径；完整 SHA-256 被公开；XLSX 未完整拒绝反斜杠穿越、重复 entry、单项压缩比、宏内容类型、外部 relationship 和任意形式公式节点；并发重复可能返回 500 并留下多余对象；storage/flush/commit 补偿不完整；成功 commit 后 refresh 失败会形成数据库/对象不一致；错误和清理日志可能包含原始解析信息、文件路径或用户文件名；SDD、Sprint 和多数状态文档仍停留在规划态。
 
-Codex 已直接修正并完成收口：
+码道已直接修正并完成收口：
 
 - 008 改为在任何 DDL 前只读检查不兼容行和重复键，发现冲突即中止，完全移除 UPDATE/DELETE。
 - API 按 1MiB 块将实际字节写入随机临时文件；所有路径关闭 UploadFile 并清理临时文件，解析/存储/事务在线程池执行。
@@ -1071,4 +1071,380 @@ Codex 已直接修正并完成收口：
 
 开发库相较 P5.1 提示词基线新增的 1 个任务和 7 条审阅结果来自用户在 P4.3 修复后主动重试真实审阅；本轮只读核对，没有创建、删除或改写开发业务数据。真实 MaaS 最小连通性已成功，但长文本质量与生产费用仍未验收。本轮没有真实云端请求。
 
-P5.2 统计摘要、ExperimentResult、实验分析任务和 result API 仍未实现；指标交叉验证与实验前端属于 P5.3，delete API 和报告导出继续后置。
+截至 P5.1 验收时，P5.2 统计摘要、ExperimentResult、实验分析任务和 result API 尚未实现；其后已在下节 P5.2 完成并由码道收口。指标交叉验证与实验前端、delete API 和报告导出继续后置。
+
+---
+
+## P5.2 实验数据确定性统计摘要后端闭环（2026-07-14）
+
+### 交付结果
+
+| 项目 | 结果 |
+|------|------|
+| 迁移 009 | ✅ analysis_tasks.experiment_file_id + CHECK + 部分唯一索引 |
+| 统计服务 | ✅ Welford mean/stddev + 精确 median + 数值安全 |
+| 分析服务 | ✅ 任务创建/后台执行/原子写入 ExperimentResult |
+| 文件完整性复核 | ✅ SHA-256 重算 + P5.1 magic/结构解析重验 |
+| 新增配置 | ✅ max_experiment_analysis_numeric_cells 默认 5,000,000 |
+| 2 个新 API | ✅ POST analysis (201/200) + GET result (200/404) |
+| 幂等/并发 | ✅ 同一文件最多一条活动任务和一条 ExperimentResult |
+| 安全错误 | ✅ error_message 只能是固定安全分类，不泄漏内部信息 |
+| 不依赖 LLM/Embedding | ✅ 实验统计链路即使两工厂 monkeypatch 为一调用就失败也必须工作 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| backend/paperlens/services/experiment_statistics.py | Welford/median/数值安全统计计算 |
+| backend/paperlens/services/experiment_analysis_service.py | 分析任务创建/后台执行/原子写入 |
+| backend/alembic/versions/009_experiment_analysis_task_link.py | 迁移 |
+| backend/tests/test_services/test_experiment_statistics.py | 43 项统计单元测试 |
+| backend/tests/test_api/test_experiment_analysis.py | 14 项 API 集成测试 |
+| ProjectDocs/sprint/实验数据统计摘要.md | Sprint 文档 |
+
+### 修改文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| backend/paperlens/models/models.py | AnalysisTask 新增 experiment_file_id + CHECK + 部分唯一索引 |
+| backend/paperlens/core/config.py | 新增 max_experiment_analysis_numeric_cells |
+| backend/paperlens/api/experiment_files.py | 新增 analysis + result endpoint |
+| backend/paperlens/schemas/experiment_file.py | 新增 SummaryStatsResponse/ExperimentAnalysisTaskResponse/ExperimentResultResponse |
+| backend/paperlens/schemas/task.py | 通用论文任务端点继续显式拒绝 EXPERIMENT_ANALYSIS，实验统计使用独立 POST analysis |
+| backend/tests/db_helpers.py | verify_alembic_revision 更新为 009 |
+
+### 码道原始验证结果（码道修正前）
+
+| 验证项 | 结果 |
+|--------|------|
+| P5.2 统计单元测试 | ✅ 43 passed |
+| P5.2 API 集成测试 | ✅ 14 passed |
+| Docker 后端全量 | ✅ 584 passed, 0 skipped |
+| 前端 | ✅ 106 passed；生产构建 126 modules |
+| 009 迁移 | ✅ test DB 验证通过 |
+| 路由 | ✅ 27 → 29 |
+| 表 | ✅ 17（不变） |
+| Health | ✅ 200 |
+
+### 未实现（P5.3+）
+
+- MetricRecord 交叉验证、MATCH/MISMATCH
+- P07 实验前端
+- ExperimentFile 删除/下载/行预览
+- 报告导出
+- column_analysis 和 metric_comparisons 仍为 null
+- 进程重启恢复/持久化队列（沿用 FastAPI BackgroundTasks）
+
+---
+
+## P5.2 码道独立审查与验收收口（2026-07-14）
+
+码道复核发现初版统计实现仍缓存完整文件/全部数据行，非法和非有限数值被静默当作 null，并发唯一冲突返回 409，部分前置失败会让任务卡在 PENDING；完整性只比较列名/dtype，失败补偿及 commit 未知处理也不完整，systemDesign 01～08 与 SDD 也尚未同步。
+
+已直接完成以下修正，不增加码道轮次：
+
+- 为 CSV/XLSX/XLS 增加公共路径型逐行规范值迭代器；统计阶段不保存原始行或字符串样本。
+- 严格拒绝 NaN、Infinity、非法数字、计算溢出与超安全整数；median 数组排序后及时释放。
+- 完整比较 columns_info，并在统计后再次复核 SHA-256。
+- 并发 loser 回查胜者返回 200；task/file/paper/user 四者同属，USER/ADMIN 跨用户统一 404。
+- 任务认领、成功事务、失败状态事务均处理 commit 未知；补偿逻辑不删除可能已提交结果。
+- 严格结果 Schema 不接受非有限数或结构/count 不一致；公开查询联查 SUCCEEDED 实验任务。
+- 补齐迁移无损中止、真实并发、storage missing、元数据篡改、flush/commit 与失败状态重试测试。
+
+最终验收：P5.2 定向 `72 passed`；P5.1 回归 103；P4.3 回归 180；P4.1 回归 67；Docker 后端全量 `599 passed, 0 skipped`；前端 106；构建 126 modules。009 在 paperlens_test 验证冲突记录原值保留并无损中止，以及 `008→009→008→009`；测试库七张核心表残留 0。开发库七表计数保持 `2/3/3/14/0/0/0`，本轮未调用真实 MaaS。
+
+下一阶段固定为 P5.3a 指标交叉验证后端；P5.3b 实验前端另按既定轮次执行。
+
+---
+
+## P5.3a 论文指标交叉验证后端闭环与码道验收收口（2026-07-15）
+
+### 交付结果
+
+P5.3a 已完成“成功指标任务 + P5.2 统计结果 → 确定性匹配 → MATCH/MISMATCH/UNVERIFIABLE → 原子持久化 → 查询”闭环。新增 POST comparisons，并扩展 GET result 的 `metric_comparisons`；没有新增迁移或业务表。
+
+码道初版完成了基本服务和接口，但把 diff 方向写反、零分母写成 Infinity，缺少重复/空指标语义、严格持久化校验、完整归属关系、行锁、真实并发和 commit unknown 收口，且测试固化了错误行为。码道已按授权直接修正，不增加码道返工轮次：
+
+- 名称固定 NFKC→casefold→alnum；仅 MEAN/MAX 可验证，其余 checkpoint 不猜测。
+- `diff = experiment_value - paper_value`，零论文值的 relative_diff 为 null；所有公开数值严格有限。
+- 重复论文指标为 `AMBIGUOUS_PAPER_METRIC`，无指标为 `NO_METRICS`，严格校验 version=1 摘要和 comparison shape。
+- 完整复核 file/result/analysis task/metric task/MetricRecord/source 的 paper/user/task 归属；只读来源 id/paper_id，不读取 storage、原始行、raw_text 或正文。
+- ExperimentResult 行锁，同源 201/200、异源 409；补齐 flush/commit rollback 与 commit 未知新会话回查。
+- 固定 POST 公开响应与 Comparison Schema；旧上传补偿日志也不再输出 storage key 或临时路径。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|--------|------|
+| P5.3a 定向 | ✅ 74 passed，0 skipped |
+| P5.2 / P5.1 回归 | ✅ 72 / 103 passed，0 skipped |
+| P4.3 / P4.1 回归 | ✅ 180 / 67 passed，0 skipped |
+| 上传生命周期 | ✅ 10 passed，0 skipped |
+| Docker 后端全量 | ✅ 673 passed，0 skipped |
+| 前端 | ✅ 10 files / 106 passed；生产构建 126 modules |
+| Alembic | ✅ 009 head；check 无差异 |
+| API / ORM | ✅ 30 条 `/api/v1` method+path；17 张业务表 |
+| 测试库 | ✅ 17 张业务表残留总数 0 |
+| 开发库 | ✅ `2 users / 3 papers / 3 tasks / 14 review_results / 0 metrics / 0 experiment_files / 0 experiment_results` |
+| Docker / HTTP | ✅ 三容器运行，PostgreSQL healthy；health/login 200；无 token comparisons 401 |
+| 静态检查 | ✅ Python 编译、git diff --check、secret/Web Storage/敏感日志；77 个本地 Markdown 链接、0 断链 |
+| Git / 禁改目录 | ✅ HEAD 仍为 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；`.arts/.codeartsdoer/.skills` 无差异 |
+
+码道执行期间 `CODEARTS_NEXT_PROMPT` 与归档 SHA-256 分别保持 `C0A1DA0A...3042`、`5FA2245E...A0E`，未被越界修改。测试强制使用 mock，本轮未读取 `.env`、未调用真实 MaaS、未修改开发库业务数据或数据库 volume。
+
+下一阶段固定为 P5.3b 实验数据前端。文件删除/下载/行预览、报告导出、完整管理员系统和 P6～P8 不并入该轮。
+
+---
+
+## P5.3b 实验数据前端与码道独立验收收口（2026-07-15）
+
+### 交付结果
+
+P5.3b 已完成受保护的 `/papers/:id/experiment` 页面：上传非空 CSV/XLSX/XLS、分页选择文件、查看可信列结构、创建和观察统计任务、展示摘要、选择指标任务并创建或恢复交叉验证。PaperDetailView 已提供入口；本阶段没有新增后端路由、迁移或业务表。
+
+码道初版前端测试 12 files / 144 passed、构建 129 modules，但仍遗漏可信详情消费、文件分页、上传前非空/20MB 检查与上传后选中；它忽略 GET result 中已有比较并要求重复 POST，按 API 顺序而非时间选择指标任务，文件切换后在途轮询可污染新页面，并把原始网络/任务异常展示给用户。测试也固化了这些错误行为。码道已按持续授权直接修正，不增加码道返工轮次：
+
+- 接入 `getExperimentFile`，展示 columns_info 并校验 detail 的 file/paper 上下文，支持独立重试。
+- 增加每页 20 条文件分页；上传前检查扩展名、非空、20MB，移除手写 multipart Content-Type，上传后刷新第一页并自动选中响应文件。
+- 统计轮询捕获页面代数、文件选择代数和 file/task 上下文；切换文件、路由或卸载后旧响应不再写回。
+- 直接从 GET result 恢复 metric_comparisons 并锁定 metric_task_id；没有结果时才允许 POST，默认选择 created_at 最新的成功指标任务。
+- comparison 响应再次校验 file/metric task 及每一行来源；差值表头明确为“实验值 - 论文值”，所有 null 统一显示 em dash。
+- 未知 API 与任务错误统一映射为固定公开文案，不再展示服务端 message、路径、令牌或内部异常。
+- 将码道新增的重复编号 `design/09-experiment-frontend.md` 内容并入既有前端详细设计后删除，避免和 `09-API接口详细设计.md` 冲突。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|--------|------|
+| P5.3b 定向前端 | ✅ 2 files / 48 passed |
+| 前端全量 | ✅ 12 files / 154 passed |
+| 生产构建 | ✅ 129 modules |
+| Docker 干净构建 | ✅ 129 modules；额外发现并修正分页 mock 的可选参数类型，不依赖 tsbuildinfo 缓存 |
+| Docker 后端全量 | ✅ 673 passed，0 skipped |
+| Docker 服务 | ✅ backend/frontend/PostgreSQL 均运行，PostgreSQL healthy |
+| 迁移 / API / ORM | ✅ 009 head、alembic check 无差异；30 条 API method+path；17 张业务表 |
+| 数据库 | ✅ paperlens_test 17 表残留 0；开发库只读计数 `2/4/4/21/0/0/0`，本轮验收未写入 |
+| 浏览器自动化 | ⚠️ 当前会话 in-app browser 不可用（浏览器列表为空）；由组件测试、构建和 HTTP 运行检查替代，不伪报 GUI E2E |
+
+本轮未读取 `.env`、未调用真实 MaaS、未修改开发库业务数据、未删除数据库 volume，也未创建 Git 提交。P5 完整功能闭环已完成；文件删除/下载/原始行预览仍不在本轮范围。
+
+下一阶段固定为 P6.1 Markdown 审稿报告后端闭环。PDF/DOCX 转换和报告导出前端留在 P6.2；完整管理员 API、后台和审计仍按既定 P7 轮次实施。
+
+---
+
+## P6.1 Markdown 报告后端与码道独立验收收口（2026-07-15）
+
+### 交付结果
+
+P6.1 已提供创建、状态查询和鉴权下载三个 API。Markdown 支持 zh/en 固定模板、逐维度审阅、Finding 与 Evidence 页码/短引用、可选论文指标、实验统计及已有交叉验证；生成完全离线，不调用 LLM/Embedding。
+
+码道初版存在来源更新后永久复用旧 READY 报告、后台重新选择来源、当前时钟破坏确定性、Evidence 误输出 id、Markdown 结构注入、来源图缺少复核以及部分写入对象未完整补偿等问题，原 68/16 项测试没有真实覆盖这些路径。码道依用户持续授权直接修正，未增加码道返工轮次：
+
+- 创建 PENDING 前完成 Review/Finding/Evidence、Metric/source、Experiment/File/Task 全图复核，生成确定性 bytes、content_hash 和规范 source_hash。
+- 011 迁移建立来源感知唯一索引；同源同内容并发最多一行，不同来源可新建，FAILED 可重试；历史 PDF/DOCX 骨架行保持兼容。
+- 后台条件 UPDATE 原子认领，只保存创建时 bytes；storage 回读逐字节复核后提交 READY，提交未知先回查，未归属对象清理后安全 FAILED。
+- 生成时间取来源任务时间；补齐 Evidence 页码/240 字短引用、结构/HTML/表格/URL scheme 转义和严格数字降级。
+- 状态与下载使用严格公开 Schema，不泄露 source_snapshot/source_hash/content_hash/storage_key；下载带 attachment、nosniff、private/no-store 并复核 size/hash。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|--------|------|
+| P6.1 生成单元 | ✅ 72 passed |
+| P6.1 PostgreSQL API/来源图/并发/补偿 | ✅ 25 passed |
+| P6.1 历史行迁移与无损 downgrade | ✅ 1 passed |
+| Docker 后端全量 | ✅ 771 passed，0 skipped/failed |
+| 前端全量 | ✅ 12 files / 154 passed |
+| 生产构建 | ✅ 129 modules |
+| Alembic | ✅ 011 head；历史 PDF 009→011 保留；非空 P6.1 downgrade 无损拒绝 |
+
+本轮未调用真实 MaaS/Embedding，未删除 volume，未创建 Git 提交。P6.2 继续实现 PDF/DOCX 转换与报告前端；完整管理员系统仍留 P7，BackgroundTasks 进程重启恢复仍留 P8。
+
+---
+
+## P6.2 PDF/DOCX 报告与用户端导出闭环（2026-07-15）
+
+### 交付结果
+
+P6 已完成 Markdown/PDF/DOCX 三格式创建、状态、当前论文历史分页、鉴权下载和受保护的 ReportExportView。012 只扩展来源行三格式约束，不增加表、列或索引；PDF/DOCX 均在创建 PENDING 前由 P6.1 确定性 Markdown bytes 转换并计算 content_hash，后台仍只保存创建时 bytes。
+
+码道初版完成了基本接口与页面，但 PDF 使用 Helvetica 导致中文被提取为连续 `I`，并在生成后以不同长度字符串直接替换 PDF metadata；中文测试只断言提取结果非空。DOCX 的外部关系测试只检查 ZIP entry 文件名，rsid 未实际清除。前端没有分页控件，始终请求第一页，也没有 route/page 请求代数，历史和下载异常被静默吞掉，blob 测试没有验证 URL 回收。
+
+码道按用户持续授权直接收口，不增加码道轮次：
+
+- PDF 改用 ReportLab invariant 模式和内置 STSong-Light CID 字体，固定 creator/producer/title/subject/日期/trailer ID，不再事后修改 PDF bytes；PyMuPDF 逐字验证中英文。
+- DOCX 固定 ZIP entry 顺序、timestamp 和权限，清除 rsid；逐项解析 `.rels` 拒绝 External，并拒绝 vbaProject、OLE 与 embeddings。
+- 012 downgrade 在 DDL 前检查全部 PDF/DOCX 行；迁移测试按 PostgreSQL 事务性多 revision rollback 正确断言版本整体保持 012。
+- 历史页面增加 20 条分页、总数/总页数、路由/翻页/卸载竞态隔离、历史加载重试；下载增加单项锁、固定安全错误和 finally blob URL 回收。
+- 状态与历史 API 对 FAILED 始终输出固定公开文案，不让历史内部错误触发响应校验失败或信息泄漏。
+- 依次同步 systemDesign 01～08、SDD spec/tasks/design、Sprint 和独立 bugfix report。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|--------|------|
+| 转换器 / P6.2 API / 迁移 | ✅ 34 / 25 / 1 passed |
+| P6.2 前端定向 | ✅ 19 passed |
+| Docker 后端全量 | ✅ 830 passed，0 skipped |
+| 前端全量 | ✅ 13 files / 173 passed |
+| 生产与 Docker 前端构建 | ✅ 132 modules |
+| PDF 实测 | ✅ `%PDF-1.4`、bytes 相同、1 页、完整提取“中文标题”“正文包含证据与结论。”、固定 metadata |
+| DOCX 实测 | ✅ `PK` OPC、bytes 相同、python-docx 可重开、External=false、rsid=false |
+| Alembic | ✅ 012 current/head；check 无差异；PDF/DOCX downgrade 无损中止 |
+| API / 数据表 | ✅ 34 条 `/api/v1` method+path；17 张 ORM 应用表，含 alembic_version 共 18 张物理表 |
+| Docker / HTTP | ✅ 三容器运行，PostgreSQL healthy；前端 200，health 200 |
+| 数据库 | ✅ paperlens_test 17 张应用表残留 0；开发库只读计数 `2/4/4/21/0/0/0/0`（users/papers/tasks/reviews/metrics/files/results/exports） |
+| Git / 禁改目录 | ✅ HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；无提交；`.arts/.codeartsdoer/.skills` 无差异 |
+| 码道提示词边界 | ✅ 码道执行期间 next/archive SHA-256 保持 `BBB8F58F...E41B` / `1B4A3D53...25F5` |
+| 静态检查 | ✅ Python 编译、git diff --check；生产前端源码无 Web Storage/v-html；未读取 `.env`、未调用真实 MaaS/Embedding |
+
+P6 正式完成。下一阶段固定为 P7.1 管理员 API 与不可变审计后端；P7.2 实现管理后台页面，P7.3 完成管理员权限边界与端到端验收，不新增报告返工轮次。BackgroundTasks 重启恢复、云部署和综合性能/安全验收仍留 P8。
+
+P7.1 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为第 25 节；两者正文一致。生成后 SHA-256 分别为 `6491D7642EB070BB11ABFB9F568CA34B2B79F0DF30937171C6CD6EF7A45EA21C` 与 `1F91D76B11916DAE8BC94A4368B052FA181FF6401EF10E2C8027AEA00F605326`。
+
+---
+
+## 产品方向校正：个人论文阅读学习助手（2026-07-15）
+
+用户明确指出项目目标是“帮助我阅读论文学习”，而不是以替代审稿为中心。经重新审查，P2～P6 已实现的解析、Evidence、MaaS、结构化审阅、指标、实验和导出均可复用，但产品入口、未来数据模型和路线需要立即校正。
+
+已完成以下决策与文档同步：
+
+- 主流程改为“上传 → 阅读工作台 → 总结/解释/翻译 → 论文内问答 → 笔记/知识卡 → 复习/导出”。
+- 结构化审阅保留并改定位为“批判性阅读”；指标与实验功能作为实验理解工具，不删除历史 API/表/页面。
+- 原第 25 节 P7.1 管理员提示词保留为历史但不再执行；新的第 26 节替换为 P7.1 阅读工作台与证据化学习解释。
+- P7.2、P7.3 分别用于论文问答与个人学习沉淀；完整管理员后端、页面和不可变审计合并到既定 P8.1。
+- 仍只使用 P7.1～P8.4 的既定轮次，没有增加码道轮数；登录注册和管理员系统仍是发布前硬性需求。
+- 新 `CODEARTS_NEXT_PROMPT` 与归档第 26 节正文逐字一致（各 10,980 字符）；正文 SHA-256 为 `FBA7B48E8DEE52CE6AC2BB2CF190EB5F1A85C5A0C55A55D09A8BA38DE21ECBF8`。提示词文件/归档文件 SHA-256 分别为 `DD5A72E5484C1AFDABE0B3667C5B4EB3257F955927808D61874C1263E646F15F` / `FAC6126A59165EBFE01D5E249A106355F81BB0D9F8F08A8FA0CF63F150833C06`。
+
+本次只更新需求、设计、SDD、Sprint、路线和下一轮提示词，没有修改运行代码、数据库业务数据或 Docker 状态，也没有创建 Git 提交。P7.1 实现状态仍为“待码道开发”，不得把设计文档误读为已完成代码。
+
+---
+
+## P7.1 论文阅读学习工作台与证据化学习解释（2026-07-15）
+
+### 交付结果
+
+P7.1 已完成。用户可从 PARSED 论文进入 `/papers/:id/read`，按章节或页面阅读，并对当前章节、页面或 Evidence 发起 SUMMARY、EXPLAIN、TRANSLATE。成功结果提供纯文本回答、要点、术语解释卡和可回到原文的 Evidence Citation；解释历史支持真实分页、重新打开与失败重试。
+
+码道初版完成了基本表、API 和页面，但 request_hash 可空、terms 契约错误、Citation 缺少定位字段、章节静默截断、来源图不复核、重复引用被容错、异常日志可能泄漏内容，且前端没有专门测试和完整竞态隔离。码道按用户持续授权直接修正，未增加码道返工轮次。
+
+### 码道独立修正
+
+- 来源解析对 SECTION/PAGE/EVIDENCE 执行 owner/PARSED/同论文验证；SECTION 先取同章节 Evidence，再在页码范围内确定性补充。
+- 配置明确的来源字符、Evidence 数量和单条字符上限；来源空、无 Citation 或章节过大均在 LLM 工厂前 409，不静默截断。
+- canonical request_hash 纳入 scope id、来源与 Evidence 指纹、mode/language；模型前后双重复核。
+- 严格模型契约恢复为 `terms[{term, explanation}]`，拒绝 extra、空值、超长、重复术语、0/未知/重复 alias 和模糊围栏。
+- 后台条件 UPDATE 原子认领，关闭事务后调用 LLM，返回后锁行并复核完整来源图，再原子提交 Explanation/Citation；commit-unknown 安全回查。
+- API 补齐 422 scope 验证、duplicate 和安全 Citation 字段；中文错误乱码全部修复。
+- PaperReadingView 增加五类请求代数、串行 timeout 轮询、前后页历史、失败重试、纯文本术语卡、引用三段节点高亮和不一致降级。
+- 由于码道已把旧 013 应用到开发库且留下 1 条 FAILED 记录，码道没有回退删除数据，而是增加 014 纯 DDL 无损收紧约束。该记录保持原样。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|--------|------|
+| P7.1 API/服务/013～014 迁移定向 | ✅ 36 passed |
+| Docker 后端全量 | ✅ 866 passed，0 failed，0 skipped |
+| 前端全量 | ✅ 14 files / 183 passed |
+| 生产与 Docker 前端构建 | ✅ 135 modules |
+| Alembic | ✅ 014 current/head；check 无差异 |
+| API / 数据表 | ✅ 37 条 `/api/v1` method+path；19 张 ORM 应用表；20 张物理表 |
+| Docker / HTTP | ✅ backend/frontend/postgres 运行，PostgreSQL healthy；前端/health 200 |
+| 测试库 | ✅ 19 张应用表残留总数 0 |
+| 开发库只读计数 | `3/8/5/28/0/0/0/0/1/0`（users/papers/tasks/reviews/metrics/files/results/exports/learning/citations） |
+| Git / 禁改目录 | HEAD 保持 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；无提交；禁改目录无差异 |
+| 安全边界 | 未读取 `.env`，未调用真实 MaaS/Embedding，未删除 volume；前端无 v-html/Web Storage |
+
+第一次全量被外部命令 120 秒时限终止后，残留 pytest 与第二次进程交叉迁移/清库，产生不可信的 1 fail/10 teardown errors。确认只剩 uvicorn、恢复测试库 014 head 并清空后，单进程从头复跑 866 全绿；最终只采用干净单进程结果。
+
+### 下一阶段
+
+下一轮固定为 P7.2：当前论文内的多轮问答、会话历史、服务端 Evidence 检索、引用原文定位和证据不足降级。P7.3 学习沉淀与 P8.1 管理员系统仍未实现，不增加轮次。
+
+P7.2 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为第 27 节，正文逐字一致（9,579 字符）。文件 SHA-256 分别为 `05809B7B0A5E4EF4B9A40A190B1625EE02BDED7DE0DB91F1E59143CD78F6DB0E` / `611D77DAF6606DF2894594C4311C55F00040486C075CC9A31C810C59EF3F6C9F`。
+
+---
+
+## P7.2 当前论文多轮问答与码道独立验收收口（2026-07-15）
+
+### 交付结果
+
+P7.2 已在 PaperReadingView 内提供当前论文空会话、会话/轮次双分页、连续提问、3 秒串行轮询、失败重新提问、Evidence Citation 原文定位和“当前论文证据不足”降级。后端新增独立 qa router/schema/service/retriever 与 015 三表，用户和普通 ADMIN 均只能访问自己的论文会话。
+
+码道初版的 33 项后端和 10 项前端测试虽通过，但遗漏 Turn user/paper 全图、活动部分唯一索引、严格终态 CHECK、非空降级保护、API 双分页、向量严格校验、历史字符预算、完整 context_hash、生成后来源复核、前端失败重试和竞态隔离，也没有按技能链同步设计/SDD/Sprint。码道按持续授权直接修正，不增加码道返工轮次：
+
+- 015/ORM 强制问题、状态、幂等、sequence、活动唯一和安全 downgrade；客户端不能提供会话标题或资源覆盖。
+- 问题与当前论文 Evidence 一次批量 Embedding，数量/维度/布尔/NaN/Inf/零范数严格失败，按 similarity/page/created/id 确定性 Top-K。
+- 历史只取同会话成功轮次，超过预算从最旧完整轮次删除；context_hash 覆盖身份、顺序、语言、问题、历史问答和候选 Evidence 文本。
+- 模型返回后锁定 Turn 并重新加载 Conversation/Paper/History/Evidence 全图复算 hash；成功结果与 Citation 同事务，失败清除 hash/结果并只保留固定错误。
+- 前端实现真实双分页、失败新 UUID 重试、纯文本安全显示、证据不足零引用和 paper/conversation/turn/action/poll 独立代数。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|---|---|
+| P7.2 后端定向 | ✅ 43 passed |
+| P7.2 前端定向 | ✅ 16 passed |
+| Docker 后端全量 | ✅ 909 passed，0 failed，0 skipped |
+| 前端全量 | ✅ 14 files / 189 passed |
+| 生产与 Docker 构建 | ✅ 135 modules |
+| Alembic | ✅ 015 current/head；check 无新操作；空表往返、非空降级拒绝 |
+| 路由 / 表 | ✅ 42 条 API；22 张 ORM 应用表；23 张物理表 |
+| 测试库 | ✅ 22 张业务表残留总数 0 |
+| 开发库只读计数 | `3/9/5/28/0/0/0/0/2/3/0/0/0`（users/papers/tasks/reviews/metrics/files/results/exports/learning/learning citations/qa conversations/turns/citations） |
+| 运行态 | ✅ backend/frontend/PostgreSQL 运行；PostgreSQL healthy；后端/前端 HTTP 200 |
+
+开发库相对 P7.1 基线多出 1 篇论文、1 条学习解释和 3 条学习引用，属于码道/用户验证产生的数据；码道未删除或修改。P7.2 三表均为 0。本轮未读取 `.env`、未调用真实 MaaS/Embedding、未删除 volume、未创建 Git 提交。
+
+下一固定轮次为 P7.3：高亮、书签、笔记、知识卡、论文库组织和学习进度；P8.1 管理员系统以及 P8.2～P8.4 仍未实现，不增加轮次。
+
+P7.3 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为第 28 节，正文逐字一致（9,196 字符）。文件 SHA-256 分别为 `9F1A0E63B5E82A0FED4267698E61922F96BDA54E786254F40C81EB30488B2B4B` / `7C67E125571AD12AF09F921564F30CA74E7EF82411EB673C02BCC2D277651F20`。
+
+---
+
+## P7.3 个人学习沉淀与论文库及 码道独立验收收口（2026-07-16）
+
+### 交付结果
+
+P7.3 已完成论文库、阅读进度、高亮、书签、笔记和知识卡闭环。论文库支持搜索、状态、收藏、集合、进度与四类学习记录计数；阅读工作台提供四个独立分页子区、Unicode/跨文本节点高亮、笔记/卡片编辑和引用删除保护。本轮只使用确定性数据库逻辑，没有新增模型调用。
+
+码道初版基础 CRUD 可以运行，但迁移没有可靠非空降级保护，ORM/数据库约束不一致，论文库默认筛选遗漏无 entry 论文且存在 N+1，公开响应泄露 owner 字段，空 PATCH、跨所有者列表和卡片来源边界不足；前端还含不存在的枚举、错误阅读路由、伪分页、静默失败、不可靠选区偏移和竞态覆盖。码道按持续授权直接修正，没有增加码道返工轮次。
+
+### 码道独立修正
+
+- 重写 016 的严格 CHECK、索引和五表非空 downgrade；ORM/迁移名称对齐，并补数据库非法行、往返和逐表非空保护。
+- 论文库改为单查询相关计数，默认 TO_READ/favorite=false 仍包含无 entry 论文；列表读取保持零写入。
+- 统一 owner/PARSED/PaperPage/来源全图验证、事务回滚和固定公开错误；Schema 拒绝 extra、空 PATCH、非法 null、控制字符和超限文本，响应移除 user_id。
+- 高亮/书签重复创建统一幂等 200；所有学习列表稳定分页；同一 mastery 状态不刷新 last_reviewed_at。
+- PaperListView 修复阅读路由并实现真实搜索/筛选/集合/分页/四类计数；PaperReadingView 增加独立分页、编辑、删除确认、失败提示和请求代数。
+- 新增安全 Selection/Range 解析器，仅允许 PAGE 正文高亮，跨文本节点与 Unicode 偏移先按完整页面切片复核，来源变化时降级。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|---|---|
+| P7.3 API/服务定向 | ✅ 60 passed |
+| 迁移组 | ✅ 13 passed |
+| P7.3 前端定向 | ✅ 24 passed |
+| Docker 后端全量 | ✅ 977 passed，0 failed，0 skipped |
+| 前端全量 | ✅ 16 files / 197 passed |
+| 生产与 Docker 构建 | ✅ 136 modules |
+| Alembic | ✅ 016 current/head；check 无差异；非空 downgrade 在 DDL 前拒绝 |
+| 路由 / 表 | ✅ 59 条 API；27 张 ORM 应用表；28 张物理表 |
+| 测试库 | ✅ 27 张应用表残留总数 0 |
+| 运行态 | ✅ backend/frontend/PostgreSQL 运行；PostgreSQL healthy；后端/前端 HTTP 200 |
+
+开发库既有 P2～P7.2 数据保持不变，P7.3 五表均为 0。本轮未读取 `.env`、未调用真实 MaaS/Embedding、未删除 volume、未创建 Git 提交。
+
+下一固定轮次为 P8.1：完整管理员后端、Vue 管理后台、用户角色/状态和不可变审计；P8.2～P8.4 仍按全链路恢复、性能可靠性和华为云部署安全依次执行，不增加轮次。
+
+P8.1 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为第 29 节，正文逐字一致（7,988 字符）。文件 SHA-256 分别为 `02DA01D5EE7693CF7B122124FE15F013B6122D329CCB8B98A3E7BCE184F99804` / `D3C834BE14D75F9B729D0F175C6ADC05C29BB70B96B5369F844DF11D5A3529BB`。
+
+---
+
+## 项目文档统一为码道独立开发口径（2026-07-16）
+
+按最新文档规则，README、docs、ProjectDocs、SDD、Sprint、修复报告和提示词归档已统一使用码道独立开发、审查、修正与验收口径。17 个旧署名修复报告已同步重命名，正文引用保持一致；功能实现、测试数字、迁移、数据库和运行验收事实均未改变。
+
+长期规则已写入 `AGENTS.md`、需求决策、实施计划和 `ProjectDocs/sprint/文档署名统一.md`。后续新生成的提示词、进度、Sprint 与修复报告继续沿用该署名方式。

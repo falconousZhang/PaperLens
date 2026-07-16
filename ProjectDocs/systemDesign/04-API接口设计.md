@@ -561,39 +561,47 @@ P5.1 当前只提供安全上传、分页列表和结构详情。公开 schema �
 
 返回 id、paper_id、filename、file_type、file_size、row_count、column_count、严格 columns_info 和 created_at；不存在和跨用户统一 404。
 
-### 8.4 获取实验数据分析结果
+### 8.4 创建实验数据统计任务
 
-📋 **PLANNED**: `GET /api/v1/experiment-files/{file_id}/result`
+✅ **CURRENT (P5.2)**: `POST /api/v1/experiment-files/{file_id}/analysis`
+
+新建任务返回 201；已有活动任务或结果返回 200，并通过 `duplicate` 标识幂等命中。规模超限返回 413 `ANALYSIS_TOO_LARGE`，不存在、跨用户及 ADMIN 访问他人资源统一 404。
+
+### 8.5 获取实验数据统计结果
+
+✅ **CURRENT (P5.2)**: `GET /api/v1/experiment-files/{file_id}/result`
 
 **响应** `200`：
 ```json
 {
   "id": "uuid",
+  "file_id": "uuid",
+  "task_id": "uuid",
   "summary_stats": {
-    "columns": {
-      "accuracy": {
+    "version": 1,
+    "row_count": 10,
+    "column_count": 1,
+    "columns": [
+      {
+        "name": "accuracy",
+        "dtype": "float",
         "count": 10,
+        "null_count": 0,
+        "stats": {
         "mean": 0.852,
-        "std": 0.023,
+        "stddev": 0.023,
         "min": 0.810,
         "max": 0.891,
         "median": 0.855
+        }
       }
-    }
+    ]
   },
-  "metric_comparisons": [
-    {
-      "metric_name": "accuracy",
-      "dataset": "SQuAD",
-      "paper_value": 0.891,
-      "experiment_value": 0.855,
-      "diff": -0.036,
-      "checkpoint_type": "MAX",
-      "status": "MISMATCH"
-    }
-  ]
+  "created_at": "2026-07-14T00:00:00Z"
 }
 ```
+
+结果未就绪返回 404；公开响应不包含 storage key、文件哈希、原始行、`column_analysis` 或 `metric_comparisons`。
 
 ### 8.5 删除实验数据文件
 
@@ -607,7 +615,7 @@ P5.1 当前只提供安全上传、分页列表和结构详情。公开 schema �
 
 ### 9.1 生成导出报告
 
-📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/exports`
+✅ **CURRENT (P6.1)**: `POST /api/v1/papers/{paper_id}/exports`
 
 **请求参数**：
 ```json
@@ -638,7 +646,7 @@ P5.1 当前只提供安全上传、分页列表和结构详情。公开 schema �
 
 ### 9.2 获取导出状态
 
-📋 **PLANNED**: `GET /api/v1/exports/{export_id}`
+✅ **CURRENT (P6.1)**: `GET /api/v1/exports/{export_id}`
 
 用于 HTTP 轮询导出进度。
 
@@ -657,7 +665,7 @@ P5.1 当前只提供安全上传、分页列表和结构详情。公开 schema �
 
 ### 9.3 下载导出报告
 
-📋 **PLANNED**: `GET /api/v1/exports/{export_id}/download`
+✅ **CURRENT (P6.1)**: `GET /api/v1/exports/{export_id}/download`
 
 **响应** `200`：文件流（Content-Type 根据 report_type 确定）
 
@@ -730,6 +738,127 @@ FastAPI 自动生成以下文档：
 
 本阶段不新增或修改公开 HTTP API。新增的 `maas-config-check` 与 `maas-smoke --confirm-billable` 是容器内运维 CLI；现有 `/api/v1` 鉴权、论文、审阅和指标契约保持不变。默认 mock 模式下，health、认证与非 LLM 业务不依赖 MaaS 配置。
 
-**文档版本**：v1.2
+## P5.2 接口影响
+
+新增 POST analysis 与 GET result 两条公开路由，`/api/v1` method+path 总数由 27 增至 29。既有任务详情用于轮询 EXPERIMENT_ANALYSIS；原论文任务列表自然包含该任务类型。
+
+## P5.3a 接口影响
+
+新增 `POST /api/v1/experiment-files/{file_id}/comparisons`，请求体只允许严格 UUID4 `metric_task_id`。首次成功 201，同源幂等 200，异源为 409；公开响应固定为 `file_id/experiment_result_id/metric_task_id/comparisons/duplicate`。
+
+比较项的 `statistic` 只允许 `MEAN|MAX|null`，`status` 只允许 `MATCH|MISMATCH|UNVERIFIABLE`；diff 固定为实验值减论文值。`GET result` 在未交叉验证时返回 `metric_comparisons=null`，完成后返回同一严格数组。无指标返回 `NO_METRICS` 409，跨 USER/ADMIN 统一 404。
+
+## P5.3b 接口影响
+
+本阶段未新增公开 HTTP 路由，`/api/v1` method+path 仍为 30。前端完整使用既有 8 个调用：Paper、Task 列表/详情，以及实验文件上传/分页列表/可信详情、analysis、result、comparisons。
+
+浏览器上传使用 FormData 且不手写 multipart Content-Type；列表 page/page_size 在客户端约束为合法整数。页面对 file detail、analysis task、result 和 comparison 响应执行 paper/file/task 上下文校验，未知服务端错误不直接展示。
+
+## P6.1 接口影响
+
+新增 3 条公开路由：`POST /api/v1/papers/{paper_id}/exports`、`GET /api/v1/exports/{export_id}`、`GET /api/v1/exports/{export_id}/download`。`/api/v1` method+path 总数由 30 增至 33。
+
+创建导出请求体含 `report_type`（P6.1 仅 MARKDOWN）、`language`（zh/en，默认 zh）、`include_metrics`（默认 true）和 `include_experiment_analysis`（默认 true），并拒绝 extra 字段。相同用户/论文/选项/来源/内容的活跃或 READY 导出幂等返回 200；新来源返回 201；FAILED 可重试。非 PARSED、无合法审阅或来源图异常为固定 409，跨用户统一 404。公开响应不含 source_snapshot/source_hash/content_hash/storage_key；下载仅 READY 且回读 size/hash 一致时返回 attachment，其余固定 409/404，并带 nosniff 与 private,no-store。
+
+## P6.2 接口影响
+
+新增 1 条公开路由：`GET /api/v1/papers/{paper_id}/exports`（导出历史分页列表）。`/api/v1` method+path 总数由 33 增至 34。
+
+`report_type` 扩展为 MARKDOWN|PDF|DOCX 三格式。三种格式在相同 user/paper/language/include/source 下各自独立 ExportReport；同格式同源同 bytes 幂等 200，不同来源 201，FAILED 可重试。列表 API 仅论文所有者可见，严格分页 1～100，按 created_at DESC/id DESC。下载按 report_type 返回对应 MIME（Markdown text/markdown、PDF application/pdf、DOCX application/vnd.openxmlformats-officedocument.wordprocessingml.document）；安全文件名只由 report id 和服务端固定扩展组成。012 迁移调整 ck_export_p61_source 约束使 source_snapshot 非空的 MARKDOWN/PDF/DOCX 均合法。
+
+## 12. P7.1 阅读学习 API（COMPLETED）
+
+| 方法与路径 | 用途 |
+|------------|------|
+| POST `/api/v1/papers/{paper_id}/learning-explanations` | 创建或复用章节/页面/Evidence 的总结、解释或翻译 |
+| GET `/api/v1/learning-explanations/{explanation_id}` | 查询状态、结果、学习要点、术语和有序 Evidence 引用 |
+| GET `/api/v1/papers/{paper_id}/learning-explanations?page=1&page_size=20` | 查询当前论文的个人学习解释历史 |
+
+实现后的公开路由总数为 37。POST 新建为 201、幂等复用为 200+duplicate；详情仅在成功时公开答案、术语对象和安全 Citation 定位字段；列表不返回大正文。参数错误 422、论文/来源状态冲突 409、资源不存在或越权 404。
+
+POST 请求仅接受 `mode`、`scope_type`、对应的 section_id/page_number/evidence_id 和 `output_language`，`extra=forbid`。客户端不得提交正文、Evidence 文本、prompt、模型名或 user_id。仅论文所有者且论文为 PARSED 时可创建；ADMIN 在普通学习 API 中不绕过所有权。
+
+新建返回 201；活动或成功的同请求复用返回 200 并标记 duplicate。FAILED 可重新创建。全部详情和列表响应不公开 request_hash、source hash、原始 prompt/响应、内部错误或任何模型密钥。预计公开 `/api/v1` method+path 34 → 37。
+
+**文档版本**：v1.8
 **创建日期**：2026-07-13
-**最后更新**：2026-07-14
+**最后更新**：2026-07-15
+
+## 13. P7.2 论文问答 API
+
+| Method + Path | 契约 |
+|---|---|
+| POST `/api/v1/papers/{paper_id}/qa-conversations` | 严格空对象创建当前用户当前 PARSED 论文的空会话，201 |
+| GET `/api/v1/papers/{paper_id}/qa-conversations?page&page_size` | 20 条分页，返回 turn_count、last_question_preview、last_status，不批量返回答案 |
+| GET `/api/v1/qa-conversations/{conversation_id}?page&page_size` | owner-only，按 sequence ASC 分页返回 turns 和 total/page/page_size |
+| POST `/api/v1/qa-conversations/{conversation_id}/turns` | 仅 question/output_language/client_request_id；新建 201，幂等复用 200，活动冲突 409 |
+| GET `/api/v1/qa-turns/{turn_id}` | owner-only 轮询单轮安全详情 |
+
+全部路径为 UUID4，page>=1，page_size 1～100。401 表示未认证，404 统一不存在/越权，409 表示未解析、无 Evidence 或已有活动轮次，422 表示非法字段/枚举/问题。响应不公开 client_request_id、context_hash、prompt、向量、模型参数、内部异常或 secret。路由基线预计 37→42，以最终统计为准。
+
+## 14. P7.3 个人学习沉淀与论文库 API
+
+新增 17 条公开路由，路由基线预计 42→59：
+
+### 论文库（3 条）
+
+| Method + Path | 契约 |
+|---|---|
+| GET `/api/v1/library/papers?page&page_size&reading_status&favorite&collection_name&q` | LEFT JOIN 论文库条目的分页列表；支持阅读状态、收藏、集合名和标题搜索过滤 |
+| PATCH `/api/v1/papers/{paper_id}/library-entry` | 创建或更新论文库条目（reading_status、favorite、collection_name）；201 新建 / 200 更新 |
+| PATCH `/api/v1/papers/{paper_id}/reading-progress` | 更新阅读进度（last_page、furthest_page、last_read_at）；自动推进 reading_status |
+
+### 高亮（3 条）
+
+| Method + Path | 契约 |
+|---|---|
+| POST `/api/v1/papers/{paper_id}/highlights` | 创建高亮；body 含 page_number、char_start、char_end、color；服务端派生 quoted_text 和 source_hash；重复返回既有对象、200 和 duplicate=true |
+| GET `/api/v1/papers/{paper_id}/highlights?page_number` | 查询高亮列表；可选 page_number 过滤 |
+| DELETE `/api/v1/highlights/{highlight_id}` | 删除高亮；被笔记或知识卡引用时返回 409 NOTE_OR_CARD_REFERENCES |
+
+### 书签（3 条）
+
+| Method + Path | 契约 |
+|---|---|
+| POST `/api/v1/papers/{paper_id}/bookmarks` | 创建书签；body 含 page_number、label；重复页码返回既有对象、200 和 duplicate=true |
+| GET `/api/v1/papers/{paper_id}/bookmarks?page&page_size` | 查询书签分页列表 |
+| DELETE `/api/v1/bookmarks/{bookmark_id}` | 删除书签 |
+
+### 笔记（4 条）
+
+| Method + Path | 契约 |
+|---|---|
+| POST `/api/v1/papers/{paper_id}/notes` | 创建笔记；anchor_type=PAGE 时只需 page_number，anchor_type=HIGHLIGHT 时需 highlight_id；互斥校验 422 |
+| GET `/api/v1/papers/{paper_id}/notes?page_number&anchor_type` | 查询笔记列表；可选过滤 |
+| PATCH `/api/v1/notes/{note_id}` | 更新笔记内容 |
+| DELETE `/api/v1/notes/{note_id}` | 删除笔记 |
+
+### 知识卡（4 条）
+
+| Method + Path | 契约 |
+|---|---|
+| POST `/api/v1/papers/{paper_id}/knowledge-cards` | 创建知识卡；source_note_id / source_highlight_id 二选一；互斥校验 422 |
+| GET `/api/v1/papers/{paper_id}/knowledge-cards?mastery_status&archived` | 查询知识卡列表；可选过滤 |
+| PATCH `/api/v1/knowledge-cards/{card_id}` | 更新知识卡（front、back、mastery_status、archived）；last_reviewed_at 只在掌握状态真实变化时由服务端更新 |
+| DELETE `/api/v1/knowledge-cards/{card_id}` | 删除知识卡 |
+
+全部路由要求 Bearer 认证，资源按 user_id 严格隔离，跨用户统一 404。所有服务均为确定性 Python 代码，不调用 LLM/Embedding，不访问网络。
+
+最终验收为 59 条 `/api/v1` method+path，其中 P7.3 恰为 17 条。所有列表均采用 page/page_size 稳定分页；公开响应不包含 user_id，PATCH 空对象、非法 null、控制字符和非法枚举统一 422。
+
+## 15. P8.1 管理员 API
+
+新增 8 条公开路由，路由基线预计 59→67，全部要求 ADMIN 角色：
+
+| Method + Path | 契约 |
+|---|---|
+| GET `/api/v1/admin/dashboard` | 聚合计数：用户数、论文数、任务数、审阅数、报告数、最近审计条目 |
+| GET `/api/v1/admin/users?page&page_size&role&status&q` | 用户列表，支持角色/状态/搜索过滤，分页 |
+| GET `/api/v1/admin/users/{user_id}` | 用户详情，含角色、状态、创建时间、最近活动 |
+| PATCH `/api/v1/admin/users/{user_id}` | 变更用户角色或状态；body 含 role/status/reason；reason 必填 8～500 字符；并发降级/禁用导致零 ACTIVE ADMIN 返回 409；同值 no-op 返回 200；审计日志 + 会话撤销在同一事务 |
+| GET `/api/v1/admin/papers?page&page_size&status&user_id&q` | 跨用户只读论文列表，列投影仅返回管理员可见字段 |
+| GET `/api/v1/admin/tasks?page&page_size&status&task_type&user_id` | 跨用户只读任务列表，列投影仅返回管理员可见字段 |
+| GET `/api/v1/admin/exports?page&page_size&status&report_type&user_id` | 跨用户只读报告列表，列投影仅返回管理员可见字段 |
+| GET `/api/v1/admin/audit-logs?page&page_size&action&actor_user_id&resource_id` | 审计日志分页列表，按 created_at DESC/id DESC 排序 |
+
+全部路由 401 表示未认证，403 表示非 ADMIN，422 表示非法字段/枚举/UUID。PATCH 用户时 reason 必填且不含控制字符；before_state/after_state 仅含 role/status 键。跨用户只读查询不返回 storage_key、file_hash、source_snapshot、content_hash 等内部字段。

@@ -3,8 +3,9 @@
     <nav v-if="auth.isAuthenticated" class="app-nav">
       <div class="nav-links">
         <router-link to="/">首页</router-link>
-        <router-link to="/papers">论文</router-link>
+        <router-link to="/papers">论文库</router-link>
         <router-link to="/upload">上传</router-link>
+        <router-link v-if="auth.isAdmin" to="/admin">管理后台</router-link>
       </div>
       <div class="nav-user">
         <router-link to="/profile">{{ auth.user?.display_name }}</router-link>

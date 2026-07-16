@@ -16,6 +16,48 @@ class LLMClient(ABC):
 
 class MockLLMClient(LLMClient):
     def chat(self, messages: list[dict], **kwargs) -> dict:
+        operation = kwargs.get("operation")
+
+        if operation == "learning":
+            evidence_aliases = kwargs.get("evidence_aliases", [])
+            return {
+                "role": "assistant",
+                "content": json.dumps(
+                    {
+                        "answer": "Mock learning answer",
+                        "key_points": ["Point 1", "Point 2"],
+                        "terms": [
+                            {
+                                "term": "Mock term",
+                                "explanation": "Mock plain-language explanation",
+                            }
+                        ],
+                        "evidence_refs": evidence_aliases[:2] if evidence_aliases else [],
+                    }
+                ),
+            }
+
+        if operation == "paper_qa":
+            evidence_aliases = kwargs.get("evidence_aliases", [])
+            language = kwargs.get("language", "zh")
+            grounded = bool(evidence_aliases)
+            if grounded:
+                answer = "Mock QA answer"
+            elif language == "en":
+                answer = "The answer cannot be confirmed only from the current paper."
+            else:
+                answer = "仅根据当前论文无法确认该问题，论文证据不足。"
+            return {
+                "role": "assistant",
+                "content": json.dumps(
+                    {
+                        "answer": answer,
+                        "grounded": grounded,
+                        "evidence_refs": evidence_aliases[:2] if evidence_aliases else [],
+                    }
+                ),
+            }
+
         dimension = kwargs.get("dimension", "OVERALL")
         evidence_aliases = kwargs.get("evidence_aliases", [])
 

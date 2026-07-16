@@ -7,7 +7,7 @@
 | 项目名称 | PaperLens |
 | 文档版本 | v1.0 |
 | 创建日期 | 2026-07-13 |
-| 最后更新 | 2026-07-13 |
+| 最后更新 | 2026-07-15 |
 | 文档状态 | 已完成 |
 | 关联设计 | design/ |
 
@@ -263,11 +263,11 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - 指标记录含 checkpoint_type 和 checkpoint_source
 - 不按数值最大推断 BEST/MAX
 
-### 3.5 实验数据分析（P5.1 部分实现）
+### 3.5 实验数据分析（P5.3b 前端已实现）
 
 #### 3.5.1 CSV/Excel 实验数据分析 (F11)
 
-**功能描述:** P5.1 已实现 CSV/XLSX/XLS 安全上传和可信结构解析；统计摘要属于 P5.2，尚未实现。
+**功能描述:** P5.1 已实现 CSV/XLSX/XLS 安全上传和可信结构解析；P5.2 已实现离线确定性统计任务、原子 ExperimentResult 和结果查询 API；P5.3b 已实现完整前端页面与交互。
 
 **功能需求:**
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传（最大 20MB）
@@ -278,33 +278,49 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 **验收标准:**
 - [x] 实验数据文件可安全上传并得到 version=1 `columns_info`
 - [x] 资源按真实用户隔离，重复上传幂等，并发最终一行一对象
-- [ ] 统计摘要由确定性代码计算（P5.2）
+- [x] 统计摘要由确定性代码计算（P5.2）
+- [x] 前端页面实现非空/20MB 上传预检、分页文件列表、可信详情、分析轮询、统计摘要和交叉验证展示（P5.3b）
 
 #### 3.5.2 指标交叉验证 (F12)
 
 **功能描述:** 对比论文报告指标与实验数据文件中的指标，标记偏差。
 
 **功能需求:**
-- FR-05.2.1: 匹配论文 MetricRecord 与实验数据中的指标
-- FR-05.2.2: 计算偏差值（diff）
-- FR-05.2.3: 标记验证状态（MATCH / MISMATCH）
+- FR-05.2.1: 按 NFKC、casefold、字母数字过滤唯一匹配论文 MetricRecord 与数值实验列
+- FR-05.2.2: 按 MEAN/MAX 口径计算 `experiment_value - paper_value`、绝对差、相对差和允许差
+- FR-05.2.3: 标记 MATCH / MISMATCH / UNVERIFIABLE，BEST/FINAL/LAST/UNKNOWN 不猜测
 
 **验收标准:**
-- 交叉验证结果可查询
+- [x] P5.3a 交叉验证结果可查询，同源幂等且异源不覆盖
+- [x] 用户、任务、结果和来源完整性校验通过，所有公开数字有限
+- [x] 前端页面默认最新成功指标任务，恢复并锁定已有比较来源，支持交叉验证创建和三类状态展示（P5.3b）
 
-### 3.6 报告导出 (P2, 规划)
+### 3.6 报告导出 (P6.1 Markdown 后端已实现)
 
 #### 3.6.1 审稿报告导出 (F10)
 
-**功能描述:** 导出 Markdown 格式的审阅报告。
+**功能描述:** 导出 Markdown 格式的审阅报告。P6.1 已实现 Markdown 导出后端完整闭环。
 
 **功能需求:**
 - FR-06.1.1: 生成包含审阅结果、指标记录的报告
 - FR-06.1.2: 支持 Markdown 格式导出
-- FR-06.1.3: 支持中英文语言选择
+- FR-06.1.3: 支持中英文语言选择（zh/en 模板）
+- FR-06.1.4: 创建导出 API（POST /api/v1/papers/{paper_id}/exports），新建 201、幂等 200
+- FR-06.1.5: 查询导出状态 API（GET /api/v1/exports/{export_id}）
+- FR-06.1.6: 下载导出报告 API（GET /api/v1/exports/{export_id}/download），Content-Type: text/markdown; charset=utf-8，Content-Disposition: attachment，X-Content-Type-Options: nosniff
+- FR-06.1.7: Markdown 生成服务：按维度排序审阅详情、可选指标表格、可选实验分析（统计摘要与交叉验证比较）
+- FR-06.1.8: 确定性输出：相同输入生成相同字节 + SHA-256 哈希
+- FR-06.1.9: HTML/Markdown 转义，禁止输出 storage_key、content_hash、raw_text、内部路径、tokens 等字段
+- FR-06.1.10: 状态机 PENDING → GENERATING → READY / FAILED；FAILED 允许重试
+- FR-06.1.11: 幂等创建：部分唯一索引 (user_id, paper_id, report_type, language, include_metrics, include_experiment_analysis) WHERE status IN ('PENDING','GENERATING','READY')
 
 **验收标准:**
-- 报告可导出下载
+- [x] 报告可创建、查询状态、下载（P6.1）
+- [x] 中英文模板正确渲染（P6.1）
+- [x] 确定性输出：相同输入 → 相同字节 + SHA-256（P6.1）
+- [x] 禁止字段不出现在导出内容中（P6.1）
+- [x] 幂等创建和 FAILED 重试（P6.1）
+- [x] 72 生成单元 + 25 API/来源/并发/补偿 + 1 迁移测试通过（P6.1 码道收口）
 
 #### 3.6.2 PDF/DOCX 报告导出 (F13)
 
@@ -313,9 +329,15 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 **功能需求:**
 - FR-06.2.1: 支持 PDF 格式导出
 - FR-06.2.2: 支持 DOCX 格式导出
+- FR-06.2.3: 支持当前论文导出历史分页列表与三格式安全下载
+- FR-06.2.4: PDF/DOCX 相同来源与选项生成逐字节一致的文件
+- FR-06.2.5: 用户端页面隔离翻页、轮询、路由和下载异步竞态
 
 **验收标准:**
-- 多格式报告可导出下载
+- [x] PDF 中英文文本可由 PyMuPDF 逐字提取，固定元数据且无脚本/附件/动作
+- [x] DOCX 可由 python-docx 重开，无宏/OLE/外部 relationship/rsid
+- [x] 历史分页、三格式 MIME、轮询、FAILED 重试与 blob URL 回收完成
+- [x] 转换器 34、P6.2 API 25、导出页 19 项定向测试通过
 
 ## 4. 非功能需求
 
@@ -380,6 +402,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - ReviewFinding.confidence 必须在 0.0-1.0 之间
 - Evidence.evidence_type 只允许 TEXT / TABLE / FIGURE_CAPTION / EQUATION
 - ExportReport.status 只允许 PENDING / GENERATING / READY / FAILED
+- ExportReport.language 只允许 'zh' / 'en'
+- ExportReport.report_type 只允许 'MARKDOWN' / 'PDF' / 'DOCX'
+- ExportReport 幂等约束包含 user_id、paper_id、report_type、language、两个 include 选项、source_hash 和 content_hash，且只覆盖 PENDING/GENERATING/READY
 
 ### 5.2 流程规则
 
@@ -419,7 +444,8 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - P3.1（已完成）: MockLLM 结构化审阅后端闭环
 - P3.2（已完成）: 华为云优先、接口可替换的 Embedding 与语义 Evidence 检索
 - P3.3（当前已完成）: 华为云 MaaS 标准 API V2 非流式生成式模型适配器
-- P4.0（规划）: 实验数据分析、报告导出
+- P5.3b（已完成）: 实验数据前端页面与完整交互
+- P6.1（已完成）: Markdown 导出报告后端闭环
 
 ## 7. 验收标准
 
@@ -452,9 +478,9 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 | 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
 | 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/metrics、GET /api/v1/metrics/{metric_id} |
-| ✅ CURRENT | POST upload、GET list、GET `/api/v1/experiment-files/{file_id}` 结构详情（P5.1） |
-| 📋 PLANNED | ExperimentResult/result API、DELETE 和 P07 实验前端 |
-| 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
+| ✅ CURRENT | P5.1 upload/list/detail；P5.2 POST analysis 与 GET result |
+| ✅ CURRENT | P5.3a POST comparisons 与扩展 GET result；P5.3b 实验前端已实现 |
+| ✅ CURRENT | P6.1 POST/GET /api/v1/papers/{paper_id}/exports, GET /api/v1/exports/{export_id}/download |
 | 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
 | ✅ CURRENT | 注册/登录/刷新/退出、密码重置、个人资料和会话管理 API（P3.5） |
 | 📋 PLANNED | 管理员用户/角色、账号状态、资源任务管理和审计日志 API（P7 细化） |
@@ -473,15 +499,20 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 - [x] F08 可追溯实验指标提取后端、任务闭环与查询 API（P4.1）
 - [x] F09 确定性 Checkpoint 口径判断与 UNKNOWN 降级（P4.1）
 
+**已实现（P6.1）:**
+- [x] F10 Markdown 审稿报告导出后端（创建/状态/下载 API、zh/en 模板、确定性生成、幂等创建、状态机、安全下载）
+- [x] ExportReport 数据模型扩展（010 language/include/source_snapshot；011 source_hash、严格状态/哈希约束与来源感知唯一索引）
+
 **待实现:**
 - [ ] F05 向量索引（FAISS）
 - [x] F08/F09 指标分析前端页面与交互（P4.2）
-- [ ] F10 审稿报告导出
+- [x] F10 审稿报告导出（P6.1～P6.2）
 - [ ] F22 管理员系统
 - [x] F11/P5.1 CSV/Excel 安全上传与结构解析
-- [ ] F11/P5.2 统计摘要
-- [ ] F12 指标交叉验证
-- [ ] F13 PDF/DOCX 报告导出
+- [x] F11/P5.2 统计摘要
+- [x] F12/P5.3a 指标交叉验证后端
+- [x] F11/F12 P5.3b 实验数据前端页面与交互（上传、分析轮询、统计摘要、交叉验证）
+- [x] F13 PDF/DOCX 报告导出
 
 ### 7.2 性能验收
 
@@ -508,6 +539,111 @@ PaperLens 旨在通过 AI 辅助论文审阅、指标提取和实验数据交叉
 
 详细设计见 [design/12-华为云MaaS运行配置.md](design/12-华为云MaaS运行配置.md)。
 
-**文档版本**: v1.1
+## 8. 产品方向校正与阅读学习规格
+
+PaperLens 的主产品定义改为“个人论文阅读学习助手”。P2～P6 已实现能力保持兼容：结构化审阅在 UI 和路线图中作为“批判性阅读”，指标、实验与报告作为高级学习工具。不得删除历史模型、路由或用户数据。
+
+### FR-13.1 阅读工作台（P7.1）
+
+- [x] FR-13.1.1 受保护的 `/papers/:id/read` 三栏工作台。
+- [x] FR-13.1.2 章节目录、章节正文、页面导航和 Evidence 原文定位。
+- [x] FR-13.1.3 论文详情以“开始阅读”为主操作，旧审阅路由保持兼容并显示为“批判性阅读”。
+- [x] FR-13.1.4 页面/章节/任务/历史异步请求具有路由代数和卸载清理。
+
+### FR-13.2 证据化学习解释（P7.1）
+
+- [x] FR-13.2.1 SUMMARY / EXPLAIN / TRANSLATE，输出语言 zh / en。
+- [x] FR-13.2.2 SECTION / PAGE / EVIDENCE 来源只由服务端读取和校验，客户端不发送正文。
+- [x] FR-13.2.3 模型输出为严格单 JSON 对象：answer、key_points、terms、evidence_refs。
+- [x] FR-13.2.4 所有 evidence_refs 必须完整绑定同一论文 Evidence；至少一个引用，否则整次失败。
+- [x] FR-13.2.5 独立 PENDING → RUNNING → SUCCEEDED / FAILED 状态机，活动/成功同请求幂等，FAILED 可重试。
+- [x] FR-13.2.6 结果历史严格分页；响应不泄露正文快照、prompt、hash、模型原始响应或内部异常。
+
+### 固定后续轮次
+
+- P7.2：论文内多轮问答、Evidence 检索、会话历史和证据不足降级。
+- P7.3：高亮、书签、笔记、知识卡、论文库标签/搜索和学习进度。
+- P8.1：完整管理员后端、页面、用户/角色/状态和不可变审计，一轮合并完成。
+- P8.2～P8.4：全链路与恢复、性能可靠性、华为云部署和综合安全。
+
+P7.1 实际验收：Alembic 014、37 条 API、19 张 ORM 应用表、后端 866 passed、前端 183 passed。固定后续轮次均未提前实现。
+
+**文档版本**: v1.5
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-14
+**最后更新**: 2026-07-15
+
+## 14. 当前论文多轮问答（P7.2）
+
+### FR-14.1 会话与历史
+
+当前用户只能为自己 PARSED 论文创建空会话；会话元数据与轮次均 20 条分页。普通 ADMIN 不绕过业务所有权。
+
+### FR-14.2 证据化生成
+
+服务端只检索当前论文非空 Evidence，历史只包含同会话预算内的成功轮次。`grounded=true` 至少一个 Citation；`grounded=false` 零 Citation 并明确当前论文证据不足。模型返回后必须复算 context_hash。
+
+### FR-14.3 安全交互
+
+客户端只发送 question、zh/en 和 UUID4 client_request_id；模型/用户文本只按纯文本渲染。页面支持新建、双分页、串行轮询、失败新 id 重试和 Citation 原文定位，并隔离论文/会话/页码/轮询竞态。
+
+该段为 P7.2 验收时边界：当时 P7.2 已实现、P7.3 尚未开始。当前 P7.3 已完成；P8.1～P8.4 未提前实现。
+
+## 15. 个人学习沉淀与论文库（P7.3）
+
+### FR-15.1 论文库管理
+
+当前用户论文库列表以全部 Paper 为真集 LEFT JOIN 可选 library entry；无 entry 时返回默认 TO_READ/favorite=false，不为列表读取而写库。Library entry PATCH 只接受 reading_status/favorite/collection_name；extra=forbid；collection_name 空白转 null；COMPLETED 时服务端写 completed_at。
+
+### FR-15.2 阅读进度
+
+Reading progress PATCH 只接受 page_number；upsert entry；TO_READ→READING 自动变；COMPLETED/ARCHIVED 不被自动改写。前端翻页后串行调用 reading-progress。
+
+### FR-15.3 高亮
+
+高亮创建只接受 page_number/char_start/char_end/color；服务端加载 PaperPage 文本校验范围，派生 quoted_text 和 source_hash；不得相信客户端引文。相同 user+paper+page+range 的重复高亮返回既有 200。高亮被 Note 或 Card 引用时删除 409。
+
+### FR-15.4 书签
+
+书签相同页重复返回既有 200+duplicate=true。CRUD 遵循用户隔离。
+
+### FR-15.5 笔记
+
+Note 锚点创建后不可偷换；PAPER 锚点不能有 page_number/highlight_id；PAGE 锚点需要 page_number；HIGHLIGHT 锚点需要 highlight_id。Note 被 Card 引用时删除 409。
+
+### FR-15.6 知识卡
+
+Card source_note_id/source_highlight_id 互斥（含双 null）。Card mastery_status 变化时服务端更新 last_reviewed_at。支持 archived 切换。
+
+### FR-15.7 安全与隔离
+
+所有 P7.3 数据按 user_id 隔离；跨用户不可见不可删。016 迁移空表支持往返；任一 P7.3 表非空时 downgrade 无损中止。
+
+P7.3 已实现。P8.1～P8.4 未提前实现。
+
+## 16. 完整管理员系统与不可变审计（P8.1）
+
+### FR-16.1 管理员仪表盘
+
+GET /api/v1/admin/dashboard 返回用户按 role/status、论文按 status、任务按 task_type/status、报告按 report_type/status 的非负聚合计数，不返回用户内容或最近正文。仅 ADMIN 可访问。
+
+### FR-16.2 用户管理
+
+GET /api/v1/admin/users 列表支持 role/status/q 筛选，q 只匹配规范化 email/display_name。GET /api/v1/admin/users/{user_id} 返回严格白名单字段和资源计数。PATCH /api/v1/admin/users/{user_id} 只接受可选 role USER|ADMIN、可选 status ACTIVE|DISABLED 和必填 reason；extra=forbid；role/status 至少一个。相同值返回 200/changed=false 不写审计。
+
+### FR-16.3 只读治理
+
+GET /api/v1/admin/papers、/admin/tasks、/admin/exports 提供跨用户只读元数据，使用有限列投影，不返回 storage_key/file_hash/source_snapshot/正文/模型输入输出。FAILED 只映射固定安全错误。
+
+### FR-16.4 不可变审计
+
+admin_audit_logs 表 append-only：应用层无 UPDATE/DELETE 路由；PostgreSQL trigger 拒绝 UPDATE/DELETE。action 只允许 ADMIN_BOOTSTRAPPED/USER_ROLE_CHANGED/USER_STATUS_CHANGED；resource_type 只允许 USER。before/after 只允许 role/status。每个实际变化字段各写一条 audit。
+
+### FR-16.5 CLI 初始化
+
+python -m paperlens.cli admin-bootstrap --user-id UUID --reason text：只允许把已存在 ACTIVE 的 USER 提升为首个 ADMIN，且仅当数据库没有 ACTIVE ADMIN 时成功。以目标用户 id 作为 actor_user_id，创建 ADMIN_BOOTSTRAPPED 审计并撤销旧 session，同事务完成。已有 ACTIVE ADMIN、目标非法/不存在/禁用、并发第二次执行都安全失败。
+
+### FR-16.6 安全与并发
+
+禁止管理员自降级或自禁用；任何提交后至少保留一个 ACTIVE ADMIN。FOR UPDATE 锁定 ACTIVE ADMIN 集合和目标。两管理员并发互相降级/禁用时最多一个成功，另一个 409。角色或状态变化后撤销目标全部活动 AuthSession；禁用时同时使未使用 PasswordResetToken 失效。017 迁移空表支持往返，非空审计降级拒绝。
+
+P8.1 进行中。P8.2～P8.4 未提前实现。

@@ -102,3 +102,55 @@ class ExperimentFileType(StrEnum):
 class UserStatus(StrEnum):
     ACTIVE = "ACTIVE"
     DISABLED = "DISABLED"
+
+
+class LearningMode(StrEnum):
+    SUMMARY = "SUMMARY"
+    EXPLAIN = "EXPLAIN"
+    TRANSLATE = "TRANSLATE"
+
+
+class LearningScopeType(StrEnum):
+    SECTION = "SECTION"
+    PAGE = "PAGE"
+    EVIDENCE = "EVIDENCE"
+
+
+class LearningStatus(StrEnum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
+class QATurnStatus(StrEnum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
+class ReadingStatus(StrEnum):
+    TO_READ = "TO_READ"
+    READING = "READING"
+    COMPLETED = "COMPLETED"
+    ARCHIVED = "ARCHIVED"
+
+
+class HighlightColor(StrEnum):
+    YELLOW = "YELLOW"
+    GREEN = "GREEN"
+    BLUE = "BLUE"
+    PINK = "PINK"
+
+
+class AnchorType(StrEnum):
+    PAPER = "PAPER"
+    PAGE = "PAGE"
+    HIGHLIGHT = "HIGHLIGHT"
+
+
+class MasteryStatus(StrEnum):
+    NEW = "NEW"
+    LEARNING = "LEARNING"
+    MASTERED = "MASTERED"

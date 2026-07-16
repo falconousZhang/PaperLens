@@ -7,7 +7,7 @@
 | 项目名称 | PaperLens |
 | 文档版本 | v1.0 |
 | 创建日期 | 2026-07-13 |
-| 最后更新 | 2026-07-14 |
+| 最后更新 | 2026-07-15 |
 | 文档状态 | 已完成 |
 
 ## 文档引用说明
@@ -42,9 +42,9 @@
 | 📋 PLANNED | GET /api/v1/papers/{paper_id}/tables |
 | 📋 PLANNED | POST /api/v1/tasks/{task_id}/cancel |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id}/metrics、GET /api/v1/metrics/{metric_id} |
-| ✅ CURRENT | POST upload、GET list、GET `/api/v1/experiment-files/{file_id}` 结构详情（P5.1） |
-| 📋 PLANNED | ExperimentResult/result API、DELETE 和实验前端（P5.2+） |
-| 📋 PLANNED | POST/GET /api/v1/papers/{paper_id}/exports, GET download |
+| ✅ CURRENT | P5.1 upload/list/detail；P5.2 POST analysis 与 GET result |
+| ✅ CURRENT | P5.3a POST comparisons 与扩展 GET result；P5.3b 实验前端已实现 |
+| ✅ CURRENT | P6.1～P6.2 POST/list/status/download 导出 API 与 ReportExportView 三格式闭环 |
 | 📋 PLANNED | POST /api/v1/papers/{paper_id}/index（FAISS） |
 
 **关键实现细节:**
@@ -754,7 +754,7 @@
 
 ---
 
-## 5. 实验数据分析（P5.1 部分实现）
+## 5. 实验数据分析（P5.3b 前端已实现）
 
 ### 5.1 CSV/Excel 实验数据分析
 
@@ -766,20 +766,21 @@
 
 **设计引用:**
 - [design/05-实验数据分析.md#1-p51-实验数据上传服务](design/05-实验数据分析.md#1-p51-实验数据上传服务)
-- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
+- [design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现](design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/experiment-files/upload
 - GET /api/v1/papers/{paper_id}/experiment-files
 - GET /api/v1/experiment-files/{file_id}
-- GET result 与 DELETE 仍为后续规划
+- GET result 与 DELETE 仍为后续规划（前端已实现 result 展示）
 
 **数据模型引用:**
 - experiment_files（CURRENT）；experiment_results（PLANNED）
 
 **验收标准:**
 - 实验数据文件可上传并解析
-- P5.1 不计算统计摘要；P5.2 必须由确定性代码计算
+- P5.1 只解析结构；P5.2 已由确定性代码计算统计摘要
+- P5.3b 前端已实现上传、文件列表、分析轮询、统计摘要和交叉验证展示
 
 #### 任务 5.1.1: 实验数据上传与结构解析（✅ DONE）
 
@@ -807,7 +808,7 @@
 - 新建 201、重复 200；并发最终一行一对象
 - 结构列表和详情只允许资源所属用户访问
 
-#### 任务 5.1.2: 统计摘要计算（规划）
+#### 任务 5.1.2: 统计摘要计算（✅ DONE）
 
 **任务描述**: 使用确定性 Python 代码计算统计摘要。
 
@@ -816,19 +817,20 @@
 - FR-05.1.4: LLM 不参与任何数值计算
 
 **设计引用:**
-- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
+- [design/05-实验数据分析.md#3-p52-统计摘要已实现](design/05-实验数据分析.md#3-p52-统计摘要已实现)
 
 **数据模型引用:**
 - experiment_results (summary_stats)
 
 **实现要点:**
-- pandas 计算count/mean/std/min/max/median
+- 路径型逐行读取；Welford 计算 mean/样本 stddev，紧凑数值数组计算精确 median
 - LLM 不参与计算
-- summary_stats JSONB 存储
+- SHA-256 与完整 columns_info 二次复核，summary_stats JSONB 与任务成功状态原子提交
 
 **验收标准:**
 - 统计摘要正确计算
 - LLM 不参与数值计算
+- 真实并发最多一个活动任务和一个结果，失败不留下半成品
 
 ### 5.2 指标交叉验证
 
@@ -838,7 +840,7 @@
 - FR-05.2.3: 标记验证状态（MATCH / MISMATCH）
 
 **设计引用:**
-- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
+- [design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现](design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
@@ -846,7 +848,7 @@
 **验收标准:**
 - 交叉验证结果可查询
 
-#### 任务 5.2.1: 指标交叉验证实现（规划）
+#### 任务 5.2.1: 指标交叉验证后端（P5.3a 已完成）
 
 **任务描述**: 对比论文报告指标与实验数据指标，标记偏差。
 
@@ -856,49 +858,65 @@
 - FR-05.2.3: 标记验证状态
 
 **设计引用:**
-- [design/05-实验数据分析.md#3-p52-统计与交叉验证规划](design/05-实验数据分析.md#3-p52-统计与交叉验证规划)
+- [design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现](design/05-实验数据分析.md#4-p53a-指标交叉验证后端已实现)
 
 **数据模型引用:**
 - experiment_results (metric_comparisons)
 
 **实现要点:**
-- 匹配 MetricRecord 与实验数据
-- diff = paper_value - experiment_value
-- MATCH / MISMATCH 标记
+- NFKC→casefold→isalnum 唯一匹配，不使用语义别名
+- MEAN→mean、MAX→max；其他 checkpoint 诚实 UNVERIFIABLE
+- diff = experiment_value - paper_value，有限数和严格 Schema
+- ExperimentResult 行锁、同源幂等、异源 409、提交未知只读恢复
 
 **验收标准:**
-- 交叉验证结果可查询
+- [x] 交叉验证结果可查询且不泄漏来源正文
+- [x] 真实并发和事务故障测试通过
 
-#### 任务 5.2.2: 实验数据前端页面（规划）
+#### 任务 5.2.2: 实验数据前端页面（✅ DONE — P5.3b）
 
 **任务描述**: 实现实验数据页面（P07），文件上传，统计摘要，交叉验证。
 
 **需求引用:**
 - FR-05.1.1: 支持 CSV / XLSX / XLS 文件上传
+- FR-05.1.3: 使用确定性 Python 代码计算统计摘要
+- FR-05.2.1: 匹配论文 MetricRecord 与实验数据中的指标
+- FR-05.2.2: 计算偏差值（diff）
+- FR-05.2.3: 标记验证状态（MATCH / MISMATCH）
 
 **设计引用:**
-- [design/07-前端展示.md#37-p07-实验数据-experimentdataview--规划](design/07-前端展示.md#37-p07-实验数据-experimentdataview--规划)
-- [design/10-前端详细设计.md#47-p07-实验数据-experimentdataview--规划](design/10-前端详细设计.md#47-p07-实验数据-experimentdataview--规划)
+- [design/07-前端展示.md#37-p07-实验数据-experimentdataview--已实现](design/07-前端展示.md#37-p07-实验数据-experimentdataview--已实现)
+- [design/10-前端详细设计.md#9-p07-实验数据页面p53b-已实现](design/10-前端详细设计.md#9-p07-实验数据页面p53b-已实现)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/experiment-files/upload
 - GET /api/v1/papers/{paper_id}/experiment-files
+- GET /api/v1/experiment-files/{file_id}
 - GET /api/v1/experiment-files/{file_id}/result
+- POST /api/v1/experiment-files/{file_id}/analysis
+- GET /api/v1/tasks/{task_id}
+- POST /api/v1/experiment-files/{file_id}/comparisons
 
 **实现要点:**
-- 拖拽上传区
-- 文件列表表格
-- 统计摘要表格
-- MATCH/MISMATCH 状态标签
+- ExperimentDataView.vue: 非空/20MB 上传预检、分页文件列表、可信列详情、分析任务创建/轮询、统计摘要、指标任务和交叉验证表格
+- 路由: `/papers/:id/experiment` (name: `paper-experiment`, requiresAuth: true)
+- PaperDetailView.vue 新增"实验数据" router-link tab
+- frontend/src/api/index.ts 新增 21 个 TypeScript 类型和 6 个 API 函数
+- 页面/文件选择 generation 与 paper/file/task 响应校验防止旧异步响应覆盖；路由/文件变化和卸载清理 timer
+- 已有比较直接恢复并锁定来源；无结果时默认最新成功指标任务
+- 安全: 不使用 v-html/localStorage/sessionStorage；不显示 API key/token/原始服务端异常
 
 **验收标准:**
-- 文件上传和列表正常
-- 统计摘要正确展示
-- 交叉验证结果正确
+- 文件上传、上传后选中、可信详情和分页正常
+- 统计摘要正确展示（数值列显示统计，非数值列显示 em dash）
+- 交叉验证结果正确（MATCH/MISMATCH/UNVERIFIABLE 状态和五种原因中文映射）
+- 分析任务轮询正常（PENDING→RUNNING→SUCCEEDED/FAILED）
+- 路由变化和卸载后 timer 已清理
+- P5.3b 定向 48 项通过（ExperimentDataView 40 + ExperimentApiAndRoute 8）；前端全量 154，构建 129 modules
 
 ---
 
-## 6. 报告导出（规划）
+## 6. 报告导出（P6.1～P6.2 已完成）
 
 ### 6.1 审稿报告导出
 
@@ -906,47 +924,64 @@
 - FR-06.1.1: 生成包含审阅结果、指标记录的报告
 - FR-06.1.2: 支持 Markdown 格式导出
 - FR-06.1.3: 支持中英文语言选择
+- FR-06.1.4～FR-06.1.11: P6.1 新增需求（创建/状态/下载 API、确定性生成、幂等创建、状态机、安全下载、禁止字段）
 
 **设计引用:**
 - [design/06-报告导出.md#21-报告生成服务](design/06-报告导出.md#21-报告生成服务)
+- [design/06-报告导出.md#22-markdown-报告模板](design/06-报告导出.md#22-markdown-报告模板)
 
 **API 引用:**
-- POST /api/v1/papers/{paper_id}/exports
-- GET /api/v1/exports/{export_id}
-- GET /api/v1/exports/{export_id}/download
+- ✅ CURRENT: POST /api/v1/papers/{paper_id}/exports（201 新建 / 200 幂等）
+- ✅ CURRENT: GET /api/v1/exports/{export_id}
+- ✅ CURRENT: GET /api/v1/exports/{export_id}/download（text/markdown; charset=utf-8, attachment, X-Content-Type-Options: nosniff）
 
 **数据模型引用:**
-- export_reports
+- export_reports（010 新增 language/include/source_snapshot；011 新增 source_hash、严格状态/哈希约束与来源感知唯一索引）
 
 **验收标准:**
-- 报告可导出下载
+- [x] 报告可创建、查询状态、下载（P6.1）
+- [x] 中英文模板正确渲染（P6.1）
+- [x] 确定性输出：相同输入 → 相同字节 + SHA-256（P6.1）
+- [x] 禁止字段不出现在导出内容中（P6.1）
+- [x] 幂等创建和 FAILED 重试（P6.1）
+- [x] 72 生成单元 + 25 API/来源/并发/补偿 + 1 迁移测试通过（P6.1 码道收口）
 
-#### 任务 6.1.1: Markdown 报告生成（规划）
+#### 任务 6.1.1: Markdown 报告生成 ✅ DONE（P6.1）
 
-**任务描述**: 实现 Markdown 格式审阅报告生成。
+**任务描述**: 实现 Markdown 格式审阅报告生成，包含创建/状态/下载 API、zh/en 模板、确定性生成、幂等创建、状态机和安全下载。
 
 **需求引用:**
 - FR-06.1.1: 生成包含审阅结果、指标记录的报告
 - FR-06.1.2: 支持 Markdown 格式导出
 - FR-06.1.3: 支持中英文语言选择
+- FR-06.1.4～FR-06.1.11: P6.1 新增需求
 
 **设计引用:**
 - [design/06-报告导出.md#21-报告生成服务](design/06-报告导出.md#21-报告生成服务)
 - [design/06-报告导出.md#22-markdown-报告模板](design/06-报告导出.md#22-markdown-报告模板)
 
 **数据模型引用:**
-- export_reports
+- export_reports（010 + 011 迁移）
 
 **实现要点:**
-- Markdown 模板拼接
-- 中英文语言选择
-- 异步生成 + HTTP 轮询
+- 010 新增 language/include/source_snapshot；011 新增 source_hash、历史行兼容、严格终态/哈希约束和来源感知部分唯一索引
+- 3 个 API 端点：POST 创建（201/200 幂等）、GET 状态、GET 下载（text/markdown; charset=utf-8, attachment, nosniff）
+- Markdown 生成服务：zh/en 模板、按维度排序审阅详情、可选指标表格、可选实验分析（统计摘要与交叉验证比较）
+- 确定性输出：相同输入 → 相同字节 + SHA-256；HTML/Markdown 转义
+- 禁止输出字段：storage_key、content_hash、raw_text、内部路径、tokens 等
+- 状态机：PENDING → GENERATING → READY / FAILED；FAILED 允许重试
+- 幂等创建：部分唯一索引 WHERE status IN ('PENDING','GENERATING','READY')
+- 新增文件：schemas/export.py、services/export_service.py、api/exports.py
 
 **验收标准:**
-- Markdown 报告可生成和下载
+- Markdown 报告可创建、查询和下载
 - 中英文语言正确
+- 确定性输出和禁止字段验证通过
+- 幂等创建和 FAILED 重试正常
+- 72 生成单元 + 25 API/来源/并发/补偿 + 1 迁移测试通过
+- 路由数 30 → 33，表数 17 → 18
 
-#### 任务 6.1.2: PDF/DOCX 报告导出（规划）
+#### 任务 6.1.2: PDF/DOCX 报告导出 ✅ DONE（P6.2）
 
 **任务描述**: 支持 PDF 和 DOCX 格式报告导出。
 
@@ -961,14 +996,17 @@
 - export_reports
 
 **实现要点:**
-- Markdown → PDF 转换
-- Markdown → DOCX 转换
-- 异步生成 + HTTP 轮询
+- P6.1 Markdown bytes → ReportLab invariant + STSong-Light PDF
+- P6.1 Markdown bytes → python-docx + 固定 ZIP/core/rsid 归一化 DOCX
+- 012 扩展三格式来源约束，三格式复用同一原子状态机与来源感知幂等索引
+- PDF/DOCX 创建 PENDING 前完成转换和哈希，后台只保存创建时 bytes
 
 **验收标准:**
-- PDF/DOCX 报告可生成和下载
+- [x] PDF/DOCX 报告可生成、查询、下载并逐字节确定
+- [x] PDF 中文可检索；DOCX 可重开且无宏/OLE/外部关系
+- [x] 转换器 34 + P6.2 API 25 项通过
 
-#### 任务 6.1.3: 报告导出前端页面（规划）
+#### 任务 6.1.3: 报告导出前端页面 ✅ DONE（P6.2）
 
 **任务描述**: 实现报告导出页面（P08），导出配置，进度轮询，下载。
 
@@ -976,24 +1014,25 @@
 - FR-06.1.1: 生成包含审阅结果、指标记录的报告
 
 **设计引用:**
-- [design/07-前端展示.md#38-p08-报告导出-reportexportview--规划](design/07-前端展示.md#38-p08-报告导出-reportexportview--规划)
-- [design/10-前端详细设计.md#48-p08-报告导出-reportexportview--规划](design/10-前端详细设计.md#48-p08-报告导出-reportexportview--规划)
+- [design/07-前端展示.md](design/07-前端展示.md)
+- [design/10-前端详细设计.md](design/10-前端详细设计.md)
 
 **API 引用:**
 - POST /api/v1/papers/{paper_id}/exports
 - GET /api/v1/exports/{export_id}
 - GET /api/v1/exports/{export_id}/download
+- GET /api/v1/papers/{paper_id}/exports?page=1&page_size=20
 
 **实现要点:**
 - 导出配置: 格式、语言、包含选项
-- 生成按钮 + 导出历史
-- 3 秒轮询进度
-- 下载按钮
+- 生成按钮 + 20 条历史分页
+- 3 秒轮询列表状态，路由/翻页/重复请求竞态隔离
+- READY blob 下载、下载锁、固定安全错误和 URL 必然回收
 
 **验收标准:**
-- 导出配置正常
-- 进度轮询正常
-- 下载功能正常
+- [x] 导出配置、分页和轮询正常
+- [x] 下载、FAILED 重试和安全错误正常
+- [x] ReportExportView 19 项、前端全量 173 项通过
 
 ---
 
@@ -1009,6 +1048,138 @@
 | 全量回归和运行验收 | ✅ 后端 435/0 skipped；前端 106；构建成功 |
 | 用户真实 MaaS 小额烟测 | ✅ 第二次且最后一次授权请求成功，35 字符；首轮安全失败后未自动重试 |
 
-**文档版本**: v1.1
+## P7.1 论文阅读学习工作台任务（COMPLETED）
+
+### T-13.1.1：同步产品方向与详细设计
+
+**引用**：FR-13.1、FR-13.2；[design/13-论文阅读学习.md](design/13-论文阅读学习.md)。
+
+- [x] 更新 systemDesign 01～08、SDD、README 和 docs 状态文档。
+- [x] 保留 P2～P6 的历史完成事实，将审阅定位调整为批判性阅读。
+- [x] 创建 Sprint 文档并在真实验收后标记完成。
+
+### T-13.1.2：013 学习解释与引用数据模型
+
+**引用**：FR-13.2.2～FR-13.2.6；systemDesign/03。
+
+- [x] 新增 LearningExplanation 与 LearningCitation ORM、013 初始迁移及 014 无损契约收紧。
+- [x] 建立 scope 互斥、状态终态、来源归属、活动请求唯一和安全 downgrade 约束。
+- [x] 迁移不修改既有 P2～P6 业务行，测试库清理清单同步到 19 张应用表。
+
+### T-13.1.3：学习解释服务与 API
+
+**引用**：FR-13.2；[design/09-API接口详细设计.md](design/09-API接口详细设计.md)。
+
+- [x] 服务端读取 SECTION/PAGE/EVIDENCE 来源并确定性选择候选 Evidence。
+- [x] 构造 prompt 注入隔离的学习指令，复用 LLMClient，严格解析 JSON 并完整绑定引用。
+- [x] 新增创建、详情、论文历史 3 个 API；实现幂等、原子状态机和固定公开错误。
+
+### T-13.1.4：PaperReadingView
+
+**引用**：FR-13.1；[design/10-前端详细设计.md](design/10-前端详细设计.md)。
+
+- [x] 新增受保护路由、三栏阅读布局、章节/页面导航和 Evidence 高亮。
+- [x] 接入解释创建、轮询、重试、历史分页和 Citation 跳转。
+- [x] 全部模型文本按纯文本渲染；处理窄屏、空态、竞态和卸载清理。
+
+### T-13.1.5：测试与验收
+
+**引用**：systemDesign/08；FR-13.1.4、FR-13.2.3～FR-13.2.6。
+
+- [x] 覆盖迁移、服务、API、并发/原子性和 Vue 交互。
+- [x] Mock 与非法模型输出走相同解析路径；禁止真实 MaaS/Embedding/外网。
+- [x] Docker 后端 866、前端 183、构建 135 modules；Alembic 014 check、路由/表/残留与安全扫描通过。
+
+**文档版本**: v1.5
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-14
+**最后更新**: 2026-07-15
+
+## 14. P7.2 当前论文多轮问答
+
+### T-14.1 015 数据契约
+
+- [x] 建立 conversation/turn/citation 三表、全图外键、状态 CHECK、幂等唯一与活动部分唯一索引。
+- [x] 支持空表 014/015 往返，非空降级在 DDL 前拒绝。
+- 引用：FR-14.1～14.2；`design/08-数据模型详细设计.md`；`design/14-论文内问答.md`。
+
+### T-14.2 后端检索与生成
+
+- [x] 独立 qa router/schema/service/retriever，批量向量严格校验和确定性 Top-K。
+- [x] 完整历史预算、prompt 注入隔离、严格 JSON/alias/grounded 校验。
+- [x] 原子认领、context_hash 写入、生成后全图复核及安全补偿。
+- 引用：FR-14.2；5 条 QA API；三张 P7.2 表。
+
+### T-14.3 前端问答区
+
+- [x] PaperReadingView 标签切换、空会话、会话/轮次分页、提问/轮询/失败重试。
+- [x] grounded 状态、Citation 原文定位、纯文本渲染和 paper/conversation/turn/poll 竞态隔离。
+- 引用：FR-14.3；P09-B；`design/10-前端详细设计.md`。
+
+### T-14.4 测试与验收
+
+- [x] 迁移、API、服务、来源变化、无效向量和 Vue 交互定向测试。
+- [x] Docker 后端 909、前端 189、构建 135 modules；015 check、42 路由、22 张应用表、残留 0。
+
+## 15. P7.3 个人学习沉淀与论文库
+
+### T-15.1 016 数据契约
+
+- [x] 建立 paper_library_entries/paper_highlights/paper_bookmarks/paper_notes/paper_knowledge_cards 五表、全图外键、互斥 CHECK、幂等唯一索引。
+- [x] 支持空表 015/016 往返，非空降级在 DDL 前拒绝。
+- 引用：FR-15.1～15.7；`design/08-数据模型详细设计.md`；`design/15-个人学习沉淀与论文库.md`。
+
+### T-15.2 后端论文库与学习记录
+
+- [x] 独立 library/personal_learning router/schema/service，论文库 LEFT JOIN 列表、entry/progress PATCH。
+- [x] 高亮服务端派生 quoted_text/source_hash、书签重复处理、笔记锚点校验、知识卡来源互斥与 mastery 更新。
+- [x] 引用删除 409、跨用户隔离、collection_name 空白转 null、COMPLETED 自动写 completed_at。
+- 引用：FR-15.1～15.7；17 条 P7.3 API；五张 P7.3 表。
+
+### T-15.3 前端论文库与学习记录
+
+- [x] PaperListView 升级为论文库（搜索/状态筛选/收藏/进度条/计数/分页/状态循环）。
+- [x] PaperReadingView 新增"学习记录"标签（高亮/书签/笔记/知识卡四子标签）。
+- [x] Selection/Range offset 计算、reading-progress 串行调用。
+- 引用：FR-15.1～15.7；P03-B/P09-C；`design/10-前端详细设计.md`。
+
+### T-15.4 测试与验收
+
+- [x] 56 API + 4 服务测试，并补充 8 项 P7.3 迁移测试：论文库默认过滤/零写入/分页、全图所有权、高亮派生、书签幂等分页、笔记/卡片互斥、引用 409、严格 schema 与并发边界。
+- [x] Docker 后端 977、前端 16 files/197 passed、构建 136 modules；016 check、59 路由、27 张 ORM 应用表、测试库残留 0。
+
+## T-16 文档署名统一
+
+- [x] 清理 README、docs、ProjectDocs 与提示词归档中的其他助手名称。
+- [x] 重命名修复报告，统一使用码道独立开发、审查、修正和验收口径。
+- [x] 在 AGENTS.md 与设计文档中固化后续署名规则。
+
+## 17. P8.1 完整管理员系统与不可变审计
+
+### T-17.1 017 迁移与 append-only 审计
+
+- [ ] 建立 admin_audit_logs 表、全图 CHECK、索引和 PostgreSQL trigger 拒绝 UPDATE/DELETE。
+- [ ] 支持空表 016/017 往返，非空审计降级在 DDL 前拒绝。
+- 引用：FR-16.4～16.6；`design/16-完整管理员系统与不可变审计.md`。
+
+### T-17.2 管理员授权与 CLI 引导
+
+- [ ] admin-bootstrap CLI：零 ACTIVE ADMIN 时提升目标用户，同事务写审计+撤 session。
+- [ ] 复用 require_admin；FOR UPDATE 锁定 ACTIVE ADMIN 集合；禁止自降级/自禁用；至少保留一个 ACTIVE ADMIN。
+- 引用：FR-16.5～16.6；`design/16-完整管理员系统与不可变审计.md`。
+
+### T-17.3 8 条管理员 API
+
+- [ ] admin router/schema/service：dashboard 聚合、users 列表/详情/PATCH、papers/tasks/exports 只读、audit-logs 列表。
+- [ ] PATCH 用户变更：role/status+reason、同值 no-op、审计写入、session+reset 撤销、并发 409。
+- 引用：FR-16.1～16.4；8 条 /admin API。
+
+### T-17.4 Vue 管理后台
+
+- [ ] AdminDashboardView 四区域（总览/用户/内容/审计）、内容三子标签、确认对话框含 reason 输入。
+- [ ] 路由守卫、401/403 安全处理、分页/筛选/乱序覆盖保护、安全渲染。
+- 引用：FR-16.1～16.6；P10；`design/10-前端详细设计.md`。
+
+### T-17.5 测试与验收
+
+- [ ] 迁移往返+trigger、CLI bootstrap+并发、8 API 全覆盖、并发管理员保护、session 撤销、审计完整性、前端路由/权限/确认/安全扫描。
+- [ ] Docker 后端 >=977、前端 >=16 files/197 passed、构建 >=136 modules；017 check、67 路由、28 张 ORM 应用表。

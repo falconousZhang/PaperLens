@@ -459,4 +459,1029 @@ export async function createMetricExtractionTask(paperId: string): Promise<TaskC
   })
 }
 
+export type ExperimentFileType = 'CSV' | 'XLSX' | 'XLS'
+
+export type ColumnDtype = 'integer' | 'float' | 'boolean' | 'datetime' | 'string' | 'empty'
+
+export type CsvEncoding = 'utf-8' | 'utf-8-sig' | 'gb18030'
+
+export type CsvDelimiter = ',' | ';' | '\t'
+
+export interface ExperimentColumnInfo {
+  name: string
+  dtype: ColumnDtype
+  nullable: boolean
+  null_count: number
+}
+
+export interface ExperimentColumnsInfo {
+  version: 1
+  encoding: CsvEncoding | null
+  delimiter: CsvDelimiter | null
+  sheet_name: string | null
+  columns: ExperimentColumnInfo[]
+}
+
+export interface ExperimentFileMetadata {
+  id: string
+  paper_id: string
+  filename: string
+  file_type: ExperimentFileType
+  file_size: number
+  row_count: number
+  column_count: number
+  columns_info: ExperimentColumnsInfo
+  created_at: string
+}
+
+export interface ExperimentFileUploadResponse extends ExperimentFileMetadata {
+  duplicate: boolean
+}
+
+export interface ExperimentFileListItem {
+  id: string
+  paper_id: string
+  filename: string
+  file_type: ExperimentFileType
+  file_size: number
+  row_count: number
+  column_count: number
+  created_at: string
+}
+
+export interface ExperimentFileListResponse {
+  items: ExperimentFileListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface NumericStats {
+  mean: number
+  stddev: number | null
+  min: number
+  max: number
+  median: number
+}
+
+export interface ColumnStats {
+  name: string
+  dtype: ColumnDtype
+  count: number
+  null_count: number
+  stats: NumericStats | null
+}
+
+export interface SummaryStatsResponse {
+  version: 1
+  row_count: number
+  column_count: number
+  columns: ColumnStats[]
+}
+
+export type ComparisonStatus = 'MATCH' | 'MISMATCH' | 'UNVERIFIABLE'
+
+export type ComparisonReason =
+  | 'AMBIGUOUS_PAPER_METRIC'
+  | 'NO_EXPERIMENT_COLUMN'
+  | 'AMBIGUOUS_EXPERIMENT_COLUMN'
+  | 'UNSUPPORTED_CHECKPOINT'
+  | 'EMPTY_NORMALIZED_NAME'
+
+export type ComparisonStatistic = 'MEAN' | 'MAX'
+
+export interface ComparisonItem {
+  metric_record_id: string
+  metric_task_id: string
+  metric_name: string
+  checkpoint_type: CheckpointType
+  column_name: string | null
+  statistic: ComparisonStatistic | null
+  paper_value: number
+  experiment_value: number | null
+  diff: number | null
+  absolute_diff: number | null
+  relative_diff: number | null
+  allowed_diff: number | null
+  status: ComparisonStatus
+  reason: ComparisonReason | null
+}
+
+export interface ExperimentAnalysisTaskResponse {
+  id: string
+  paper_id: string
+  task_type: 'EXPERIMENT_ANALYSIS'
+  status: TaskStatus
+  progress: number
+  experiment_file_id: string
+  created_at: string
+  duplicate: boolean
+}
+
+export interface ExperimentResultResponse {
+  id: string
+  file_id: string
+  task_id: string
+  summary_stats: SummaryStatsResponse
+  metric_comparisons: ComparisonItem[] | null
+  created_at: string
+}
+
+export interface PostComparisonsRequest {
+  metric_task_id: string
+}
+
+export interface PostComparisonsResponse {
+  file_id: string
+  experiment_result_id: string
+  metric_task_id: string
+  comparisons: ComparisonItem[]
+  duplicate: boolean
+}
+
+export async function uploadExperimentFile(
+  paperId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<ExperimentFileUploadResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data, status } = await api.post<ExperimentFileUploadResponse>(
+    `/papers/${paperId}/experiment-files/upload`,
+    form,
+    {
+      onUploadProgress(e) {
+        if (e.total && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+      },
+      validateStatus: (s) => s === 201 || s === 200,
+    },
+  )
+  if (status === 200) {
+    return { ...data, duplicate: true }
+  }
+  return data
+}
+
+export async function listExperimentFiles(
+  paperId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<ExperimentFileListResponse> {
+  const normalizedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
+  const normalizedPageSize = Number.isFinite(pageSize)
+    ? Math.min(100, Math.max(1, Math.trunc(pageSize)))
+    : 20
+  const { data } = await api.get<ExperimentFileListResponse>(
+    `/papers/${paperId}/experiment-files`,
+    { params: { page: normalizedPage, page_size: normalizedPageSize } },
+  )
+  return data
+}
+
+export async function getExperimentFile(fileId: string): Promise<ExperimentFileMetadata> {
+  const { data } = await api.get<ExperimentFileMetadata>(`/experiment-files/${fileId}`)
+  return data
+}
+
+export async function createExperimentAnalysis(
+  fileId: string,
+): Promise<ExperimentAnalysisTaskResponse> {
+  const { data, status } = await api.post<ExperimentAnalysisTaskResponse>(
+    `/experiment-files/${fileId}/analysis`,
+    null,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  if (status === 200) {
+    return { ...data, duplicate: true }
+  }
+  return data
+}
+
+export async function getExperimentResult(fileId: string): Promise<ExperimentResultResponse> {
+  const { data } = await api.get<ExperimentResultResponse>(
+    `/experiment-files/${fileId}/result`,
+  )
+  return data
+}
+
+export async function createComparisons(
+  fileId: string,
+  body: PostComparisonsRequest,
+): Promise<PostComparisonsResponse> {
+  const { data, status } = await api.post<PostComparisonsResponse>(
+    `/experiment-files/${fileId}/comparisons`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  if (status === 200) {
+    return { ...data, duplicate: true }
+  }
+  return data
+}
+
+export type ExportReportType = 'MARKDOWN' | 'PDF' | 'DOCX'
+
+export type ExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED'
+
+export interface CreateExportRequest {
+  report_type: ExportReportType
+  language: 'zh' | 'en'
+  include_metrics: boolean
+  include_experiment_analysis: boolean
+}
+
+export interface ExportReportResponse {
+  id: string
+  paper_id: string
+  report_type: ExportReportType
+  language: 'zh' | 'en'
+  include_metrics: boolean
+  include_experiment_analysis: boolean
+  status: ExportStatus
+  file_size: number | null
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+  duplicate: boolean
+}
+
+export interface ExportListItem {
+  id: string
+  paper_id: string
+  report_type: ExportReportType
+  language: 'zh' | 'en'
+  include_metrics: boolean
+  include_experiment_analysis: boolean
+  status: ExportStatus
+  file_size: number | null
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface ExportListResponse {
+  items: ExportListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export async function createExport(
+  paperId: string,
+  body: CreateExportRequest,
+): Promise<ExportReportResponse> {
+  const { data, status } = await api.post<ExportReportResponse>(
+    `/papers/${paperId}/exports`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  return { ...data, duplicate: status === 200 }
+}
+
+export async function listExports(
+  paperId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<ExportListResponse> {
+  const { data } = await api.get<ExportListResponse>(
+    `/papers/${paperId}/exports`,
+    { params: { page, page_size: pageSize } },
+  )
+  return data
+}
+
+export async function downloadExportBlob(exportId: string): Promise<Blob> {
+  const { data } = await api.get(`/exports/${exportId}/download`, {
+    responseType: 'blob',
+  })
+  return data
+}
+
 export default api
+
+export type LearningMode = 'SUMMARY' | 'EXPLAIN' | 'TRANSLATE'
+
+export type LearningScopeType = 'SECTION' | 'PAGE' | 'EVIDENCE'
+
+export type LearningStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+
+export interface CreateLearningExplanationRequest {
+  mode: LearningMode
+  scope_type: LearningScopeType
+  output_language: 'zh' | 'en'
+  section_id?: string | null
+  page_number?: number | null
+  evidence_id?: string | null
+}
+
+export interface LearningCitationItem {
+  evidence_id: string
+  sequence: number
+  page_number: number
+  evidence_type: string
+  quoted_text: string
+  char_start: number | null
+  char_end: number | null
+}
+
+export interface LearningTermItem {
+  term: string
+  explanation: string
+}
+
+export interface LearningExplanationResponse {
+  id: string
+  paper_id: string
+  mode: LearningMode
+  scope_type: LearningScopeType
+  output_language: 'zh' | 'en'
+  section_id: string | null
+  page_number: number | null
+  evidence_id: string | null
+  status: LearningStatus
+  duplicate: boolean
+  answer: string | null
+  key_points: string[] | null
+  terms: LearningTermItem[] | null
+  error_message: string | null
+  citations: LearningCitationItem[] | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface LearningExplanationListItem {
+  id: string
+  paper_id: string
+  mode: LearningMode
+  scope_type: LearningScopeType
+  output_language: 'zh' | 'en'
+  section_id: string | null
+  page_number: number | null
+  evidence_id: string | null
+  status: LearningStatus
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface LearningExplanationListResponse {
+  items: LearningExplanationListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export async function createLearningExplanation(
+  paperId: string,
+  body: CreateLearningExplanationRequest,
+): Promise<LearningExplanationResponse> {
+  const { data } = await api.post<LearningExplanationResponse>(
+    `/papers/${paperId}/learning-explanations`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  return data
+}
+
+export async function getLearningExplanation(
+  explanationId: string,
+): Promise<LearningExplanationResponse> {
+  const { data } = await api.get<LearningExplanationResponse>(
+    `/learning-explanations/${explanationId}`,
+  )
+  return data
+}
+
+export async function listLearningExplanations(
+  paperId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<LearningExplanationListResponse> {
+  const { data } = await api.get<LearningExplanationListResponse>(
+    `/papers/${paperId}/learning-explanations`,
+    { params: { page, page_size: pageSize } },
+  )
+  return data
+}
+
+export type QATurnStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+
+export interface QACitationItem {
+  evidence_id: string
+  sequence: number
+  page_number: number
+  evidence_type: string
+  quoted_text: string
+  char_start: number | null
+  char_end: number | null
+}
+
+export interface QATurnResponse {
+  id: string
+  conversation_id: string
+  sequence: number
+  question: string
+  output_language: 'zh' | 'en'
+  status: QATurnStatus
+  duplicate: boolean
+  answer: string | null
+  grounded: boolean | null
+  error_message: string | null
+  citations: QACitationItem[] | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface QAConversationResponse {
+  id: string
+  paper_id: string
+  created_at: string
+  updated_at: string
+  turns: QATurnResponse[] | null
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface QAConversationListItem {
+  id: string
+  paper_id: string
+  created_at: string
+  updated_at: string
+  turn_count: number
+  last_question_preview: string | null
+  last_status: QATurnStatus | null
+}
+
+export interface QAConversationListResponse {
+  items: QAConversationListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type CreateQAConversationRequest = Record<string, never>
+
+export interface CreateQATurnRequest {
+  question: string
+  output_language: 'zh' | 'en'
+  client_request_id: string
+}
+
+export async function createQAConversation(
+  paperId: string,
+  body: CreateQAConversationRequest,
+): Promise<QAConversationResponse> {
+  const { data } = await api.post<QAConversationResponse>(
+    `/papers/${paperId}/qa-conversations`,
+    body,
+  )
+  return data
+}
+
+export async function listQAConversations(
+  paperId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<QAConversationListResponse> {
+  const { data } = await api.get<QAConversationListResponse>(
+    `/papers/${paperId}/qa-conversations`,
+    { params: { page, page_size: pageSize } },
+  )
+  return data
+}
+
+export async function getQAConversation(
+  conversationId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<QAConversationResponse> {
+  const { data } = await api.get<QAConversationResponse>(
+    `/qa-conversations/${conversationId}`,
+    { params: { page, page_size: pageSize } },
+  )
+  return data
+}
+
+export async function createQATurn(
+  conversationId: string,
+  body: CreateQATurnRequest,
+): Promise<QATurnResponse> {
+  const { data, status } = await api.post<QATurnResponse>(
+    `/qa-conversations/${conversationId}/turns`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  return { ...data, duplicate: status === 200 }
+}
+
+export async function getQATurn(
+  turnId: string,
+): Promise<QATurnResponse> {
+  const { data } = await api.get<QATurnResponse>(
+    `/qa-turns/${turnId}`,
+  )
+  return data
+}
+
+export type ReadingStatus = 'TO_READ' | 'READING' | 'COMPLETED' | 'ARCHIVED'
+
+export type HighlightColor = 'YELLOW' | 'GREEN' | 'BLUE' | 'PINK'
+
+export type AnchorType = 'PAPER' | 'PAGE' | 'HIGHLIGHT'
+
+export type MasteryStatus = 'NEW' | 'LEARNING' | 'MASTERED'
+
+export interface LibraryPaperItem {
+  paper_id: string
+  title: string
+  filename: string
+  page_count: number | null
+  status: string
+  created_at: string
+  reading_status: ReadingStatus
+  favorite: boolean
+  collection_name: string | null
+  last_page: number | null
+  furthest_page: number | null
+  progress_percent: number
+  last_read_at: string | null
+  completed_at: string | null
+  updated_at: string
+  highlight_count: number
+  bookmark_count: number
+  note_count: number
+  card_count: number
+}
+
+export interface LibraryPaperListResponse {
+  items: LibraryPaperItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface LibraryEntryResponse {
+  paper_id: string
+  reading_status: ReadingStatus
+  favorite: boolean
+  collection_name: string | null
+  last_page: number | null
+  furthest_page: number | null
+  last_read_at: string | null
+  completed_at: string | null
+  updated_at: string
+}
+
+export interface ReadingProgressResponse {
+  paper_id: string
+  reading_status: ReadingStatus
+  last_page: number | null
+  furthest_page: number | null
+  progress_percent: number
+  last_read_at: string | null
+  updated_at: string
+}
+
+export interface HighlightResponse {
+  id: string
+  paper_id: string
+  page_number: number
+  char_start: number
+  char_end: number
+  quoted_text: string
+  color: HighlightColor
+  created_at: string
+  updated_at: string
+  duplicate?: boolean
+}
+
+export interface HighlightListResponse {
+  items: HighlightResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface BookmarkResponse {
+  id: string
+  paper_id: string
+  page_number: number
+  label: string | null
+  created_at: string
+  duplicate: boolean
+}
+
+export interface BookmarkListResponse {
+  items: BookmarkResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface NoteResponse {
+  id: string
+  paper_id: string
+  anchor_type: AnchorType
+  page_number: number | null
+  highlight_id: string | null
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface NoteListResponse {
+  items: NoteResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface KnowledgeCardResponse {
+  id: string
+  paper_id: string
+  source_note_id: string | null
+  source_highlight_id: string | null
+  front: string
+  back: string
+  mastery_status: MasteryStatus
+  last_reviewed_at: string | null
+  archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeCardListResponse {
+  items: KnowledgeCardResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface LibraryListParams {
+  page?: number
+  page_size?: number
+  reading_status?: ReadingStatus | null
+  favorite?: boolean | null
+  collection_name?: string | null
+  keyword?: string | null
+}
+
+export async function listLibraryPapers(params: LibraryListParams = {}): Promise<LibraryPaperListResponse> {
+  const filtered: Record<string, string | number | boolean> = {}
+  if (params.page) filtered.page = params.page
+  if (params.page_size) filtered.page_size = params.page_size
+  if (params.reading_status) filtered.reading_status = params.reading_status
+  if (params.favorite != null) filtered.favorite = params.favorite
+  if (params.collection_name) filtered.collection_name = params.collection_name
+  if (params.keyword) filtered.keyword = params.keyword
+  const { data } = await api.get<LibraryPaperListResponse>('/library/papers', { params: filtered })
+  return data
+}
+
+export async function patchLibraryEntry(
+  paperId: string,
+  body: { reading_status?: ReadingStatus; favorite?: boolean; collection_name?: string | null },
+): Promise<LibraryEntryResponse> {
+  const { data } = await api.patch<LibraryEntryResponse>(
+    `/papers/${paperId}/library-entry`,
+    body,
+  )
+  return data
+}
+
+export async function patchReadingProgress(
+  paperId: string,
+  pageNumber: number,
+): Promise<ReadingProgressResponse> {
+  const { data } = await api.patch<ReadingProgressResponse>(
+    `/papers/${paperId}/reading-progress`,
+    { page_number: pageNumber },
+  )
+  return data
+}
+
+export async function createHighlight(
+  paperId: string,
+  body: { page_number: number; char_start: number; char_end: number; color?: HighlightColor },
+): Promise<HighlightResponse> {
+  const { data, status } = await api.post<HighlightResponse>(
+    `/papers/${paperId}/highlights`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  return { ...data, duplicate: status === 200 }
+}
+
+export async function listHighlights(
+  paperId: string,
+  params: { page_number?: number; page?: number; page_size?: number } = {},
+): Promise<HighlightListResponse> {
+  const { data } = await api.get<HighlightListResponse>(
+    `/papers/${paperId}/highlights`,
+    { params },
+  )
+  return data
+}
+
+export async function deleteHighlight(highlightId: string): Promise<void> {
+  await api.delete(`/highlights/${highlightId}`)
+}
+
+export async function createBookmark(
+  paperId: string,
+  body: { page_number: number; label?: string | null },
+): Promise<BookmarkResponse> {
+  const { data, status } = await api.post<BookmarkResponse>(
+    `/papers/${paperId}/bookmarks`,
+    body,
+    { validateStatus: (s) => s === 201 || s === 200 },
+  )
+  return { ...data, duplicate: status === 200 }
+}
+
+export async function listBookmarks(
+  paperId: string,
+  params: { page?: number; page_size?: number } = {},
+): Promise<BookmarkListResponse> {
+  const { data } = await api.get<BookmarkListResponse>(
+    `/papers/${paperId}/bookmarks`,
+    { params },
+  )
+  return data
+}
+
+export async function deleteBookmark(bookmarkId: string): Promise<void> {
+  await api.delete(`/bookmarks/${bookmarkId}`)
+}
+
+export async function createNote(
+  paperId: string,
+  body: { anchor_type: AnchorType; page_number?: number | null; highlight_id?: string | null; content: string },
+): Promise<NoteResponse> {
+  const { data } = await api.post<NoteResponse>(
+    `/papers/${paperId}/notes`,
+    body,
+  )
+  return data
+}
+
+export async function listNotes(
+  paperId: string,
+  params: { anchor_type?: AnchorType; page_number?: number; highlight_id?: string; page?: number; page_size?: number } = {},
+): Promise<NoteListResponse> {
+  const { data } = await api.get<NoteListResponse>(
+    `/papers/${paperId}/notes`,
+    { params },
+  )
+  return data
+}
+
+export async function patchNote(noteId: string, content: string): Promise<NoteResponse> {
+  const { data } = await api.patch<NoteResponse>(
+    `/notes/${noteId}`,
+    { content },
+  )
+  return data
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  await api.delete(`/notes/${noteId}`)
+}
+
+export async function createKnowledgeCard(
+  paperId: string,
+  body: { source_note_id?: string | null; source_highlight_id?: string | null; front: string; back: string },
+): Promise<KnowledgeCardResponse> {
+  const { data } = await api.post<KnowledgeCardResponse>(
+    `/papers/${paperId}/knowledge-cards`,
+    body,
+  )
+  return data
+}
+
+export async function listKnowledgeCards(
+  paperId: string,
+  params: { mastery_status?: MasteryStatus; archived?: boolean; page?: number; page_size?: number } = {},
+): Promise<KnowledgeCardListResponse> {
+  const { data } = await api.get<KnowledgeCardListResponse>(
+    `/papers/${paperId}/knowledge-cards`,
+    { params },
+  )
+  return data
+}
+
+export async function patchKnowledgeCard(
+  cardId: string,
+  body: { front?: string; back?: string; mastery_status?: MasteryStatus; archived?: boolean },
+): Promise<KnowledgeCardResponse> {
+  const { data } = await api.patch<KnowledgeCardResponse>(
+    `/knowledge-cards/${cardId}`,
+    body,
+  )
+  return data
+}
+
+export async function deleteKnowledgeCard(cardId: string): Promise<void> {
+  await api.delete(`/knowledge-cards/${cardId}`)
+}
+
+export interface AdminDashboardResponse {
+  users_by_role: Record<string, number>
+  users_by_status: Record<string, number>
+  papers_by_status: Record<string, number>
+  tasks_by_type: Record<string, number>
+  tasks_by_status: Record<string, number>
+  exports_by_type: Record<string, number>
+  exports_by_status: Record<string, number>
+}
+
+export interface AdminUserItem {
+  id: string
+  email: string
+  display_name: string
+  role: string
+  status: string
+  failed_login_count: number
+  locked_until: string | null
+  created_at: string
+  updated_at: string
+  active_session_count: number
+  paper_count: number
+  task_count: number
+  export_count: number
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminUserPatchRequest {
+  role?: 'USER' | 'ADMIN'
+  status?: 'ACTIVE' | 'DISABLED'
+  reason: string
+}
+
+export interface AdminUserPatchResponse {
+  changed: boolean
+  audit_ids: string[]
+  user: AdminUserItem
+}
+
+export interface AdminPaperItem {
+  id: string
+  user_id: string
+  owner_email: string
+  title: string
+  filename: string
+  file_size: number
+  page_count: number | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminPaperListResponse {
+  items: AdminPaperItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminTaskItem {
+  id: string
+  paper_id: string
+  user_id: string
+  task_type: string
+  status: string
+  created_at: string
+  updated_at: string | null
+}
+
+export interface AdminTaskListResponse {
+  items: AdminTaskItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminExportItem {
+  id: string
+  paper_id: string
+  user_id: string
+  report_type: string
+  status: string
+  created_at: string
+  completed_at: string | null
+}
+
+export interface AdminExportListResponse {
+  items: AdminExportItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AuditLogActorInfo {
+  id: string
+  email: string
+}
+
+export interface AuditLogItem {
+  id: string
+  actor: AuditLogActorInfo
+  action: string
+  resource_type: string
+  resource_id: string
+  reason: string
+  before_state: Record<string, string>
+  after_state: Record<string, string>
+  created_at: string
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export async function getAdminDashboard(): Promise<AdminDashboardResponse> {
+  const { data } = await api.get<AdminDashboardResponse>('/admin/dashboard')
+  return data
+}
+
+export async function listAdminUsers(params: {
+  page?: number
+  page_size?: number
+  role?: string
+  status?: string
+  q?: string
+} = {}): Promise<AdminUserListResponse> {
+  const { data } = await api.get<AdminUserListResponse>('/admin/users', { params })
+  return data
+}
+
+export async function getAdminUser(userId: string): Promise<AdminUserItem> {
+  const { data } = await api.get<AdminUserItem>(`/admin/users/${userId}`)
+  return data
+}
+
+export async function patchAdminUser(
+  userId: string,
+  body: AdminUserPatchRequest,
+): Promise<AdminUserPatchResponse> {
+  const { data } = await api.patch<AdminUserPatchResponse>(`/admin/users/${userId}`, body)
+  return data
+}
+
+export async function listAdminPapers(params: {
+  page?: number
+  page_size?: number
+  status?: string
+  user_id?: string
+  q?: string
+} = {}): Promise<AdminPaperListResponse> {
+  const { data } = await api.get<AdminPaperListResponse>('/admin/papers', { params })
+  return data
+}
+
+export async function listAdminTasks(params: {
+  page?: number
+  page_size?: number
+  task_type?: string
+  status?: string
+  user_id?: string
+  paper_id?: string
+} = {}): Promise<AdminTaskListResponse> {
+  const { data } = await api.get<AdminTaskListResponse>('/admin/tasks', { params })
+  return data
+}
+
+export async function listAdminExports(params: {
+  page?: number
+  page_size?: number
+  report_type?: string
+  status?: string
+  user_id?: string
+  paper_id?: string
+} = {}): Promise<AdminExportListResponse> {
+  const { data } = await api.get<AdminExportListResponse>('/admin/exports', { params })
+  return data
+}
+
+export async function listAuditLogs(params: {
+  page?: number
+  page_size?: number
+  actor_user_id?: string
+  action?: string
+  resource_id?: string
+  created_from?: string
+  created_to?: string
+} = {}): Promise<AuditLogListResponse> {
+  const { data } = await api.get<AuditLogListResponse>('/admin/audit-logs', { params })
+  return data
+}

@@ -20,7 +20,14 @@ class Settings(BaseSettings):
 
     max_pdf_size_mb: int = 50
     max_experiment_file_size_mb: int = 20
+    max_experiment_analysis_numeric_cells: int = Field(default=5_000_000, ge=1, le=10_000_000)
+    experiment_comparison_absolute_tolerance: float = Field(default=1e-6, ge=0.0, le=1e12)
+    experiment_comparison_relative_tolerance: float = Field(default=0.01, ge=0.0, le=1.0)
     max_page_count: int = 500
+    max_report_size_bytes: int = Field(default=5_000_000, ge=100_000, le=50_000_000)
+    learning_max_source_chars: int = Field(default=40_000, ge=1_000, le=500_000)
+    learning_max_evidences: int = Field(default=12, ge=1, le=50)
+    learning_max_evidence_chars: int = Field(default=2_000, ge=100, le=20_000)
 
     storage_backend: str = "local"
     storage_root: str = "./data"
@@ -42,6 +49,14 @@ class Settings(BaseSettings):
     chunk_overlap_chars: int = 200
 
     review_evidence_top_k: int = Field(default=8, ge=1, le=50)
+
+    qa_evidence_top_k: int = Field(default=8, ge=1, le=50)
+    qa_question_max_chars: int = Field(default=2_000, ge=1, le=2_000)
+    qa_context_turns: int = Field(default=6, ge=1, le=20)
+    qa_context_max_chars: int = Field(default=12_000, ge=1_000, le=100_000)
+    qa_evidence_max_chars: int = Field(default=2_000, ge=100, le=20_000)
+
+    highlight_max_chars: int = Field(default=5_000, ge=100, le=50_000)
 
     embedding_provider: str = Field(default="mock", pattern=r"^(mock|huawei_maas)$")
     embedding_base_url: str = "https://api.modelarts-maas.com/v1"

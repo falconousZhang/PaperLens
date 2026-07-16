@@ -7,6 +7,7 @@ import math
 import re
 import unicodedata
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree
@@ -537,4 +538,127 @@ def parse_experiment_file(
         return parse_xlsx(source_path)
     if file_type == ExperimentFileType.XLS:
         return parse_xls(source_path)
+    raise ParseError("unsupported file type", "type")
+
+
+def _expected_column_names(columns_info: dict) -> list[str]:
+    if not isinstance(columns_info, dict):
+        raise ParseError("columns_info is invalid")
+    columns = columns_info.get("columns")
+    if not isinstance(columns, list) or not columns:
+        raise ParseError("columns_info is invalid")
+    names = []
+    for column in columns:
+        if not isinstance(column, dict) or not isinstance(column.get("name"), str):
+            raise ParseError("columns_info is invalid")
+        names.append(column["name"])
+    return names
+
+
+def _iter_csv_rows(source_path: str | Path, columns_info: dict) -> Iterator[tuple]:
+    path = validate_container(source_path, ExperimentFileType.CSV)
+    expected_names = _expected_column_names(columns_info)
+    encoding = columns_info.get("encoding")
+    delimiter = columns_info.get("delimiter")
+    if encoding not in {"utf-8", "utf-8-sig", "gb18030"}:
+        raise ParseError("CSV encoding metadata is invalid")
+    if delimiter not in _CSV_DELIMITERS:
+        raise ParseError("CSV delimiter metadata is invalid")
+    try:
+        with path.open("r", encoding=encoding, newline="") as stream:
+            reader = csv.reader(stream, delimiter=delimiter, strict=True)
+            header = next(reader, None)
+            if header is None or _validate_column_names(header) != expected_names:
+                raise ParseError("CSV header does not match metadata")
+            for row in reader:
+                if len(row) != len(expected_names):
+                    raise ParseError("CSV row width is inconsistent")
+                yield tuple(_infer_csv_value(value) for value in row)
+    except (OSError, UnicodeError, csv.Error) as exc:
+        raise ParseError("CSV cannot be streamed") from exc
+
+
+def _iter_xlsx_rows(source_path: str | Path, columns_info: dict) -> Iterator[tuple]:
+    path = validate_container(source_path, ExperimentFileType.XLSX)
+    expected_names = _expected_column_names(columns_info)
+    sheet_name = columns_info.get("sheet_name")
+    if not isinstance(sheet_name, str) or not sheet_name:
+        raise ParseError("XLSX sheet metadata is invalid")
+    try:
+        with zipfile.ZipFile(path) as archive:
+            _check_xlsx_zip_safety(archive)
+    except zipfile.BadZipFile as exc:
+        raise ParseError("XLSX is not a valid ZIP container", "type") from exc
+    try:
+        import openpyxl
+
+        workbook = openpyxl.load_workbook(
+            filename=str(path),
+            read_only=True,
+            data_only=False,
+            keep_links=False,
+        )
+    except Exception as exc:
+        raise ParseError("XLSX workbook cannot be parsed") from exc
+    try:
+        if sheet_name not in workbook.sheetnames:
+            raise ParseError("XLSX sheet does not match metadata")
+        rows = workbook[sheet_name].iter_rows(values_only=True)
+        header = list(next(rows, ()))
+        while header and header[-1] is None:
+            header.pop()
+        if _validate_column_names(header) != expected_names:
+            raise ParseError("XLSX header does not match metadata")
+        for row in rows:
+            if any(value is not None for value in row[len(expected_names):]):
+                raise ParseError("XLSX row width exceeds header width")
+            values = list(row[: len(expected_names)])
+            values.extend([None] * (len(expected_names) - len(values)))
+            yield tuple(values)
+    finally:
+        workbook.close()
+
+
+def _iter_xls_rows(source_path: str | Path, columns_info: dict) -> Iterator[tuple]:
+    path = validate_container(source_path, ExperimentFileType.XLS)
+    expected_names = _expected_column_names(columns_info)
+    sheet_name = columns_info.get("sheet_name")
+    if not isinstance(sheet_name, str) or not sheet_name:
+        raise ParseError("XLS sheet metadata is invalid")
+    try:
+        import xlrd
+
+        workbook = xlrd.open_workbook(filename=str(path), on_demand=True, ragged_rows=True)
+    except Exception as exc:
+        raise ParseError("XLS workbook cannot be parsed", "type") from exc
+    try:
+        if sheet_name not in workbook.sheet_names():
+            raise ParseError("XLS sheet does not match metadata")
+        sheet = workbook.sheet_by_name(sheet_name)
+        header = [sheet.cell_value(0, index) for index in range(sheet.ncols)]
+        if _validate_column_names(header) != expected_names:
+            raise ParseError("XLS header does not match metadata")
+        for row_index in range(1, sheet.nrows):
+            yield tuple(
+                _xls_cell_value(workbook, sheet.cell(row_index, column_index))
+                for column_index in range(len(expected_names))
+            )
+    finally:
+        workbook.release_resources()
+
+
+def iter_experiment_rows(
+    source_path: str | Path,
+    file_type: ExperimentFileType,
+    columns_info: dict,
+) -> Iterator[tuple]:
+    if file_type == ExperimentFileType.CSV:
+        yield from _iter_csv_rows(source_path, columns_info)
+        return
+    if file_type == ExperimentFileType.XLSX:
+        yield from _iter_xlsx_rows(source_path, columns_info)
+        return
+    if file_type == ExperimentFileType.XLS:
+        yield from _iter_xls_rows(source_path, columns_info)
+        return
     raise ParseError("unsupported file type", "type")

@@ -8,6 +8,11 @@ _BUSINESS_TABLES = [
     "finding_evidences", "review_findings", "review_results",
     "analysis_tasks", "metric_records", "experiment_files",
     "experiment_results", "export_reports",
+    "learning_citations", "learning_explanations",
+    "paper_qa_citations", "paper_qa_turns", "paper_qa_conversations",
+    "paper_knowledge_cards", "paper_notes", "paper_bookmarks",
+    "paper_highlights", "paper_library_entries",
+    "admin_audit_logs",
     "evidences", "paper_chunks", "paper_tables",
     "paper_sections", "paper_pages", "papers",
     "password_reset_tokens", "auth_sessions", "users",
@@ -122,7 +127,7 @@ def run_alembic_migrations(test_url: str):
         raise RuntimeError(f"Alembic migration failed: {result.stderr}")
 
 
-def verify_alembic_revision(test_url: str, expected: str = "008_experiment_file_integrity"):
+def verify_alembic_revision(test_url: str, expected: str = "017_admin_audit_logs"):
     import subprocess
     env = os.environ.copy()
     env["PAPERLENS_DATABASE_URL"] = test_url

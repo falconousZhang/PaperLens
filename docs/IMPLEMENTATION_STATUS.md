@@ -9,8 +9,8 @@
 | P2 | 核心解析流程 | PDF 上传、解析、分块、向量索引 | ✅ 已完成 |
 | P3 | 审阅生成与身份基础 | 证据检索、LLM 审阅、Evidence 绑定、真实用户认证与 RBAC | ✅ 已完成 |
 | P4 | 指标提取与 MaaS 运行准备 | 表格提取、指标识别、口径判断、LLM 安全运行配置 | ✅ 已完成（真实 MaaS 最小烟测成功） |
-| P5 | 实验数据分析 | CSV/Excel 上传、统计计算、交叉验证 | 🔄 进行中（P5.1 上传/结构解析已完成） |
-| P6 | 报告导出 | Markdown/PDF/DOCX 导出 | ⬜ 未开始 |
+| P5 | 实验数据分析 | CSV/Excel 上传、统计计算、交叉验证 | ✅ 已完成（P5.1～P5.3b） |
+| P6 | 报告导出 | Markdown/PDF/DOCX 导出 | ✅ P6.1～P6.2 已完成 |
 | P7 | 用户端与管理端应用 | Vue3 用户页面、认证页面、管理员 API 与管理后台 | 🔄 进行中 |
 | P8 | 集成测试与部署 | 端到端测试、云端部署、性能调优 | ⬜ 未开始 |
 
@@ -117,7 +117,7 @@
 | P2.5-09 | 前端测试与构建 | ✅ 15 passed，生产构建成功 |
 | P2.5-10 | 开发库隔离与测试库清理 | ✅ 最终全量测试开发库 28→28，测试库 14 张业务表均为 0 |
 | P2.5-11 | Alembic 与双页 HTTP E2E | ✅ head/无差异；2 页、2 Evidence、char range 全匹配 |
-| P2.5-12 | 码道提示词统一归档 | ✅ 从 Codex rollout 恢复 8 个原文版本到 `docs/CODEARTS_PROMPT_ARCHIVE.md` |
+| P2.5-12 | 码道提示词统一归档 | ✅ 从 码道 rollout 恢复 8 个原文版本到 `docs/CODEARTS_PROMPT_ARCHIVE.md` |
 
 ## P2.6 阶段清单（ProjectDocs 实现态校准）
 
@@ -164,7 +164,7 @@
 | P3.1-11 | alembic check 无差异 | ✅ 已完成 |
 | P3.1-12 | Markdown 链接检查 75/0/0 | ✅ 已完成 |
 | P3.1-13 | 开发库隔离验证 | ✅ 已完成 |
-| P3.1-14 | Codex 独立审查与直接修复（事务原子性、UUID4、依赖注入、越权查询、严格 schema、Prompt 边界、统一 422） | ✅ 已完成 |
+| P3.1-14 | 码道独立审查与直接修复（事务原子性、UUID4、依赖注入、越权查询、严格 schema、Prompt 边界、统一 422） | ✅ 已完成 |
 
 ### P3.2 — 华为云优先的 Embedding 抽象与语义 Evidence 检索
 
@@ -182,9 +182,9 @@
 | P3.2-10 | Docker 后端全量回归 | ✅ 205 passed, 0 skipped |
 | P3.2-11 | 前端测试 15 passed，构建成功 | ✅ 已完成 |
 | P3.2-12 | alembic check 无差异 | ✅ 已完成 |
-| P3.2-13 | P3.2 执行后提示词正文与归档第 12 节 SHA-256 一致；验收后由 Codex 正常生成 P3.3 并归档第 13 节 | ✅ 已完成 |
+| P3.2-13 | P3.2 执行后提示词正文与归档第 12 节 SHA-256 一致；验收后由码道正常生成 P3.3 并归档第 13 节 | ✅ 已完成 |
 | P3.2-14 | 端点/表计数不变（12 条 `/api/v1` 路由、14 张业务表、4 条 task/review 路由） | ✅ 已完成 |
-| P3.2-15 | Codex 独立审查与直接修复（密钥解包、事务边界、华为响应校验、中文检索、原子失败与文档去伪） | ✅ 已完成 |
+| P3.2-15 | 码道独立审查与直接修复（密钥解包、事务边界、华为响应校验、中文检索、原子失败与文档去伪） | ✅ 已完成 |
 | P3.2-16 | 测试库清理与开发库隔离 | ✅ 测试库 14 表为 0；用户确认开发库 3 条 back1/back2 FAILED 记录是本人上传尝试 |
 
 ### P3.3 — 华为云 MaaS 真实生成式模型适配器
@@ -203,7 +203,7 @@
 | P3.3-10 | alembic check 无差异 | ✅ 已完成 |
 | P3.3-11 | 执行提示词正文与归档第 13 节 SHA-256 一致；验收后正常生成 P3.4 | ✅ `415edde1...f02c` |
 | P3.3-12 | 端点/表计数不变（12 条 `/api/v1` 路由、14 张业务表） | ✅ 已完成 |
-| P3.3-13 | Codex 修复歧义 choice、参数类型/上下界、非列表 messages、错误回显并校准文档 | ✅ 已完成 |
+| P3.3-13 | 码道修复歧义 choice、参数类型/上下界、非列表 messages、错误回显并校准文档 | ✅ 已完成 |
 | P3.3-14 | 生成 P3.4 提示词并归档第 14 节，230 行正文一致 | ✅ `502e2d03...ba5d0` |
 
 ### P3.4 — 审阅结果前端与完整任务交互
@@ -214,13 +214,13 @@
 | P3.4-02 | router/index.ts 新增 /papers/:id/review 路由（name=paper-review） | ✅ 已完成 |
 | P3.4-03 | ReviewResultView.vue：完整状态、最新有结果 task_id 选择、历史结果保留、Finding 筛选、Evidence 深链、创建防重复、进度钳制、3 秒轮询、失败重试、timer/旧请求清理 | ✅ 已完成 |
 | P3.4-04 | PaperDetailView.vue：PARSED 状态"审阅"入口、route.query.evidence 深链处理（初始加载+watch 变化）、未找到证据提示 | ✅ 已完成 |
-| P3.4-05 | ReviewResultView.test.ts：码道 20 项 + Codex 6 项回归（历史结果保留、轮询终态/错误、进度边界、刷新异常、路由陈旧响应） | ✅ 26 passed |
+| P3.4-05 | ReviewResultView.test.ts：初版 20 项 + 后续 6 项回归（历史结果保留、轮询终态/错误、进度边界、刷新异常、路由陈旧响应） | ✅ 26 passed |
 | P3.4-06 | PaperDetailView.test.ts：新增 4 项 Evidence query 测试（初始加载高亮、未知/数组提示、query 变化跳转） | ✅ 19 passed（原 15 + 新 4） |
 | P3.4-07 | Docker 后端全量回归 | ✅ 277 passed, 0 skipped |
 | P3.4-08 | 前端测试 45 passed，生产构建成功（102 modules transformed） | ✅ 已完成 |
 | P3.4-09 | alembic check 无差异 | ✅ head=003 |
 | P3.4-10 | 提示词文件 SHA-256 不变 | ✅ NEXT=e820c302... ARCHIVE=8844b0fe... |
-| P3.4-11 | Codex 独立审查与直接修复（历史结果、轮询错误可见性、终态同步、进度边界、刷新失败、数组 query、严格类型） | ✅ 已完成 |
+| P3.4-11 | 码道独立审查与直接修复（历史结果、轮询错误可见性、终态同步、进度边界、刷新失败、数组 query、严格类型） | ✅ 已完成 |
 | P3.4-12 | 生成 P3.5 提示词并归档第 15 节，259 行正文一致 | ✅ `59cd46c6...5ae8` |
 
 ### P3.5 — 完整认证、真实用户隔离与 USER/ADMIN RBAC 基础
@@ -228,7 +228,7 @@
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
 | P3.5-01 | 后端依赖新增：pwdlib[argon2]==0.2.1、PyJWT==2.9.0、email-validator==2.2.0 | ✅ 已完成 |
-| P3.5-02 | config.py 认证配置（必填 32-byte SecretStr、固定 HS256、TTL 上界、cookie secure、锁定参数） | ✅ Codex 已纠正 |
+| P3.5-02 | config.py 认证配置（必填 32-byte SecretStr、固定 HS256、TTL 上界、cookie secure、锁定参数） | ✅ 码道已纠正 |
 | P3.5-03 | enums.py 新增 UserRole（USER/ADMIN）和 UserStatus（ACTIVE/DISABLED） | ✅ 已完成 |
 | P3.5-04 | models.py 新增 User（id=String(128)）/AuthSession/PasswordResetToken；Paper/AnalysisTask/ExperimentFile/ExportReport 的 user_id 加 FK 到 users.id | ✅ 已完成 |
 | P3.5-05 | 004 初始认证迁移 + 005 无损安全纠正（nullable、唯一索引、RESTRICT FK、demo-user disabled） | ✅ head=005 |
@@ -243,10 +243,10 @@
 | P3.5-14 | 认证 API/服务/JWT/密码/CLI 安全测试 | ✅ 定向 42 passed |
 | P3.5-15 | test_health.py/test_review_tasks.py 适配（创建测试用户+auth headers、覆盖依赖、other-user FK） | ✅ 已完成 |
 | P3.5-16 | db_helpers.py 更新（17 张业务表、verify_alembic_revision 默认 005） | ✅ 已完成 |
-| P3.5-17 | docker-compose.yml 强制显式 JWT secret；本地 `.env` 安全生成且被忽略 | ✅ Codex 已纠正 |
-| P3.5-18 | .env.example 仅空变量名与生成说明，无默认 secret | ✅ Codex 已纠正 |
-| P3.5-19 | 前端 Bearer 拦截器 + 401 single-flight refresh + 每请求最多重放一次 | ✅ Codex 已纠正 |
-| P3.5-20 | Pinia 纯内存 access/User；bootstrap 只尝试 HttpOnly refresh cookie | ✅ Codex 已纠正 |
+| P3.5-17 | docker-compose.yml 强制显式 JWT secret；本地 `.env` 安全生成且被忽略 | ✅ 码道已纠正 |
+| P3.5-18 | .env.example 仅空变量名与生成说明，无默认 secret | ✅ 码道已纠正 |
+| P3.5-19 | 前端 Bearer 拦截器 + 401 single-flight refresh + 每请求最多重放一次 | ✅ 码道已纠正 |
+| P3.5-20 | Pinia 纯内存 access/User；bootstrap 只尝试 HttpOnly refresh cookie | ✅ 码道已纠正 |
 | P3.5-21 | 前端 router/index.ts 5 个认证路由 + beforeEach 守卫（bootstrap + requiresAuth/guest meta） | ✅ 已完成 |
 | P3.5-22 | 前端 LoginView/RegisterView/ForgotPasswordView/ResetPasswordView/ProfileView | ✅ 已完成 |
 | P3.5-23 | 前端 App.vue 导航栏+用户信息+退出按钮 | ✅ 已完成 |
@@ -256,7 +256,7 @@
 | P3.5-27 | 独立测试库 005→003→head 往返；开发库不 downgrade | ✅ head=005_auth_security_corrections |
 | P3.5-28 | 路由计数 22 条业务路由（12 既有 + 10 auth） | ✅ 已完成 |
 | P3.5-29 | 表计数 17 张业务表（14 既有 + 3 auth） | ✅ 已完成 |
-| P3.5-30 | 开发库历史数据核对 | ⚠️ P3.4 记录 35/1/1；Codex 本轮首次计数已为 0/0/0，无法自动恢复或证明删除来源 |
+| P3.5-30 | 开发库历史数据核对 | ⚠️ P3.4 记录 35/1/1；码道本轮首次计数已为 0/0/0，无法自动恢复或证明删除来源 |
 
 ### P3 后续（待细化）
 
@@ -283,7 +283,7 @@
 | P4.1-05 | models.py MetricRecord 新增 user_id 列 + CheckConstraint + 索引 | ✅ 已完成 |
 | P4.1-06 | 006_metric_user_and_constraints 迁移 | ✅ 已完成 |
 | P4.1-07 | main.py 注册 metrics_router | ✅ 已完成 |
-| P4.1-08 | 指标规范化、数值、Checkpoint、上下文、来源与去重测试 | ✅ Codex 扩充后定向共 67 passed |
+| P4.1-08 | 指标规范化、数值、Checkpoint、上下文、来源与去重测试 | ✅ 码道扩充后定向共 67 passed |
 | P4.1-09 | API、后台终态、原子失败、严格 schema、过滤、USER/ADMIN 隔离与数据库约束测试 | ✅ 已完成 |
 | P4.1-10 | test_review_tasks.py 适配（EXPERIMENT_ANALYSIS 替代 METRIC_EXTRACTION） | ✅ 已完成 |
 | P4.1-11 | Docker 后端全量回归 | ✅ 385 passed, 0 skipped |
@@ -292,7 +292,7 @@
 | P4.1-14 | 路由计数 24 条（22 既有 + 2 metrics） | ✅ 已完成 |
 | P4.1-15 | 表计数 17 张（006 只加列/索引不加表） | ✅ 已完成 |
 | P4.1-16 | 文档同步（README/IMPLEMENTATION_STATUS/PROGRESS） | ✅ 已完成 |
-| P4.1-17 | Codex 修复后台任务必然失败、来源完整性、UNKNOWN、判别 schema、过滤及并发竞态 | ✅ 007_metric_integrity_corrections |
+| P4.1-17 | 码道修复后台任务必然失败、来源完整性、UNKNOWN、判别 schema、过滤及并发竞态 | ✅ 007_metric_integrity_corrections |
 
 ### P4.2 — 指标分析前端与完整任务交互
 
@@ -310,7 +310,7 @@
 | P4.2-10 | 测试库残留 0；开发库计数不变（2u/2p/1t/7r/0m） | ✅ 已完成 |
 | P4.2-11 | P4.2 输入提示词 SHA-256 在码道执行期间不变 | ✅ EE0D146C...15FB4 |
 | P4.2-12 | systemDesign 01～08、SDD、Sprint、README/STATUS/PROGRESS 同步 | ✅ 已完成 |
-| P4.2-13 | Codex 修正 Evidence 占位、来源详情、task_id 隔离、历史范围、零结果筛选、请求竞态与 409 恢复 | ✅ 已完成 |
+| P4.2-13 | 码道修正 Evidence 占位、来源详情、task_id 隔离、历史范围、零结果筛选、请求竞态与 409 恢复 | ✅ 已完成 |
 | P4.2-14 | 最新前端容器重建；health/login 200、无 token metrics 401、PostgreSQL healthy | ✅ 已完成 |
 | P4.2-15 | 浏览器可视化 E2E | ⚠️ 当前会话无可用内置浏览器实例，未执行 |
 
@@ -330,7 +330,7 @@
 | P4.3-10 | Alembic head=007，路由 24，表 17，无新迁移 | ✅ 已完成 |
 | P4.3-11 | 开发库计数不变（2u/2p/1t/7r/0m） | ✅ 已完成 |
 | P4.3-12 | 真实云端最小烟测（首轮安全失败；smoke 关闭思考模式后第二轮成功，35 字符） | ✅ 已完成 |
-| P4.3-13 | Codex 修正 huawei config-check AttributeError、占位 Key/full endpoint、CLI 单次调用与固定安全失败 | ✅ 已完成 |
+| P4.3-13 | 码道修正 huawei config-check AttributeError、占位 Key/full endpoint、CLI 单次调用与固定安全失败 | ✅ 已完成 |
 | P4.3-14 | Compose 实际文件只读挂载，Docker 三项 skip 消除 | ✅ 已完成 |
 | P4.3-15 | pytest 强制两类 provider mock、`.invalid` endpoint，并移除继承 API Key | ✅ 已完成 |
 | P4.3-16 | ProjectDocs 01～08、SDD、独立 Sprint 与 bugfix report 收口 | ✅ 已完成 |
@@ -363,33 +363,67 @@
 | P5.1-18 | Docker 后端全量 527 passed, 0 skipped | ✅ 已完成 |
 | P5.1-19 | 前端 10 files / 106 passed；生产构建 126 modules | ✅ 已完成 |
 | P5.1-20 | Alembic 008 head + check 无差异；冲突只读中止，007→008→007→008 可逆 | ✅ 已完成 |
-| P5.1-21 | Codex 修正一次性内存读取、事件循环阻塞、原始 bytes 解析器、哈希公开、迁移 DML、并发竞争和补偿缺口 | ✅ 已完成 |
+| P5.1-21 | 码道修正一次性内存读取、事件循环阻塞、原始 bytes 解析器、哈希公开、迁移 DML、并发竞争和补偿缺口 | ✅ 已完成 |
 | P5.1-22 | P5.1 解析/存储/API 定向 103；P4.3/MaaS/审阅广义定向 180；P4.1 指标定向 67，均 0 skipped | ✅ 已完成 |
 | P5.1-23 | 测试库 17 表残留 0；开发库实验文件/结果保持 0；最新提交不变 | ✅ 已完成 |
 
-### P5.2 — 确定性统计摘要 ⬜ 未开始
+### P5.2 — 确定性统计摘要 ✅ 已完成
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P5.2-01 | 统计计算服务 | ⬜ 未开始 |
+| P5.2-01 | 迁移 009（analysis_tasks.experiment_file_id + CHECK + 部分唯一索引） | ✅ 已完成 |
+| P5.2-02 | 统计计算服务（Welford mean/stddev + 精确 median + 数值安全） | ✅ 已完成 |
+| P5.2-03 | 分析服务（任务创建/后台执行/原子写入 ExperimentResult） | ✅ 已完成 |
+| P5.2-04 | 文件完整性复核（SHA-256 重算 + P5.1 magic/结构解析重验） | ✅ 已完成 |
+| P5.2-05 | 新增配置 max_experiment_analysis_numeric_cells（默认 5,000,000） | ✅ 已完成 |
+| P5.2-06 | POST /api/v1/experiment-files/{file_id}/analysis（201/200 幂等） | ✅ 已完成 |
+| P5.2-07 | GET /api/v1/experiment-files/{file_id}/result（200/404） | ✅ 已完成 |
+| P5.2-08 | 安全错误消息（固定安全分类，不泄漏内部信息） | ✅ 已完成 |
+| P5.2-09 | 码道加固后统计/API/并发/事务定向 72 项 | ✅ 已完成 |
+| P5.2-10 | Docker 后端全量 599 passed, 0 skipped | ✅ 已完成 |
+| P5.2-11 | 前端 106 passed；生产构建 126 modules | ✅ 已完成 |
+| P5.2-12 | 路由 27→29；表 17 不变；Alembic 009 head | ✅ 已完成 |
+| P5.2-13 | 码道修正整文件缓存、静默数值降级、并发 409、PENDING 卡死、部分元数据比较和 commit 未知风险 | ✅ 已完成 |
 
-### P5.3 — 指标交叉验证与实验前端 ⬜ 未开始
+### P5.3a — 论文指标交叉验证后端闭环 ✅ 已完成
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P5.3-01 | 指标交叉验证服务 | ⬜ 未开始 |
-| P5.3-02 | 实验数据前端 | ⬜ 未开始 |
+| P5.3a-01 | 交叉验证服务（normalize_comparison_key: NFKC→casefold→alnum；checkpoint 映射 MEAN→mean/MAX→max；容差比较） | ✅ 已完成 |
+| P5.3a-02 | Comparison service（持久化/幂等/事务原子性/异源 409） | ✅ 已完成 |
+| P5.3a-03 | POST /api/v1/experiment-files/{file_id}/comparisons（201/200 幂等） | ✅ 已完成 |
+| P5.3a-04 | 扩展 GET /api/v1/experiment-files/{file_id}/result 新增 metric_comparisons: list \| null | ✅ 已完成 |
+| P5.3a-05 | Pydantic schema（ComparisonItem/PostComparisonsRequest/PostComparisonsResponse） | ✅ 已完成 |
+| P5.3a-06 | 配置项 experiment_comparison_absolute_tolerance（默认 1e-6）+ experiment_comparison_relative_tolerance（默认 0.01） | ✅ 已完成 |
+| P5.3a-07 | .env.example + docker-compose.yml 新增两个容差配置 | ✅ 已完成 |
+| P5.3a-08 | 服务/Schema/配置单元测试 48 项（规范化、MEAN/MAX、不可验证口径、容差、有限数、严格跨字段关系） | ✅ 码道扩充并通过 |
+| P5.3a-09 | PostgreSQL/API 集成测试 26 项（401/422/201/200/404/409、隔离、篡改、并发、事务与 commit unknown） | ✅ 码道扩充并通过 |
+| P5.3a-10 | Docker P5.3a 定向 74；后端全量 673 passed, 0 skipped；前端 106 passed + build | ✅ 已完成 |
+| P5.3a-11 | 路由 29→30；表 17 不变；Alembic 009 head | ✅ 已完成 |
+| P5.3a-12 | 码道修正 diff 方向、零分母、重复/空指标、严格持久化校验、归属关系、行锁并发与事务恢复 | ✅ 已完成 |
+| P5.3a-13 | 安全收口：比较链路不读正文/原始行/存储；旧上传补偿日志不再输出 storage key 或临时路径 | ✅ 已完成 |
 
-## P6 阶段清单（待细化）
+### P5.3b — 实验数据前端 ✅ 已完成
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P6-01 | Markdown 报告生成 | ⬜ 未开始 |
-| P6-02 | PDF 报告生成 | ⬜ 未开始 |
-| P6-03 | DOCX 报告生成 | ⬜ 未开始 |
-| P6-04 | 报告导出 API | ⬜ 未开始 |
+| P5.3b-01 | 受保护路由、论文详情入口与严格 TypeScript API | ✅ 已完成 |
+| P5.3b-02 | 非空 CSV/XLSX/XLS 本地预检、上传锁、上传后选中与可信列结构 | ✅ 码道收口 |
+| P5.3b-03 | 文件分页、统计任务创建/轮询/重试与统计摘要 | ✅ 码道收口 |
+| P5.3b-04 | 最新成功指标任务、已有比较恢复/来源锁定及 12 列结果表 | ✅ 码道收口 |
+| P5.3b-05 | 路由/文件/任务三层竞态隔离与公开错误脱敏 | ✅ 码道收口 |
+| P5.3b-06 | 定向 48；前端全量 12 files / 154；构建 129 modules；后端全量 673 | ✅ 已完成 |
 
-## P7 阶段清单（待细化）
+## P6 阶段清单
+
+| 编号 | 交付物 | 状态 |
+|------|--------|------|
+| P6-01 | Markdown 报告生成、来源快照、状态机与安全下载 | ✅ P6.1 完成并经 码道收口 |
+| P6-02 | PDF 报告生成 | ✅ P6.2 完成并经 码道中文可检索收口 |
+| P6-03 | DOCX 报告生成 | ✅ P6.2 完成并经 码道包安全收口 |
+| P6-04 | 报告创建/状态/历史/下载 API 与用户端闭环 | ✅ P6.1～P6.2 完成 |
+
+## P7 阶段清单（产品方向已校正）
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
@@ -397,17 +431,19 @@
 | P7-02a | 论文详情、页面文本与 Evidence normalized 字符区间高亮 | ✅ 已完成 |
 | P7-02b | LLM 审阅结果展示页面 | ✅ 已完成（P3.4 ReviewResultView） |
 | P7-03 | 指标分析页面 | ✅ 已完成（P4.2 MetricAnalysisView） |
-| P7-04 | 报告导出页面 | ⬜ 未开始 |
+| P7-04 | 报告导出页面 | ✅ 已完成（P6.2 ReportExportView） |
 | P7-05 | 注册、登录、密码找回、个人中心和受保护路由 | ✅ 已完成（P3.5） |
-| P7-06 | 管理员 API（用户/角色、账号状态、论文/任务/报告、审计日志） | ⬜ 未开始 |
-| P7-07 | 管理后台仪表盘、用户管理、内容任务管理和审计查询 | ⬜ 未开始 |
-| P7-08 | 权限边界与管理员端到端测试 | ⬜ 未开始 |
+| P7-06 | P7.1 论文阅读工作台与证据化总结/解释/翻译 | ✅ 完成并经 码道收口（014 head；后端 866；前端 183） |
+| P7-07 | P7.2 当前论文多轮问答、会话历史与 Evidence 引用 | ✅ 完成并经 码道独立收口（015；后端 909；前端 189） |
+| P7-08 | P7.3 高亮/书签/笔记/知识卡/论文库与学习进度 | ✅ 完成并经 码道独立收口（016；后端 977；前端 197） |
 
-## P8 阶段清单（待细化）
+## P8 阶段清单（固定轮次，不增加总数）
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P8-01 | 端到端集成测试 | ⬜ 未开始 |
-| P8-02 | 云端部署（ECS + RDS + OBS + ModelArts） | ⬜ 未开始 |
-| P8-03 | 性能调优 | ⬜ 未开始 |
-| P8-04 | 安全审计（认证、令牌、RBAC、管理员操作与数据越权） | ⬜ 未开始 |
+| P8-01 | 完整管理员后端 + Vue 管理后台 + 用户角色/状态 + 不可变审计 | ⬜ 未开始，发布前必做 |
+| P8-02 | 用户端/管理员端 E2E、任务恢复与全链路一致性 | ⬜ 未开始 |
+| P8-03 | 性能、可靠性、限流和可观测性调优 | ⬜ 未开始 |
+| P8-04 | 华为云部署（ECS/RDS/OBS/ModelArts）、备份恢复与综合安全审计 | ⬜ 未开始 |
+
+P7.3 已新增 016、5 张个人学习表和 17 条 API，完成论文库、进度、高亮、书签、笔记、知识卡及前端学习记录闭环。最终结果为后端 977 passed、前端 16 files/197 passed、构建 136 modules、59 条 API、27 张 ORM 应用表和测试库残留 0。P8.1～P8.4 仍未实现。

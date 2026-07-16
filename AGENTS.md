@@ -74,6 +74,12 @@ ProjectDocs/
 - Build: `cd frontend && npm run build`
 - Test DB isolation: `paperlens_test` database, `PAPERLENS_REQUIRE_TEST_DB=true` in Docker
 
+## Documentation Attribution
+
+- All project documentation, progress logs, Sprint records, bug-fix reports, and prompt archives must attribute implementation, review, correction, and verification to CodeArts（码道）only.
+- Do not mention other AI assistants or agents in project-document content or filenames.
+- New reports and historical-document updates must continue using the same CodeArts-only attribution.
+
 ## Constraints
 
 - Do NOT modify `.arts/` or `.codeartsdoer/` directories

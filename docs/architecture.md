@@ -70,7 +70,7 @@ frontend/
 - 文件上传（multipart 流式上传，最大 50MB）
 - 展示论文解析结果与 Evidence 定位（当前基于 `normalized_text_content` 字符区间高亮，不是 PDF.js/bbox 覆盖层）
 - 展示审阅结果、任务进度、Finding 筛选与 Evidence 深链；指标表格和统计口径标注仍在规划
-- 触发报告导出并下载（规划，尚未实现）
+- 创建 Markdown/PDF/DOCX 报告、分页查看历史、轮询状态并安全下载（P6.2 已实现）
 - 后端不可用时显示明确错误
 
 ### 2.2 后端架构（FastAPI + Python）
@@ -102,7 +102,7 @@ backend/
 - Embedding 抽象与语义 Evidence 检索（已实现，默认 MockEmbedding，华为云 MaaS 适配器已就绪）
 - 向量索引与持久化（规划，FAISS/pgvector，尚未实现）
 - 通过可替换 LLMClient 生成结构化审阅意见（已实现，默认 Mock、可配置华为 MaaS）
-- 可追溯指标提取后端（P4.1 已实现，完全离线）；指标前端、实验分析和报告导出仍为规划
+- 可追溯指标提取、实验分析和三格式报告导出均已实现；确定性链路不调用 LLM/Embedding
 
 ### 2.3 LLM 调用抽象
 
@@ -142,7 +142,7 @@ class HuaweiMaaSEmbeddingClient(EmbeddingClient):
 
 ## 3. 后台任务处理流程
 
-> 当前已完成 PDF 解析、page-local Evidence 提取、基于 MockLLM 的结构化审阅后端闭环、基于 Embedding 抽象的语义 Evidence 检索，以及华为云 MaaS 标准 API V2 的 LLM 适配器。FAISS/pgvector 向量数据库、指标分析和报告导出尚未实现。
+> 当前已完成 PDF 解析、page-local Evidence、结构化审阅、指标与实验分析、Markdown/PDF/DOCX 报告闭环，以及华为云 MaaS 标准 API V2 适配器。FAISS/pgvector 持久化向量数据库仍未实现。
 
 ```
 用户上传 PDF
@@ -267,8 +267,8 @@ PENDING → RUNNING → SUCCEEDED
 | 11 | 用户 | ECS | CSV/XLSX/XLS | P5.1 固定块临时落盘和认证校验 |
 | 12 | ECS worker | ECS | 临时路径 | magic/ZIP/OLE 安全、SHA-256、确定性结构解析 |
 | 13 | ECS | LocalStorage/OBS 抽象 + RDS | source.ext + ExperimentFile | 幂等保存和失败补偿；OBS 实现仍规划 |
-| 14 | ECS | RDS | ExperimentResult | P5.2 确定性统计结果，尚未实现 |
-| 15 | ECS | 用户 | 导出报告 | 报告下载（规划） |
+| 14 | ECS | RDS | ExperimentResult | P5.2 确定性流式统计与原子结果已实现 |
+| 15 | ECS | 用户 | 导出报告 | P6.2 三格式历史分页与安全下载已实现 |
 
 ## 5. 本地开发与云端部署的差异
 
@@ -339,3 +339,47 @@ PENDING → RUNNING → SUCCEEDED
 - Embedding 在 LLM 首次真实验收前强制为 mock，避免意外双重计费。
 - `maas-config-check` 只验证配置；`maas-smoke --confirm-billable` 才允许一次最多 32 completion token 的真实请求。
 - Compose 源文件只读挂载到 backend，仅供 Docker 测试核对实际配置，文件中不含展开后的 secret。
+
+### 6.6 P5.3a 确定性交叉验证
+
+交叉验证服务位于独立 `experiment_comparison_service`。API 只传入文件和指标任务 id；服务锁定 ExperimentResult，复核文件、论文、用户、分析任务、指标任务、记录和来源后，使用结构化 summary_stats 完成纯 Python 比较。
+
+名称匹配不使用 LLM、Embedding 或模糊算法。MetricRecord.raw_text 延迟加载，PaperTable/Evidence 只投影 id 与 paper_id；服务不访问实验 storage。结果以严格 JSONB 数组写回，行锁负责同源/异源竞争，独立 Session 负责提交结果未知恢复。
+
+### 6.7 P5.3b 实验数据前端编排
+
+ExperimentDataView 只组合现有 Paper、Task、ExperimentFile、ExperimentResult 和 comparison API。文件列表分页，选择文件后并行读取可信 columns_info 与已有结果；统计任务以 3 秒 HTTP 轮询观察。页面代数、文件选择代数和明确的 paper/file/task 校验共同隔离陈旧响应。已有比较直接恢复并锁定来源；未知错误映射为固定公开文案。该阶段不新增后端组件、数据库迁移、任务队列或云端调用。
+
+### 6.8 P6.1 Markdown 导出闭环
+
+创建接口先复核 ReviewResult/Finding/Evidence、MetricRecord/source、ExperimentResult/File/AnalysisTask 的完整用户与论文关系，再形成只含 id 的 source_snapshot。Markdown bytes、content_hash 与 source_hash 均在插入 PENDING 前确定；后台任务通过条件 UPDATE 原子认领，并只保存创建时 bytes，不重新查询“最新来源”。
+
+存储后必须通过 StorageBackend 回读并逐字节复核，再原子提交 READY。提交结果未知时用独立 Session 确认 READY 归属；否则清理未归属对象并安全 FAILED。FastAPI BackgroundTasks 仍不是持久化队列，进程重启恢复留 P8。
+
+### 6.9 P6.2 多格式报告与用户端闭环
+
+PDF/DOCX 由 P6.1 创建时 Markdown bytes 离线转换，不重新查询数据库。PDF 使用 ReportLab invariant 模式与内置 STSong-Light CID 字体，固定元数据并由 PyMuPDF 验证中英文提取；DOCX 使用 python-docx 后按固定 entry 顺序、时间和权限重打包，清除 rsid，并拒绝宏、OLE、嵌入对象与外部 relationship。
+
+012 只扩展来源行格式约束，三格式复用同一来源感知幂等索引和状态机。ReportExportView 通过当前论文历史接口执行 20 条分页和状态轮询，以请求代数隔离路由/翻页乱序响应；READY 文件通过 blob 下载并在所有路径回收对象 URL。
+
+### 6.10 产品方向校正与 P7.1 阅读学习架构
+
+PaperLens 的主产品定义改为个人论文阅读学习助手。现有 reviewer、metric、experiment 和 export 模块保持兼容，分别作为批判性阅读、实验理解和学习成果导出能力。P7.1 新增独立 learning service，不把学习解释写入 ReviewResult，也不继续使用评分/审稿结论作为主页面语义。
+
+阅读工作台复用 Paper/Section/Page/Evidence API，并通过独立 LearningExplanation 状态机调用统一 LLMClient。服务端根据 section/page/evidence id 获取不可信论文内容，确定性选择候选 Evidence，模型返回严格 JSON，全部 alias 校验成功后才原子写入结果与 Citation。外部模型调用期间不持有数据库事务；自动测试只使用 Mock。
+
+P7.2 在同一证据边界上增加论文内问答，P7.3 增加个人学习记录。完整管理员系统重排到 P8.1 合并交付，剩余轮次总数不变。
+
+P7.1 已实现：013 建表后由 014 无损收紧契约；创建前和模型返回后都复核 canonical scope、来源及 Evidence 指纹；推理期间没有数据库事务；结果与 Citation 原子提交。PaperReadingView 对 paper/page/history/explanation/poll 分别做竞态隔离。
+
+## P7.2 当前论文问答架构（COMPLETED）
+
+015 新增 conversation/turn/citation 三表和独立 qa router/schema/service/retriever。问题创建在同步事务中完成 owner、PARSED、非空 Evidence、UUID 幂等与活动轮次门禁；后台条件认领后关闭事务，批量嵌入问题和当前论文 Evidence，严格验证向量并确定性 Top-K。预算内历史与候选来源组成 context_hash，LLM 返回后锁定 Turn、重新加载全图并复算，匹配后才原子保存 grounded 结果与 Citation。
+
+前端继续使用 PaperReadingView，通过会话/轮次真实分页、3 秒串行轮询、失败新 id 重试和 Citation 原文定位完成闭环；paper/conversation/turn/action/poll 分别做竞态隔离。自动测试只使用 Mock，不访问真实云端。
+
+## P7.3 个人学习沉淀架构（COMPLETED）
+
+016 新增论文库条目、高亮、书签、笔记和知识卡五表。library router 使用全部 owner Paper LEFT JOIN 可选 entry，并在同一查询中计算四类记录数；默认 TO_READ/favorite=false 不排除尚无 entry 的论文。personal_learning router 统一复核 owner、PARSED、PaperPage 和来源全图，所有写入为确定性数据库逻辑，不构造 LLM/Embedding client。
+
+PaperListView 提供搜索、状态/收藏/集合过滤、进度与四类计数；PaperReadingView 的学习记录区分别维护高亮、书签、笔记和知识卡分页与请求代数。高亮只从服务端 Page 文本派生，浏览器选区通过跨文本节点偏移解析与原文切片复核，来源变化时降级而不是错误标注。

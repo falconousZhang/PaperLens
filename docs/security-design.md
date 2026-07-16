@@ -81,6 +81,14 @@ MAGIC_NUMBERS = {
 - XLS 同时验证扩展名、OLE magic 和 xlrd 解析成功；解析器不执行宏、DDE、外链或网络。
 - 解析/校验失败不进入持久存储；storage、flush、commit 失败 rollback 并补偿对象。错误响应和日志不包含文件内容、用户文件名、本机临时路径、SQL 参数或 secret。
 
+### P5.2 统计安全边界
+
+- 统计任务仅使用认证上下文 user_id，联查 task、ExperimentFile、Paper 与 User；ADMIN 不默认访问他人资源。
+- 计算前重新验证 SHA-256、magic/容器和完整 columns_info，计算后再次复核 SHA-256，防止替换文件结果入库。
+- CSV/XLSX/XLS 按路径逐行读取，不保存原始行或字符串样本；只为数值列保留受 5,000,000 cells 上限约束的紧凑数组。
+- 非有限数、计算溢出与超 JavaScript 安全范围整数安全失败；任务错误只使用固定分类，不包含值、行、文件名、路径、storage key、SQL 或底层异常。
+- ExperimentResult 与 SUCCEEDED 同事务提交；失败回滚，commit 未知重新查询，补偿逻辑不删除可能已提交的结果。
+
 3. **文件读取**：
    - 读取存储文件时仅使用数据库中记录的 storage_key
    - 不接受用户输入的文件路径参数
@@ -311,3 +319,64 @@ P3.5 已完成产品账号认证和 USER/ADMIN RBAC 基础；完整管理员业�
 - smoke 必须显式提供 `--confirm-billable`，每次命令只发一次固定短提示，最多请求 32 completion token；GLM smoke 专用发送 `thinking.type=disabled`，正常审阅保持模型默认；成功不打印模型原文，失败仅打印固定类别。
 - 自动测试只用 `.invalid` 域名、fake client 或 MockTransport。2026-07-14 的真实云端烟测仅在用户明确授权后执行，第二次且最后一次请求成功；未读取、输出或记录本地 Key。
 - pytest 的 conftest 在导入 Settings 前覆盖两类 provider 为 mock，并从测试进程环境移除继承的 LLM/Embedding API Key，避免运行容器切换到真实 MaaS 后回归测试产生费用。
+
+## 12. P5.3a 交叉验证安全边界
+
+- USER 与 ADMIN 都必须满足资源所有权；他人实验文件或指标任务统一 404，管理员不获得读取普通用户论文数据的旁路。
+- Result、EXPERIMENT_ANALYSIS task、ExperimentFile、Paper、User 以及 MetricRecord/source 在写入前交叉验证；关系异常固定 409。
+- 不读取 storage、实验原始行、MetricRecord.raw_text、PaperTable.raw_text/structured_data 或 Evidence.quoted_text；公开响应不包含哈希、对象 key 或正文。
+- 所有数值拒绝布尔、NaN、Infinity 和计算溢出；零论文值不构造 Infinity，相对差返回 null。
+- 行锁和原子 JSONB 写入防止并发覆盖；同源幂等，异源固定冲突，失败不删除可能已经提交的结果。
+- 交叉验证完全离线，不构造 LLM/Embedding client，不产生华为云请求或费用。
+
+## 13. P5.3b 浏览器安全与竞态边界
+
+- 实验路由需要认证；前端权限只改善体验，所有资源归属仍由后端逐接口校验。
+- 文件选择只做扩展名、非空和 20MB 快速拒绝；服务端继续执行完整格式、容器、哈希和结构校验。
+- FormData 不手写 Content-Type，避免错误 boundary；不把文件内容、API Key、token 或 Authorization 写入 Web Storage、DOM HTML 或日志。
+- 详情、结果、分析任务和比较响应必须匹配当前 paper/file/task；路由或文件切换后在途响应被代数令牌丢弃。
+- 只允许固定分析错误列表进入页面，未知网络/服务端错误统一为安全文案，不展示内部路径、SQL、Traceback 或服务端 message。
+- 所有后端文本使用 Vue 转义插值，不使用 v-html；已有比较结果只读恢复并锁定来源，防止用户误覆盖审计链。
+
+## 14. P6.1 Markdown 导出安全边界
+
+- POST、状态和下载均要求资源所有权；USER/ADMIN 访问他人报告统一 404。公开 Schema 不包含 source_snapshot、source_hash、content_hash 或 storage_key。
+- 所有来源图逐层复核 paper/user/task/file/source 关系；异常固定 `EXPORT_SOURCE_INVALID` 409，不跨论文拼接数据。
+- 数据库文本规范换行并转义 HTML、Markdown 结构、表格分隔符和可执行 URL scheme；Evidence 只输出页码与最多 240 字短引用，不输出整页正文、raw_text 或原始实验行。
+- 同来源并发由 source_hash/content_hash 部分唯一索引收口；后台条件 UPDATE 单次认领。storage 部分写入、校验或提交失败时清理未归属对象，FAILED 只保存固定安全文案。
+- 下载通过 StorageBackend 回读并复核 size/SHA-256，响应为 attachment、nosniff、private/no-store；不接受路径或 Range 参数。
+
+## 15. P6.2 多格式导出安全边界
+
+- PDF 使用内置字体和纯 Python invariant 生成，不执行 shell、不下载字体、不事后替换二进制对象；禁止 JavaScript、OpenAction、Launch、附件或外部资源。
+- DOCX 从全新文档生成并确定性重打包；输出验证拒绝 vbaProject、OLE、embeddings 和任何 `TargetMode="External"` relationship，同时清除 rsid。
+- 导出历史只返回固定公开字段；FAILED 无论数据库历史详情为何均映射为固定安全文案。USER/ADMIN 访问他人论文或报告统一 404。
+- 前端不使用 v-html、Web Storage 或 token URL；翻页、轮询和路由请求均由代数令牌隔离，下载对象 URL 在成功、失败和竞态路径都回收。
+
+## 16. P7.1 阅读学习安全边界（COMPLETED）
+
+- 客户端只能提交同论文 section/page/evidence 标识，不能上传任意“原文”或覆盖服务端 source；user_id 只取认证上下文。
+- 论文标题、正文、Evidence 和后续用户问题都属于不可信输入，必须与系统指令分隔；内容中的“忽略之前规则”等文本不得改变模型契约。
+- 模型输出只接受严格单 JSON 对象；answer/key_points/terms/evidence_refs 均有长度和数量上限，全部 alias 必须完整绑定同论文 Evidence。
+- 不存在有效 Citation 时整次失败，不能把未验证或部分验证答案公开。公开响应不含 prompt、request/source hash、原始模型响应或底层异常。
+- 外部 LLM 调用时不持有数据库事务；成功结果、Citation 和终态单事务提交，失败回滚并只保存固定安全错误。
+- Vue 只用文本插值，不渲染模型 Markdown/HTML；Citation 定位使用服务端 Evidence 和规范字符区间，失败时安全降级。
+
+实现验收确认：来源和 Evidence 指纹在创建前及模型返回后双重复核；外部推理期间 Session 已关闭；日志只记录 explanation/paper/stage/异常类型；前端对 paper/page/history/explanation/poll 分别使用代数令牌并在卸载时清理 timer。自动测试只使用 Mock，未调用真实 MaaS。
+
+## P7.2 问答安全边界
+
+- 会话创建只接受空对象，问题创建只接受去空白问题、zh/en 和 UUID4；user/paper/正文/Evidence/prompt/model 均不能由客户端覆盖。
+- 检索只使用当前论文非空 Evidence；批量向量在排序前验证数量、维度、数值类型、NaN/Inf 和零范数，错误整轮失败。
+- 历史 question/answer、当前问题、标题和 Evidence 都是不可信文本，经过标签分隔和转义，不能提升为 system 指令。
+- context_hash 覆盖身份、顺序、语言、问题、历史和候选 Evidence；模型返回后重新加载并复算，来源变化不公开答案。
+- grounded/Citation 同事务，失败清空 hash 和结果并只保存固定错误；日志不记录问题、回答、Evidence、prompt、hash、email 或 token。
+- Vue 纯文本显示，grounded=false 无伪引用；会话/轮次分页、轮询、切换与卸载有独立代数和 timer 清理，不使用 Web Storage。
+
+## 18. P7.3 个人学习安全边界
+
+- 全部资源使用认证上下文中的 user_id，Paper、Page、高亮、笔记和知识卡来源必须形成同一 owner/paper 全图；普通 ADMIN 不绕过普通业务所有权。
+- 客户端不能提交 quoted_text、source_hash、last_reviewed_at 或 owner 字段；高亮引文和 hash 只由服务端页面文本与偏移派生。
+- Schema 拒绝 extra、空 PATCH、非法 null、控制字符和超限文本；公开错误固定，不记录笔记、卡片、引文、正文或 secret。
+- 论文库计数在单查询内完成；读取不创建 library entry。写事务失败统一 rollback，并发重复只形成一行一对象。
+- Vue 不使用 v-html/Web Storage；更新失败不做乐观覆盖，路由、列表、动作、页码和进度请求分别用代数令牌隔离。高亮只允许 PAGE 正文选区，并复核 Unicode/跨文本节点的完整切片。

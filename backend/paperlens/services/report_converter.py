@@ -1,0 +1,371 @@
+from __future__ import annotations
+
+import io
+import re
+import zipfile
+from xml.etree import ElementTree
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+    PageBreak,
+)
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+
+_FIXED_CREATOR = "PaperLens"
+_FIXED_PRODUCER = "PaperLens Report Generator"
+_PDF_FONT_NAME = "STSong-Light"
+
+pdfmetrics.registerFont(UnicodeCIDFont(_PDF_FONT_NAME))
+pdfmetrics.registerFontFamily(
+    _PDF_FONT_NAME,
+    normal=_PDF_FONT_NAME,
+    bold=_PDF_FONT_NAME,
+    italic=_PDF_FONT_NAME,
+    boldItalic=_PDF_FONT_NAME,
+)
+
+
+def markdown_to_pdf(md_bytes: bytes) -> bytes:
+    md_text = md_bytes.decode("utf-8")
+    lines = md_text.split("\n")
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title="PaperLens Report",
+        author=_FIXED_CREATOR,
+        subject="Paper Review Report",
+        creator=_FIXED_CREATOR,
+        invariant=1,
+    )
+    styles = getSampleStyleSheet()
+    h1_style = ParagraphStyle(
+        "H1Custom",
+        parent=styles["Heading1"],
+        fontSize=16,
+        fontName=_PDF_FONT_NAME,
+        spaceAfter=6,
+        spaceBefore=12,
+    )
+    h2_style = ParagraphStyle(
+        "H2Custom",
+        parent=styles["Heading2"],
+        fontSize=13,
+        fontName=_PDF_FONT_NAME,
+        spaceAfter=4,
+        spaceBefore=10,
+    )
+    h3_style = ParagraphStyle(
+        "H3Custom",
+        parent=styles["Heading3"],
+        fontSize=11,
+        fontName=_PDF_FONT_NAME,
+        spaceAfter=3,
+        spaceBefore=8,
+    )
+    body_style = ParagraphStyle(
+        "BodyCustom",
+        parent=styles["Normal"],
+        fontSize=10,
+        fontName=_PDF_FONT_NAME,
+        spaceAfter=3,
+        leading=14,
+    )
+    bullet_style = ParagraphStyle(
+        "BulletCustom",
+        parent=styles["Normal"],
+        fontSize=10,
+        fontName=_PDF_FONT_NAME,
+        spaceAfter=2,
+        leftIndent=20,
+        leading=14,
+    )
+
+    story = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if not stripped:
+            i += 1
+            continue
+
+        if stripped.startswith("### "):
+            text = _strip_md_formatting(stripped[4:])
+            story.append(Paragraph(_esc_pdf(text), h3_style))
+        elif stripped.startswith("## "):
+            text = _strip_md_formatting(stripped[3:])
+            story.append(Paragraph(_esc_pdf(text), h2_style))
+        elif stripped.startswith("# "):
+            text = _strip_md_formatting(stripped[2:])
+            story.append(Paragraph(_esc_pdf(text), h1_style))
+        elif stripped.startswith("---"):
+            pass
+        elif stripped.startswith("| ") and "---" not in stripped:
+            table_lines = [stripped]
+            j = i + 1
+            while j < len(lines) and lines[j].strip().startswith("|"):
+                if "---" in lines[j]:
+                    j += 1
+                    continue
+                table_lines.append(lines[j].strip())
+                j += 1
+            i = j - 1
+            story.append(_build_pdf_table(table_lines, body_style))
+            story.append(Spacer(1, 4))
+        elif stripped.startswith("- "):
+            text = _strip_md_formatting(stripped[2:])
+            story.append(Paragraph(f"\u2022 {_esc_pdf(text)}", bullet_style))
+        elif stripped.startswith("*") and stripped.endswith("*") and not stripped.startswith("**"):
+            text = _strip_md_formatting(stripped[1:-1])
+            story.append(Paragraph(f"<i>{_esc_pdf(text)}</i>", body_style))
+        elif stripped.startswith("**") and stripped.endswith("**"):
+            text = _strip_md_formatting(stripped[2:-2])
+            story.append(Paragraph(f"<b>{_esc_pdf(text)}</b>", body_style))
+        else:
+            text = _strip_md_formatting(stripped)
+            story.append(Paragraph(_esc_pdf(text), body_style))
+
+        i += 1
+
+    doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+    return buf.getvalue()
+
+
+def markdown_to_docx(md_bytes: bytes) -> bytes:
+    md_text = md_bytes.decode("utf-8")
+    lines = md_text.split("\n")
+    doc = Document()
+
+    style = doc.styles["Normal"]
+    font = style.font
+    font.name = "Calibri"
+    font.size = Pt(11)
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if not stripped:
+            i += 1
+            continue
+
+        if stripped.startswith("### "):
+            text = _strip_md_formatting(stripped[4:])
+            heading = doc.add_heading(text, level=3)
+            for run in heading.runs:
+                run.font.size = Pt(13)
+        elif stripped.startswith("## "):
+            text = _strip_md_formatting(stripped[3:])
+            heading = doc.add_heading(text, level=2)
+            for run in heading.runs:
+                run.font.size = Pt(15)
+        elif stripped.startswith("# "):
+            text = _strip_md_formatting(stripped[2:])
+            heading = doc.add_heading(text, level=1)
+            for run in heading.runs:
+                run.font.size = Pt(18)
+        elif stripped.startswith("---"):
+            pass
+        elif stripped.startswith("| ") and "---" not in stripped:
+            table_lines = [stripped]
+            j = i + 1
+            while j < len(lines) and lines[j].strip().startswith("|"):
+                if "---" in lines[j]:
+                    j += 1
+                    continue
+                table_lines.append(lines[j].strip())
+                j += 1
+            i = j - 1
+            _build_docx_table(doc, table_lines)
+        elif stripped.startswith("- "):
+            text = _strip_md_formatting(stripped[2:])
+            doc.add_paragraph(text, style="List Bullet")
+        elif stripped.startswith("*") and stripped.endswith("*") and not stripped.startswith("**"):
+            text = _strip_md_formatting(stripped[1:-1])
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.italic = True
+        elif stripped.startswith("**") and stripped.endswith("**"):
+            text = _strip_md_formatting(stripped[2:-2])
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.bold = True
+        else:
+            text = _strip_md_formatting(stripped)
+            doc.add_paragraph(text)
+
+        i += 1
+
+    core_props = doc.core_properties
+    core_props.author = _FIXED_CREATOR
+    core_props.title = "PaperLens Report"
+    core_props.subject = "Paper Review Report"
+    core_props.creator = _FIXED_CREATOR
+    core_props.keywords = None
+    core_props.comments = None
+    core_props.category = None
+    core_props.content_status = None
+    core_props.identifier = None
+    core_props.language = None
+    core_props.last_modified_by = None
+    core_props.revision = 1
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    raw = buf.getvalue()
+    return _make_deterministic_docx(raw)
+
+
+def _esc_pdf(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _strip_md_formatting(text: str) -> str:
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    return text
+
+
+def _add_page_number(canvas, doc):
+    canvas.saveState()
+    canvas.setAuthor(_FIXED_CREATOR)
+    canvas.setCreator(_FIXED_CREATOR)
+    canvas.setProducer(_FIXED_PRODUCER)
+    canvas.setSubject("Paper Review Report")
+    canvas.setTitle("PaperLens Report")
+    canvas.setFont(_PDF_FONT_NAME, 9)
+    page_num = canvas.getPageNumber()
+    canvas.drawCentredString(A4[0] / 2, 15 * mm, str(page_num))
+    canvas.restoreState()
+
+
+def _build_pdf_table(table_lines: list[str], style) -> Table:
+    rows = []
+    for line in table_lines:
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        rows.append([Paragraph(_esc_pdf(c), style) for c in cells])
+    if not rows:
+        return Spacer(1, 0)
+    col_count = max(len(row) for row in rows)
+    for row in rows:
+        row.extend([Paragraph("", style)] * (col_count - len(row)))
+    t = Table(
+        rows,
+        colWidths=[170 * mm / col_count] * col_count,
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    return t
+
+
+def _build_docx_table(doc: Document, table_lines: list[str]) -> None:
+    rows_data = []
+    for line in table_lines:
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        rows_data.append(cells)
+    if not rows_data:
+        return
+    col_count = len(rows_data[0])
+    table = doc.add_table(rows=len(rows_data), cols=col_count)
+    table.style = "Table Grid"
+    for row_idx, row_data in enumerate(rows_data):
+        for col_idx, cell_text in enumerate(row_data):
+            if col_idx < col_count:
+                cell = table.cell(row_idx, col_idx)
+                cell.text = _strip_md_formatting(cell_text)
+                if row_idx == 0:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.bold = True
+
+
+def _make_deterministic_docx(raw: bytes) -> bytes:
+    buf_in = io.BytesIO(raw)
+    buf_out = io.BytesIO()
+    with zipfile.ZipFile(buf_in, "r") as zin:
+        with zipfile.ZipFile(buf_out, "w", zipfile.ZIP_DEFLATED) as zout:
+            for info in sorted(zin.infolist(), key=lambda x: x.filename):
+                data = zin.read(info.filename)
+                if info.filename == "docProps/core.xml":
+                    data = _fix_core_xml(data)
+                elif info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                    data = re.sub(rb'\s+w:rsid[A-Za-z]*="[^"]*"', b"", data)
+                    data = re.sub(rb"<w:rsids\b[^>]*>.*?</w:rsids>", b"", data, flags=re.DOTALL)
+                    data = re.sub(rb"<w:rsid[A-Za-z]*\b[^>]*/>", b"", data)
+                new_info = zipfile.ZipInfo(info.filename, date_time=(2026, 1, 1, 0, 0, 0))
+                new_info.compress_type = zipfile.ZIP_DEFLATED
+                new_info.create_system = 0
+                new_info.external_attr = 0
+                zout.writestr(new_info, data)
+    result = buf_out.getvalue()
+    _validate_docx_package(result)
+    return result
+
+
+def _fix_core_xml(data: bytes) -> bytes:
+    root = ElementTree.fromstring(data)
+    ns = {"cp": "http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "dcmitype": "http://purl.org/dc/dcmitype/",
+          "xsi": "http://www.w3.org/2001/XMLSchema-instance"}
+    for tag in ["cp:lastModifiedBy", "cp:revision"]:
+        elem = root.find(tag, ns)
+        if elem is not None:
+            root.remove(elem)
+    for tag in ["dcterms:created", "dcterms:modified"]:
+        elem = root.find(tag, ns)
+        if elem is not None:
+            elem.text = "2026-01-01T00:00:00Z"
+    ElementTree.register_namespace("cp", ns["cp"])
+    ElementTree.register_namespace("dc", ns["dc"])
+    ElementTree.register_namespace("dcterms", ns["dcterms"])
+    ElementTree.register_namespace("dcmitype", ns["dcmitype"])
+    ElementTree.register_namespace("xsi", ns["xsi"])
+    return ElementTree.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+
+def _validate_docx_package(content: bytes) -> None:
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        names = archive.namelist()
+        lowered = [name.lower() for name in names]
+        if any("vbaproject" in name or "oleobject" in name or "/embeddings/" in name for name in lowered):
+            raise ValueError("unsafe DOCX package")
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            root = ElementTree.fromstring(archive.read(name))
+            for relationship in root:
+                if relationship.attrib.get("TargetMode", "").lower() == "external":
+                    raise ValueError("external DOCX relationship")

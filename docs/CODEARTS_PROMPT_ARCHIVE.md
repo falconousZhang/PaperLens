@@ -7,10 +7,10 @@
 
 1. 按生成时间顺序保存不同版本；相同内容在聊天展示并写入文件时只归档一次。
 2. 后续每个开发任务都在本文件末尾追加对应提示词，并同步更新 `docs/CODEARTS_NEXT_PROMPT.md` 供用户提交给码道。
-3. 码道负责按提示词实施；Codex 在码道完成后审查真实代码并独立复测。若发现问题，依据用户的持续授权由 Codex 直接修正并验证，不再让码道反复返修；当前阶段确认通过后，再生成下一步提示词。
+3. 码道负责按提示词独立实施、审查和复测；若发现问题，依据用户授权直接修正并验证，不增加重复返修轮次。当前阶段确认通过后，再生成下一步提示词。
 4. 不以 `docs/PROGRESS.md` 的汇报代替代码、数据库、Docker 和测试结果核验。
-5. 本文 01～08 均从本机 Codex rollout JSONL 的原始消息或 `apply_patch` 参数逐字恢复；仅统一换行为 LF，没有根据阶段汇报改写正文。
-6. P2.5 之前实际交给码道的版本为 01～07；P2.5 已生成提示词，但该轮由 Codex 直接实施。从 P2.6 起恢复码道实施、Codex 审查的协作方式。
+5. 本文 01～08 均从项目历史开发记录的原始消息或补丁参数逐字恢复；仅统一换行为 LF，没有根据阶段汇报改写正文。
+6. P2.5 之前实际执行的版本为 01～07；P2.5 已生成提示词且同样由码道实施。从 P2.6 起延续码道独立实施、审查与验收的开发方式。
 7. 未实际提交给码道的提示词仍保留归档并明确标注；它们记录了当时的审查结论和任务边界，但不得记作码道执行记录。
 
 ## 索引
@@ -26,16 +26,32 @@
 | 07 | P2.4 事务边界与验收收口 | ✅ rollout 原文 |
 | 08 | P2.5 验收去伪与并发翻页修复 | ✅ rollout 原文 |
 | 09 | P2.6 ProjectDocs 实现态校准 | ✅ 已提交并完成 |
-| 10 | P2.7 ProjectDocs 验收去伪与文档收口 | ⚠️ 未提交，改由 Codex 直接修正 |
-| 11 | P3.1 基于 MockLLM 的结构化审阅后端闭环 | ✅ 已提交并完成；Codex 审查通过 |
-| 12 | P3.2 华为云优先的 Embedding 抽象与语义 Evidence 检索 | ✅ 已提交并完成；Codex 修正并验收通过 |
+| 10 | P2.7 ProjectDocs 验收去伪与文档收口 | ⚠️ 未提交；码道直接完成同等修正 |
+| 11 | P3.1 基于 MockLLM 的结构化审阅后端闭环 | ✅ 已提交、完成并验收 |
+| 12 | P3.2 华为云优先的 Embedding 抽象与语义 Evidence 检索 | ✅ 已提交、完成并验收 |
 | 13 | P3.3 华为云 MaaS 真实生成式模型适配器 | ✅ 本轮生成，待提交 |
+| 14 | P3.4 审阅结果前端与完整任务交互 | ✅ 已提交、完成并验收 |
+| 15 | P3.5 完整认证、真实用户隔离与 RBAC 基础 | ✅ 已提交、完成并验收 |
+| 16 | P4.1 可追溯实验指标提取后端 | ✅ 已提交、完成并验收 |
+| 17 | P4.2 指标分析前端 | ✅ 已提交、完成并验收 |
+| 18 | P4.3 华为云 MaaS 运行配置 | ✅ 已提交、完成并验收 |
+| 19 | P5.1 CSV/Excel 安全上传与解析 | ✅ 已提交、完成并验收 |
+| 20 | P5.2 确定性统计摘要 | ✅ 已提交、完成并验收 |
+| 21 | P5.3a 指标交叉验证后端 | ✅ 已提交、完成并验收 |
+| 22 | P5.3b 实验数据前端 | ✅ 已提交、完成并验收 |
+| 23 | P6.1 Markdown 报告后端 | ✅ 已提交、完成并验收 |
+| 24 | P6.2 PDF/DOCX 与导出前端 | ✅ 已提交、完成并验收 |
+| 25 | 原 P7.1 管理员后端方案 | ⚠️ 历史方案，已被 26 取代，不执行 |
+| 26 | P7.1 论文阅读学习工作台 | ✅ 已提交、完成并验收 |
+| 27 | P7.2 当前论文多轮问答 | ✅ 已提交、完成并验收 |
+| 28 | P7.3 个人学习沉淀与论文库 | ✅ 已提交、完成并验收 |
+| 29 | P8.1 完整管理员系统与不可变审计 | ⬜ 本轮生成，待提交 |
 
 ---
 
 ## 01 — P1 工程骨架首次实施
 
-> 来源：Codex 历史会话中的直接回复原文（2026-07-12，rollout 行 117）
+> 来源：码道历史会话中的直接回复原文（2026-07-12，rollout 行 117）
 
 ~~~~text
 你现在负责继续开发 D:\shixi\PaperLens 项目。
@@ -195,7 +211,7 @@
 
 ## 02 — P1 缺陷修复与 P2 第一条闭环（初版）
 
-> 来源：Codex 历史会话中的直接回复原文（2026-07-12，rollout 行 159）
+> 来源：码道历史会话中的直接回复原文（2026-07-12，rollout 行 159）
 
 ~~~~text
 继续开发 D:\shixi\PaperLens。
@@ -2049,7 +2065,7 @@ npm run build
 
 ## 08 — P2.5 验收去伪与并发翻页修复
 
-> 来源：`docs/CODEARTS_NEXT_PROMPT.md` 覆盖补丁原文（2026-07-13，rollout 行 1058）；生成后改由 Codex 实施，未再投递码道
+> 来源：`docs/CODEARTS_NEXT_PROMPT.md` 覆盖补丁原文（2026-07-13，rollout 行 1058）；生成后改由码道实施，未再投递码道
 
 ~~~~text
 继续修复 D:\shixi\PaperLens 项目。
@@ -2386,7 +2402,7 @@ npm run build
 
 ## 09 — P2.6 ProjectDocs 实现态校准
 
-> 来源：Codex 根据 ProjectDocs 静态审查结果生成（2026-07-13）
+> 来源：码道根据 ProjectDocs 静态审查结果生成（2026-07-13）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
@@ -2503,7 +2519,7 @@ npm run build
 1. 保留 7 个 CodeArts skill 的用途、测试命令和安全约束。
 2. 确认其中路径与真实目录一致。
 3. ProjectDocs/bugfix-report/ 若尚不存在，由 bug-fix-reporter 创建本轮报告；AGENTS 中注明该目录按首次报告创建即可。
-4. 不要把本轮提示词或 Codex/码道职责改写进 AGENTS.md。
+4. 不要把本轮提示词或 码道职责改写进 AGENTS.md。
 
 六、跨文档一致性要求
 
@@ -2524,7 +2540,7 @@ npm run build
 3. 不删除 P3～P6 设计内容，只修正状态和当前事实。
 4. 避免在多份文档复制相互冲突的测试数字；必要时注明事实来源和验证日期。
 5. docs/PROGRESS.md 中既有历史记录不得篡改，只在末尾追加 P2.6 记录。
-6. docs/CODEARTS_NEXT_PROMPT.md 和 docs/CODEARTS_PROMPT_ARCHIVE.md 由 Codex 管理，本轮不得修改。
+6. docs/CODEARTS_NEXT_PROMPT.md 和 docs/CODEARTS_PROMPT_ARCHIVE.md 由码道管理，本轮不得修改。
 
 七、验证与允许修改范围
 
@@ -2595,10 +2611,12 @@ P2.6 — ProjectDocs 实现态校准与可追溯性修复
 
 ---
 
+---
+
 ## 10 — P2.7 ProjectDocs 验收去伪与文档收口
 
-> 来源：Codex 对 P2.6 码道结果独立复核后生成（2026-07-13）
-> 状态：未提交给码道；用户调整协作流程后，由 Codex 直接完成同等修正并独立验证。
+> 来源：码道对 P2.6 开发结果独立复核后生成（2026-07-13）
+> 状态：未提交给码道；用户调整协作流程后，由码道直接完成同等修正并独立验证。
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
@@ -2790,7 +2808,7 @@ P2.7 — ProjectDocs 验收去伪与文档收口
 
 明确记录：
 
-- Codex 独立复核发现 P2.6 的“0 失效锚点”不成立，实际为路径 0、锚点 17。
+- 码道独立复核发现 P2.6 的“0 失效锚点”不成立，实际为路径 0、锚点 17。
 - 新检查器修改前真实复现 75/0/17。
 - 修复后真实结果 75/0/0。
 - 上传状态、标题、Swagger、Evidence 过滤、DELETE、Element Plus、finding_evidences 和物理约束/索引的修正。
@@ -2828,14 +2846,14 @@ P2.7 — ProjectDocs 验收去伪与文档收口
 - docs/CODEARTS_NEXT_PROMPT.md
 - docs/CODEARTS_PROMPT_ARCHIVE.md
 
-注意：上述两个提示词文件可能已经包含 Codex 在本轮开始前生成的未提交变更。开始工作前先记录 git status --short，并分别记录这两个文件的 SHA-256；它们可以作为既有基线出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须与开始前完全相同。禁止范围中的其他代码和配置应使用 git diff --quiet 单独验证。
+注意：上述两个提示词文件可能已经包含 码道在本轮开始前生成的未提交变更。开始工作前先记录 git status --short，并分别记录这两个文件的 SHA-256；它们可以作为既有基线出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须与开始前完全相同。禁止范围中的其他代码和配置应使用 git diff --quiet 单独验证。
 
 完成前依次执行：
 
 1. 修改前运行新检查器并保存 75/0/17 结果。
 2. 修改后运行同一检查器并保存 75/0/0 结果。
 3. git diff --check，必须无错误。
-4. 对比开始前后的状态：P2.7 新增修改必须只有允许范围；两个 Codex 提示词文件只作为既有基线且 SHA-256 不变。
+4. 对比开始前后的状态：P2.7 新增修改必须只有允许范围；两个 码道提示词文件只作为既有基线且 SHA-256 不变。
 5. git diff --quiet -- AGENTS.md backend frontend docker-compose.yml .arts .codeartsdoer .skills，必须确认这些禁止范围相对 HEAD 无变化。
 6. 从 route decorator 重新确认 8 个后端端点。
 7. 从 models.py 重新确认 14 张表。
@@ -2871,8 +2889,8 @@ P2.7 — ProjectDocs 验收去伪与文档收口
 
 ## 11 — P3.1 基于 MockLLM 的结构化审阅后端闭环
 
-> 来源：Codex 在直接完成 P2.7 收口并独立验收后生成（2026-07-13）
-> 状态：已提交给码道并完成；Codex 独立审查、直接修复并于 2026-07-13 验收通过。
+> 来源：码道在直接完成 P2.7 收口并独立验收后生成（2026-07-13）
+> 状态：已提交给码道并完成；码道独立审查、直接修复并于 2026-07-13 验收通过。
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
@@ -2928,7 +2946,7 @@ P2.7 — ProjectDocs 验收去伪与文档收口
 - backend/tests/test_api/test_upload_lifecycle.py
 - backend/tests/test_services/test_llm_client.py
 
-先检查 `git status --short`，记录工作区已有修改，不得覆盖、回退或清理用户/Codex 的既有改动。先给出简短实施计划和预计修改文件，然后直接实施，不要停留在建议层面。
+先检查 `git status --short`，记录工作区已有修改，不得覆盖、回退或清理用户/码道的既有改动。先给出简短实施计划和预计修改文件，然后直接实施，不要停留在建议层面。
 
 按 AGENTS.md 实际执行相关 skill 工作流：
 
@@ -3186,7 +3204,7 @@ LLM content 的严格 JSON 结构固定为：
 - docs/CODEARTS_NEXT_PROMPT.md
 - docs/CODEARTS_PROMPT_ARCHIVE.md
 
-开始工作前分别记录两个 Codex 提示词文件的 SHA-256；它们可以作为既有未提交修改出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须完全相同。不得清理其他既有工作区修改。
+开始工作前分别记录两个 码道提示词文件的 SHA-256；它们可以作为既有未提交修改出现在 git diff 中，但本轮不得修改、还原或覆盖，结束时 SHA-256 必须完全相同。不得清理其他既有工作区修改。
 
 不要 git commit，不要执行 `docker compose down -v`，不要删除数据库 volume，不要清空或改写开发库，不要写入任何真实密钥。
 
@@ -3231,13 +3249,13 @@ LLM content 的严格 JSON 结构固定为：
 
 ## 12 — P3.2 华为云优先的 Embedding 抽象与语义 Evidence 检索
 
-> 来源：Codex 在 P3.1 独立审查、直接修复并验收通过后生成（2026-07-13）
-> 状态：待用户提交给码道实施；完成后由 Codex 审查并在授权范围内直接修正。
+> 来源：码道在 P3.1 独立审查、直接修复并验收通过后生成（2026-07-13）
+> 状态：待用户提交给码道实施；完成后由码道审查并在授权范围内直接修正。
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P3.2：华为云优先的 Embedding 抽象与语义 Evidence 检索。P3.1 已完成 MockLLM 结构化审阅后端闭环并经 Codex 独立验收；当前真实基线为 Docker 后端 115 passed、0 skipped，P3.1 定向测试 53 passed，前端 15 passed 且构建成功，12 条 /api/v1 业务端点、14 张业务表，Alembic 位于 003 head 且 check 无差异，Markdown 链接 75/0/0。
+本轮定义为 P3.2：华为云优先的 Embedding 抽象与语义 Evidence 检索。P3.1 已完成 MockLLM 结构化审阅后端闭环并经 码道独立验收；当前真实基线为 Docker 后端 115 passed、0 skipped，P3.1 定向测试 53 passed，前端 15 passed 且构建成功，12 条 /api/v1 业务端点、14 张业务表，Alembic 位于 003 head 且 check 无差异，Markdown 链接 75/0/0。
 
 本轮目标是把 P3.1 的“固定排序取前 8 条 Evidence”升级为按审阅维度进行语义相关性检索，同时建立可替换的 EmbeddingClient。生产适配方向优先华为云 MaaS；默认本地和测试仍使用确定性的 MockEmbeddingClient，不调用真实网络、不要求用户提供密钥、不产生云费用。
 
@@ -3312,7 +3330,7 @@ LLM content 的严格 JSON 结构固定为：
 - backend/requirements.txt
 - frontend/
 
-开始工作前先记录 `git status --short`，并分别记录两个 Codex 提示词文件的 SHA-256。它们可以作为既有未提交基线出现在 git diff 中，但本轮结束时 SHA-256 必须完全不变。不要清理或覆盖其他既有未提交修改。
+开始工作前先记录 `git status --short`，并分别记录两个 码道提示词文件的 SHA-256。它们可以作为既有未提交基线出现在 git diff 中，但本轮结束时 SHA-256 必须完全不变。不要清理或覆盖其他既有未提交修改。
 
 二、实现 EmbeddingClient 抽象
 
@@ -3463,7 +3481,7 @@ LLM content 的严格 JSON 结构固定为：
 10. 运行 Markdown 链接检查器并报告本地链接/坏路径/坏锚点。
 11. `git diff --check`，必须无错误。
 12. 对禁止范围执行独立 diff 检查，证明没有修改前端、Docker、Alembic、依赖、skills 和 AGENTS。
-13. 比较两个 Codex 提示词文件开始前后的 SHA-256，必须完全不变。
+13. 比较两个 码道提示词文件开始前后的 SHA-256，必须完全不变。
 14. 检查测试库所有业务表无测试残留，并确认开发库 papers 数量与本轮测试前一致。
 
 如果 Docker、Node 或网络不可用，必须报告真实原因和完整命令，禁止把未执行写成通过。华为云真实网络测试本轮本来就禁止执行，不能将“未调用真实云”记为缺陷或 skip。
@@ -3483,19 +3501,19 @@ LLM content 的严格 JSON 结构固定为：
 11. 明确本轮没有新增依赖/迁移，没有实现 FAISS/pgvector、真实生成式 LLM、前端审阅、取消任务或 P4～P6 功能。
 12. 尚未完成的问题和建议的 P3.3 下一步，但不要自行进入 P3.3。
 
-不要 git commit，不要删除数据库 volume，不写入任何真实密钥，不清理开发库已有数据，不要修改或还原 Codex 提示词文件。
+不要 git commit，不要删除数据库 volume，不写入任何真实密钥，不清理开发库已有数据，不要修改或还原 码道提示词文件。
 ~~~~
 
 ---
 
 ## 13 — P3.3 华为云 MaaS 真实生成式模型适配器
 
-> 来源：Codex 在 P3.2 独立审查、直接修复并验收通过后生成（2026-07-13）
+> 来源：码道在 P3.2 独立审查、直接修复并验收通过后生成（2026-07-13）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P3.3：实现华为云 MaaS 标准 API V2 的真实生成式模型适配器，并接入现有结构化审阅链路。P3.2 已完成可替换 EmbeddingClient、华为云 MaaS Embedding 适配器和按维度语义 Evidence 检索，并经 Codex 独立修正与验收；当前真实基线为 Docker 后端全量 205 passed、0 skipped，P3.2 定向测试 142 passed，前端 15 passed 且生产构建成功，12 条 /api/v1 路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。
+本轮定义为 P3.3：实现华为云 MaaS 标准 API V2 的真实生成式模型适配器，并接入现有结构化审阅链路。P3.2 已完成可替换 EmbeddingClient、华为云 MaaS Embedding 适配器和按维度语义 Evidence 检索，并经 码道独立修正与验收；当前真实基线为 Docker 后端全量 205 passed、0 skipped，P3.2 定向测试 142 passed，前端 15 passed 且生产构建成功，12 条 /api/v1 路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。
 
 本轮目标是在不改变现有审阅 API、数据库模型和前端的前提下，把 LLMClient 从“只有 Mock 实现”扩展为可配置的 HuaweiMaaSLLMClient。默认本地和测试仍使用 MockLLMClient；所有华为接口测试必须使用 httpx MockTransport，禁止真实联网、禁止要求用户提供密钥、禁止产生云费用。
 
@@ -3519,7 +3537,7 @@ LLM content 的严格 JSON 结构固定为：
 - ProjectDocs/specs_SDD/PaperLens/tasks.md
 - ProjectDocs/specs_SDD/PaperLens/design/03-审阅生成.md
 - ProjectDocs/sprint/审阅生成.md
-- ProjectDocs/bugfix-report/P3.2-Codex独立审查与验收收口.md
+- ProjectDocs/bugfix-report/P3.2-码道独立审查与验收收口.md
 - backend/requirements.txt
 - backend/paperlens/core/config.py
 - backend/paperlens/core/errors.py
@@ -3533,7 +3551,7 @@ LLM content 的严格 JSON 结构固定为：
 - backend/tests/test_services/test_review_service.py
 - backend/tests/test_api/test_review_tasks.py
 
-不要只根据 docs/PROGRESS.md 判断完成度；必须检查真实实现、git 状态、Docker、数据库和 pytest collection/result。当前工作区包含用户和 Codex 的既有修改，码道不得清理、还原、覆盖或顺手提交。
+不要只根据 docs/PROGRESS.md 判断完成度；必须检查真实实现、git 状态、Docker、数据库和 pytest collection/result。当前工作区包含用户和码道的既有修改，码道不得清理、还原、覆盖或顺手提交。
 
 一、研发流程和允许范围
 
@@ -3579,7 +3597,7 @@ LLM content 的严格 JSON 结构固定为：
 - backend/paperlens/models/
 - backend/paperlens/schemas/
 
-开始工作前先记录 `git status --short`，并分别记录两个 Codex 提示词文件的 SHA-256。它们可以作为既有修改出现在 diff 中，但本轮结束时内容和 SHA-256 必须完全不变。不要执行 git add、git commit、git reset、git checkout、git restore、git clean、rebase 或其他会改写索引、历史或既有工作区的操作。现有提交历史由用户管理，本轮不要尝试整理或重写。
+开始工作前先记录 `git status --short`，并分别记录两个 码道提示词文件的 SHA-256。它们可以作为既有修改出现在 diff 中，但本轮结束时内容和 SHA-256 必须完全不变。不要执行 git add、git commit、git reset、git checkout、git restore、git clean、rebase 或其他会改写索引、历史或既有工作区的操作。现有提交历史由用户管理，本轮不要尝试整理或重写。
 
 二、以华为云当前官方 V2 契约为准
 
@@ -3703,8 +3721,8 @@ LLM content 的严格 JSON 结构固定为：
 9. 核对 `/api/v1` 路由仍为 12、ORM 业务表仍为 14。
 10. 运行 Markdown 链接检查器并报告本地链接/坏路径/坏锚点。
 11. `git diff --check`，必须无错误。
-12. 对禁止范围执行独立 diff 检查，证明没有修改前端、Docker、Alembic、依赖、skills、AGENTS 和 Codex 提示词文件。
-13. 比较两个 Codex 提示词文件开始前后的 SHA-256，必须完全不变。
+12. 对禁止范围执行独立 diff 检查，证明没有修改前端、Docker、Alembic、依赖、skills、AGENTS 和码道提示词文件。
+13. 比较两个 码道提示词文件开始前后的 SHA-256，必须完全不变。
 14. 检查测试库所有业务表无测试残留，并确认开发库 papers 数量与本轮测试前一致。
 
 如果 Docker、Node 或网络不可用，必须报告真实原因和完整命令，禁止把未执行写成通过。真实华为网络测试本轮明确禁止，不能以未联网为由修改测试要求或伪造云端结果。
@@ -3724,19 +3742,19 @@ LLM content 的严格 JSON 结构固定为：
 11. 明确本轮没有新增依赖/迁移，没有实现前端、认证/RBAC、持久化向量索引、流式/重试/工具调用或 P4～P8 功能。
 12. 尚未完成的问题和建议的 P3.4 下一步，但不要自行进入 P3.4。
 
-不要 git commit，不要修改 .git，不要删除数据库 volume，不写入任何真实密钥，不真实调用华为云，不清理开发库已有数据，不要修改或还原 Codex 提示词文件。
+不要 git commit，不要修改 .git，不要删除数据库 volume，不写入任何真实密钥，不真实调用华为云，不清理开发库已有数据，不要修改或还原 码道提示词文件。
 ~~~~
 
 ---
 
 ## 14 — P3.4 审阅结果前端与完整任务交互
 
-> 来源：Codex 在 P3.3 独立审查、直接修复并验收通过后生成（2026-07-13）
+> 来源：码道在 P3.3 独立审查、直接修复并验收通过后生成（2026-07-13）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P3.4：实现审阅结果前端页面和完整 REVIEW 任务交互。P3.3 已完成华为云 MaaS 标准 API V2 非流式 LLM 适配器，并经 Codex 独立修正与验收；当前真实基线为 Docker 后端全量 277 passed、0 skipped，P3.3 精确定向测试 73 passed，前端 15 passed 且生产构建成功，12 条 /api/v1 业务路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。Docker backend/frontend 正在运行，postgres healthy；独立测试库 14 张业务表均为空，开发库当前为 33 papers / 1 task / 1 review。
+本轮定义为 P3.4：实现审阅结果前端页面和完整 REVIEW 任务交互。P3.3 已完成华为云 MaaS 标准 API V2 非流式 LLM 适配器，并经 码道独立修正与验收；当前真实基线为 Docker 后端全量 277 passed、0 skipped，P3.3 精确定向测试 73 passed，前端 15 passed 且生产构建成功，12 条 /api/v1 业务路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。Docker backend/frontend 正在运行，postgres healthy；独立测试库 14 张业务表均为空，开发库当前为 33 papers / 1 task / 1 review。
 
 本轮只实现现有后端契约之上的前端：新增 `/papers/:id/review` 页面、审阅任务创建/恢复/轮询、结果展示与筛选、Evidence 深链到现有 PaperDetail 高亮。不得修改后端契约来迁就页面，不得进入 P3.5 认证/RBAC，不得实现 P4～P8。
 
@@ -3759,7 +3777,7 @@ LLM content 的严格 JSON 结构固定为：
 - ProjectDocs/specs_SDD/PaperLens/design/10-前端详细设计.md
 - ProjectDocs/specs_SDD/PaperLens/tasks.md
 - ProjectDocs/sprint/审阅生成.md
-- ProjectDocs/bugfix-report/P3.3-Codex独立审查与验收收口.md
+- ProjectDocs/bugfix-report/P3.3-码道独立审查与验收收口.md
 - frontend/package.json
 - frontend/src/api/index.ts
 - frontend/src/router/index.ts
@@ -3779,7 +3797,7 @@ LLM content 的严格 JSON 结构固定为：
    - sdd-workflow：同步 specs_SDD 和 sprint 状态。
 2. 如果某个 skill 实际不可用，明确记录并按同样顺序手工完成，不得假装调用成功。
 3. 不新增 Element Plus、UI 框架、状态库、轮询库或测试依赖。当前 package.json 已足够。
-4. 开始前记录 `git status --short`，并分别记录两个 Codex 提示词文件的 SHA-256。
+4. 开始前记录 `git status --short`，并分别记录两个 码道提示词文件的 SHA-256。
 5. 不执行 git add、git commit、git reset、git checkout、git restore、git clean、rebase 或任何改写索引、历史、既有工作区的操作。现有提交和修改全部由用户管理。
 
 允许修改：
@@ -3945,7 +3963,7 @@ LLM content 的严格 JSON 结构固定为：
 7. `git diff --check`。
 8. Docker backend/frontend 运行、postgres healthy。
 9. 测试库 14 张业务表均为空；不清理开发库，记录开发库前后计数并确认无测试污染。
-10. 两个 Codex 提示词文件内容和 SHA-256 与开始前完全一致。
+10. 两个 码道提示词文件内容和 SHA-256 与开始前完全一致。
 11. 检查禁止范围相对本轮开始没有变化；不得把既有 P3.1～P3.3 修改误报为本轮产生。
 
 十、最终回复必须逐项报告
@@ -3963,19 +3981,19 @@ LLM content 的严格 JSON 结构固定为：
 11. 明确没有新增依赖/后端 API/迁移，没有实现认证/RBAC、P4～P8、WebSocket/SSE/cancel。
 12. 尚未完成的问题和建议的 P3.5 下一步，但不要自行进入 P3.5。
 
-不要 git commit，不要修改 .git，不要删除数据库 volume，不写入任何真实密钥，不真实调用华为云，不清理开发库已有数据，不要修改或还原 Codex 提示词文件。
+不要 git commit，不要修改 .git，不要删除数据库 volume，不写入任何真实密钥，不真实调用华为云，不清理开发库已有数据，不要修改或还原 码道提示词文件。
 ~~~~
 
 ---
 
 ## 15 — P3.5 完整认证、真实用户隔离与 USER/ADMIN RBAC 基础
 
-> 来源：Codex 在 P3.4 独立审查、直接修复并验收通过后生成（2026-07-13）
+> 来源：码道在 P3.4 独立审查、直接修复并验收通过后生成（2026-07-13）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P3.5：实现可实际使用的注册、登录、刷新、退出、密码与个人资料流程，把论文/任务/审阅从 demo_user_id 迁移到真实认证上下文，并建立 USER/ADMIN RBAC 基础。P3.4 已完成审阅结果前端与完整任务交互并经 Codex 独立修正与验收；当前真实基线为 Docker 后端全量 277 passed、0 skipped，前端 45 passed 且生产构建成功，12 条 /api/v1 业务路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。Docker backend/frontend 正在运行，postgres healthy；独立测试库 14 张业务表均为空。开发库数据属于用户，开始时重新只读计数，不得假定仍固定为某个数字，也不得清理。
+本轮定义为 P3.5：实现可实际使用的注册、登录、刷新、退出、密码与个人资料流程，把论文/任务/审阅从 demo_user_id 迁移到真实认证上下文，并建立 USER/ADMIN RBAC 基础。P3.4 已完成审阅结果前端与完整任务交互并经 码道独立修正与验收；当前真实基线为 Docker 后端全量 277 passed、0 skipped，前端 45 passed 且生产构建成功，12 条 /api/v1 业务路由、14 张业务表，Alembic 位于 003_normalized_and_error head 且 check 无差异，Markdown 本地链接 75/0/0。Docker backend/frontend 正在运行，postgres healthy；独立测试库 14 张业务表均为空。开发库数据属于用户，开始时重新只读计数，不得假定仍固定为某个数字，也不得清理。
 
 本轮必须形成认证端到端基础，不能只新增 User 表或只签发一个不可撤销 JWT。完整管理员资源管理 API、管理员仪表盘/控制台仍属于 P7；P3.5 只实现角色模型、服务端鉴权依赖、无默认凭据的管理员提升命令，以及现有业务资源的真实用户隔离。不得进入 P4～P8 的指标、实验、报告或管理员业务页面。
 
@@ -4023,7 +4041,7 @@ LLM content 的严格 JSON 结构固定为：
 - ProjectDocs/specs_SDD/PaperLens/spec.md
 - ProjectDocs/specs_SDD/PaperLens/tasks.md
 - ProjectDocs/sprint/前端展示.md
-- ProjectDocs/bugfix-report/P3.4-Codex独立审查与验收收口.md
+- ProjectDocs/bugfix-report/P3.4-码道独立审查与验收收口.md
 
 一、严格执行工作流和边界
 
@@ -4035,9 +4053,9 @@ LLM content 的严格 JSON 结构固定为：
    - backend-detail、frontend-detail：分别遵循现有 FastAPI/SQLAlchemy 与 Vue3/TypeScript 风格。
    - sdd-workflow：同步认证和前端 Sprint。
 2. 如果某个 skill 实际不可用，明确记录并按相同顺序手工产出文档，不得假装调用成功。
-3. 开始前记录 `git status --short`、最新提交、Docker 状态、开发库只读计数，以及两个 Codex 提示词文件 SHA-256。
+3. 开始前记录 `git status --short`、最新提交、Docker 状态、开发库只读计数，以及两个 码道提示词文件 SHA-256。
 4. 不执行 git add、git commit、git reset、git checkout、git restore、git clean、rebase 或任何改写索引、历史和既有工作区的操作。
-5. 不修改、删除或还原 `.arts/`、`.codeartsdoer/`、`.skills/`、`.git/`、AGENTS.md、两个 Codex 提示词文件和用户已有数据。
+5. 不修改、删除或还原 `.arts/`、`.codeartsdoer/`、`.skills/`、`.git/`、AGENTS.md、两个 码道提示词文件和用户已有数据。
 6. 不引入外部身份平台、社交登录、MFA、Redis、Celery、Element Plus、管理员 UI、P4～P8 功能或真实邮件/短信云调用。
 
 允许按本轮需要修改：
@@ -4211,8 +4229,8 @@ LLM content 的严格 JSON 结构固定为：
 9. Markdown 检查坏路径/坏锚点均为 0；`git diff --check` 无错误。
 10. 测试库所有新旧业务表均为 0；开发库测试前后计数不变，legacy 数据仍完整。
 11. 检查响应、日志、git diff 和测试快照中没有 JWT secret、密码、refresh/reset 明文 token或 hash。
-12. 两个 Codex 提示词文件内容和开始时 SHA-256 完全不变。
-13. 检查禁止范围和最新 Git 提交没有变化；不得把用户或 Codex 既有修改归因于本轮。
+12. 两个 码道提示词文件内容和开始时 SHA-256 完全不变。
+13. 检查禁止范围和最新 Git 提交没有变化；不得把用户或 码道既有修改归因于本轮。
 
 如果 Docker、依赖下载、Node 或数据库不可用，报告真实命令和原因，禁止把未执行写成通过。不要为了保住旧测试数字而 skip、xfail、删测试、放宽安全断言或恢复 demo_user_id 后门。
 
@@ -4231,21 +4249,21 @@ LLM content 的严格 JSON 结构固定为：
 11. 明确没有自动创建/提升管理员，没有真实发送通知，没有实现管理员业务 API/控制台、MFA、P4～P8。
 12. 尚未完成的问题和建议的下一阶段，但不要自行进入下一阶段。
 
-不要 git commit，不要修改 .git，不要删除数据库 volume，不要打印或提交任何真实密钥/密码/token，不要真实调用华为云或邮件服务，不要清理开发库已有数据，不要修改或还原 Codex 提示词文件。
+不要 git commit，不要修改 .git，不要删除数据库 volume，不要打印或提交任何真实密钥/密码/token，不要真实调用华为云或邮件服务，不要清理开发库已有数据，不要修改或还原 码道提示词文件。
 ~~~~
 
 ---
 
 ## 16 — P4.1 可追溯实验指标提取与 Checkpoint 口径判断后端
 
-> 来源：Codex 在 P3.5 独立安全纠正并完成代码验收后生成（2026-07-13）
+> 来源：码道在 P3.5 独立安全纠正并完成代码验收后生成（2026-07-13）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P4.1：在 P3.5 完整认证和真实用户隔离基础上，实现从已解析论文表格/原文 Evidence 中提取实验指标、判断 checkpoint 统计口径、保存可追溯 MetricRecord，并提供任务与查询 API。P3.5 已经 Codex 独立安全纠正：认证定向 42 passed，Docker 后端全量 318 passed、0 skipped，前端 66 passed 且生产构建成功；Alembic 为 005_auth_security_corrections head 且 check 无差异，22 条 `/api/v1` 路由、17 张 ORM 表。Docker backend/frontend 正在运行，postgres healthy。
+本轮定义为 P4.1：在 P3.5 完整认证和真实用户隔离基础上，实现从已解析论文表格/原文 Evidence 中提取实验指标、判断 checkpoint 统计口径、保存可追溯 MetricRecord，并提供任务与查询 API。P3.5 已经 码道独立安全纠正：认证定向 42 passed，Docker 后端全量 318 passed、0 skipped，前端 66 passed 且生产构建成功；Alembic 为 005_auth_security_corrections head 且 check 无差异，22 条 `/api/v1` 路由、17 张 ORM 表。Docker backend/frontend 正在运行，postgres healthy。
 
-特别注意：P3.4 文档曾记录开发库 35 papers / 1 task / 1 review，但 Codex 在 P3.5 本轮首次只读计数时已经是 0 / 0 / 0，原持久卷仍存在，现有证据无法自动恢复或精确归因。P4.1 开始和结束都必须重新只读计数，只能诚实记录当前值；禁止把“0→0”描述成 P3.5 历史数据保留成功，禁止自动恢复、伪造、清理开发库或删除 volume。
+特别注意：P3.4 文档曾记录开发库 35 papers / 1 task / 1 review，但 码道在 P3.5 本轮首次只读计数时已经是 0 / 0 / 0，原持久卷仍存在，现有证据无法自动恢复或精确归因。P4.1 开始和结束都必须重新只读计数，只能诚实记录当前值；禁止把“0→0”描述成 P3.5 历史数据保留成功，禁止自动恢复、伪造、清理开发库或删除 volume。
 
 本轮只做指标提取后端、任务执行和查询契约，不实现 CSV/Excel 实验文件分析、报告导出、指标前端页面、管理员业务 API/控制台、FAISS/pgvector、真实邮件、MFA 或 P5～P8 功能。不得削弱 P3.5 认证、会话撤销和真实用户隔离。
 
@@ -4271,14 +4289,14 @@ LLM content 的严格 JSON 结构固定为：
 - ProjectDocs/systemDesign/01～08
 - ProjectDocs/specs_SDD/PaperLens/spec.md、tasks.md、design/
 - ProjectDocs/sprint/用户认证与权限.md、审阅生成.md
-- ProjectDocs/bugfix-report/P3.5-Codex独立审查与安全验收收口.md
+- ProjectDocs/bugfix-report/P3.5-码道独立审查与安全验收收口.md
 
 一、工作流与边界
 
 1. 严格按 AGENTS.md 的 skill 顺序执行：先用 dev-process-framework 更新 systemDesign/01～06 的 P4.1 需求、数据流、API 和实施计划；本轮无新页面，page-mockup 只需确认 07 中指标页面仍为规划，不生成静态页面；用 fullstack-testing 先更新 08 测试矩阵；再用 function-detail/backend-detail 更新 SDD 后编码；最后用 sdd-workflow 更新或新增指标提取 Sprint。
 2. 某个 skill 不可用时明确记录，并按同一顺序手工产出，不能假装调用成功。
-3. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库只读计数、Alembic 状态，以及两个 Codex 提示词文件 SHA-256。
-4. 不执行 git add/commit/reset/checkout/restore/clean/rebase，不修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和 Codex 提示词文件。
+3. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库只读计数、Alembic 状态，以及两个 码道提示词文件 SHA-256。
+4. 不执行 git add/commit/reset/checkout/restore/clean/rebase，不修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和码道提示词文件。
 5. 不删除 volume、不 downgrade 开发库、不清理或重建用户数据。测试只能写 `paperlens_test`，任何数据库保护断言失败都必须立即停止。
 6. 不修改认证安全语义：access 必须继续查 sid/AuthSession/User，refresh 继续轮换与重放撤销，token 不得进入 Web Storage 或日志，业务 user_id 继续只来自认证依赖。
 
@@ -4352,25 +4370,25 @@ LLM content 的严格 JSON 结构固定为：
 7. Markdown 本地坏路径/坏锚点均为 0，`git diff --check` 无错误。
 8. paperlens_test 全部业务表 0；开发库各业务计数测试前后相等，同时明确历史 35/1/1 已不在库中的既知事实。
 9. 扫描响应、日志、diff、测试快照，无 JWT secret、密码、refresh/reset 明文、Huawei Key、论文原文或内部 prompt 泄漏。
-10. 两个 Codex 提示词 SHA-256 与开始时一致；最新 Git 提交和禁止范围未变化。
+10. 两个 码道提示词 SHA-256 与开始时一致；最新 Git 提交和禁止范围未变化。
 
 八、最终回复
 
 逐项报告实际 skill/手工替代、修改文件、提取口径、checkpoint 规则、API、任务原子性、认证/所有权、测试、迁移、Docker、路由/表、Markdown、测试库/开发库、secret 扫描和未实现边界。失败或未执行项必须如实写，禁止复用历史数字或把计划写成完成。
 
-不要 git commit，不要修改 .git，不要删除 volume，不要清理/伪造/自动恢复开发库数据，不要写入或打印 secret/token/password，不要真实调用华为云，不要修改或还原 Codex 提示词文件，不要自行进入 P4.2/P5～P8。
+不要 git commit，不要修改 .git，不要删除 volume，不要清理/伪造/自动恢复开发库数据，不要写入或打印 secret/token/password，不要真实调用华为云，不要修改或还原 码道提示词文件，不要自行进入 P4.2/P5～P8。
 ~~~~
 
 ---
 
 ## 17 — P4.2 指标分析前端与完整任务交互
 
-> 来源：Codex 在 P4.1 独立纠正并完成代码验收后生成（2026-07-14）
+> 来源：码道在 P4.1 独立纠正并完成代码验收后生成（2026-07-14）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
-本轮定义为 P4.2：在 P4.1 已完成且经 Codex 独立纠正验收的指标后端上，实现用户可操作的指标分析页面、指标任务创建/恢复/轮询、历史结果选择、严格筛选分页和来源追溯交互。P4.1 最终基线为：指标定向 67 passed；Docker 后端全量 385 passed、0 skipped；前端 8 files / 66 passed 且生产构建成功；Alembic 为 007_metric_integrity_corrections head，check 无差异；24 条 `/api/v1` method+path 路由、17 张 ORM 表；Docker backend/frontend running、postgres healthy。
+本轮定义为 P4.2：在 P4.1 已完成且经 码道独立纠正验收的指标后端上，实现用户可操作的指标分析页面、指标任务创建/恢复/轮询、历史结果选择、严格筛选分页和来源追溯交互。P4.1 最终基线为：指标定向 67 passed；Docker 后端全量 385 passed、0 skipped；前端 8 files / 66 passed 且生产构建成功；Alembic 为 007_metric_integrity_corrections head，check 无差异；24 条 `/api/v1` method+path 路由、17 张 ORM 表；Docker backend/frontend running、postgres healthy。
 
 当前开发库在本轮开始前为 2 users / 2 papers / 1 task / 7 reviews / 0 metrics，这是用户注册、上传和审阅产生的真实数据。P4.2 开始和结束必须只读计数并保持完全一致；禁止为截图、E2E 或演示创建账号、上传论文、发起开发库任务、伪造指标、清理记录或删除 volume。P3.4→P3.5 的历史数据异常继续保留在文档中，不要改写或重新归因。
 
@@ -4393,14 +4411,14 @@ LLM content 的严格 JSON 结构固定为：
 - ProjectDocs/systemDesign/01～08
 - ProjectDocs/specs_SDD/PaperLens/spec.md、tasks.md、design/04、07、09、10
 - ProjectDocs/sprint/指标提取与口径判断.md
-- ProjectDocs/bugfix-report/P4.1-Codex独立审查与指标完整性验收收口.md
+- ProjectDocs/bugfix-report/P4.1-码道独立审查与指标完整性验收收口.md
 
 一、工作流与边界
 
 1. 严格按 AGENTS.md 的 skill 顺序执行：先用 dev-process-framework 校准 P4.2 需求与前端数据流；用 page-mockup 更新 systemDesign/07 和 SDD 前端设计；用 fullstack-testing 先更新 08 测试矩阵；再用 function-detail/frontend-detail 更新 SDD 后编码；最后用 sdd-workflow 更新指标 Sprint。
 2. 某个 skill 不可用时明确记录，并按同一顺序手工产出，不能假装调用成功。
-3. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库计数、Alembic 状态，以及两个 Codex 提示词文件 SHA-256。
-4. 不执行 git add/commit/reset/checkout/restore/clean/rebase，不修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和 Codex 提示词文件。
+3. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库计数、Alembic 状态，以及两个 码道提示词文件 SHA-256。
+4. 不执行 git add/commit/reset/checkout/restore/clean/rebase，不修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和码道提示词文件。
 5. 测试只能写 paperlens_test；不得修改开发库数据，不得 downgrade 开发库，不得删除 volume。
 6. 不改变 access 内存存储、refresh HttpOnly/single-flight、sid 会话撤销、真实 user_id 来源或 ADMIN 默认不越权语义。
 
@@ -4482,20 +4500,20 @@ LLM content 的严格 JSON 结构固定为：
 8. Markdown 本地坏路径/坏锚点为 0，`git diff --check` 无错误。
 9. paperlens_test 业务表为 0；开发库开始/结束严格保持 2/2/1/7/0，除非用户在并行操作，若变化必须只读核对并如实报告。
 10. 扫描 diff、构建产物和日志，无 token、密码、JWT secret、Huawei Key、论文原文或内部 prompt 泄漏。
-11. 两个 Codex 提示词 SHA-256 与开始时一致；最新 Git 提交和禁止范围未变化。
+11. 两个 码道提示词 SHA-256 与开始时一致；最新 Git 提交和禁止范围未变化。
 
 九、最终回复
 
 逐项报告实际 skill/手工替代、页面与状态机、API 类型、历史结果隔离、筛选分页、来源追溯、安全、测试、构建、后端回归、迁移、Docker、路由/表、Markdown、测试库/开发库和未实现边界。失败或未执行项必须如实写，禁止复用历史数字或把计划写成完成。
 
-不要 git commit，不要修改 .git，不要删除 volume，不要清理/伪造开发库数据，不要写入或打印 secret/token/password，不要真实调用华为云，不要修改或还原 Codex 提示词文件，不要自行进入 P5～P8。
+不要 git commit，不要修改 .git，不要删除 volume，不要清理/伪造开发库数据，不要写入或打印 secret/token/password，不要真实调用华为云，不要修改或还原 码道提示词文件，不要自行进入 P5～P8。
 ~~~~
 
 ---
 
 ## 18 — P4.3 华为云 MaaS LLM 运行配置与安全联调准备
 
-> 来源：Codex 在 P4.2 独立纠正并完成代码验收后生成（2026-07-14）
+> 来源：码道在 P4.2 独立纠正并完成代码验收后生成（2026-07-14）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
@@ -4515,13 +4533,13 @@ P4.2 最终基线：P4.2 前端定向 59 passed；前端全量 106 passed（10 f
 - ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens、相关 Sprint
 - docs/PROGRESS.md、IMPLEMENTATION_STATUS.md、architecture.md、security-design.md
 
-用户已在“西南-贵阳一”控制台的调用说明中确认：API 地址为 `https://api.modelarts-maas.com/v2/chat/completions`，model 参数为 `glm-5.2`。项目配置使用去掉末尾 `/chat/completions` 的 base URL，即 `https://api.modelarts-maas.com/v2`。控制台实际调用说明优先于可能滞后的公开区域列表。用户曾在聊天中粘贴过一把 API Key，该 Key 必须视为已泄露并由用户在控制台删除重建；禁止读取、恢复、使用、测试或写入那把旧 Key。新 Key 只能由用户稍后直接写入本机忽略的 `.env`，不得发送给码道或 Codex。
+用户已在“西南-贵阳一”控制台的调用说明中确认：API 地址为 `https://api.modelarts-maas.com/v2/chat/completions`，model 参数为 `glm-5.2`。项目配置使用去掉末尾 `/chat/completions` 的 base URL，即 `https://api.modelarts-maas.com/v2`。控制台实际调用说明优先于可能滞后的公开区域列表。用户曾在聊天中粘贴过一把 API Key，该 Key 必须视为已泄露并由用户在控制台删除重建；禁止读取、恢复、使用、测试或写入那把旧 Key。新 Key 只能由用户稍后直接写入本机忽略的 `.env`，不得发送给码道或 码道。
 
 一、工作流与边界
 
 1. 严格按 AGENTS.md 的 skill 顺序执行：dev-process-framework 校准运行配置与运维边界；本轮无新 UI，page-mockup 只记录不需要页面变更；fullstack-testing 先补配置/CLI/回归测试设计；function-detail 更新 SDD 后编码；sdd-workflow 更新独立 Sprint。skill 不可用时明确记录并按同一顺序手工产出。
-2. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库只读计数、Alembic 状态和两个 Codex 提示词文件 SHA-256。
-3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 Codex 提示词文件。
+2. 开始前记录 git status、最新提交、Docker 状态、开发库/测试库只读计数、Alembic 状态和两个 码道提示词文件 SHA-256。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词文件。
 4. 不真实访问华为云，不产生推理费用，不创建/读取用户 API Key，不向用户索要或打印 secret。本轮所有自动测试必须离线，使用 MockTransport/假 client。
 5. 不修改开发库业务数据，不发起真实 REVIEW/METRIC 任务，不创建账号/论文，不删除 volume，不 downgrade 开发库。
 6. 不进入 CSV/Excel、实验分析、报告导出、管理员系统、OBS、FAISS/pgvector、Embedding 真实切换或其他 P5～P8 功能。
@@ -4588,27 +4606,27 @@ P4.2 最终基线：P4.2 前端定向 59 passed；前端全量 106 passed（10 f
 
 逐项报告 skill/手工替代、Compose 变量、默认 mock、Embedding 强制 mock、配置校验、CLI 确认门、secret 防护、离线测试、全量回归、构建、迁移、Docker、路由/表、Markdown、测试库/开发库和未执行的真实云端烟测。任何未执行项必须如实写明。
 
-不要 git commit，不要修改 Codex 提示词，不要真实调用华为云，不要生成或读取真实 API Key，不要打印环境或 secret，不要修改开发库，不要删除 volume，不要提前切换 Embedding，不要进入 P5～P8。
+不要 git commit，不要修改 码道提示词，不要真实调用华为云，不要生成或读取真实 API Key，不要打印环境或 secret，不要修改开发库，不要删除 volume，不要提前切换 Embedding，不要进入 P5～P8。
 ~~~~
 
 ## 19 — P5.1 CSV/Excel 实验文件安全上传与结构解析
 
-> 来源：Codex 在 P4.3 独立纠正、真实 MaaS 最小烟测及 GLM 审阅围栏修复后更新（2026-07-14）
+> 来源：码道在 P4.3 独立纠正、真实 MaaS 最小烟测及 GLM 审阅围栏修复后更新（2026-07-14）
 
 ~~~~text
 继续维护 D:\shixi\PaperLens 项目。
 
 本轮定义为 P5.1：实现 CSV/XLSX/XLS 实验文件的安全上传、确定性结构解析、元数据列表和详情 API。只完成“文件进入系统并得到可信结构描述”的后端闭环，不实现统计摘要、论文指标交叉验证、ExperimentResult、实验分析任务、实验前端或报告导出。
 
-P4.3 最终基线：MaaS 配置/CLI/Huawei LLM 定向 110 passed、0 skipped；真实审阅围栏修复定向 138 passed、0 skipped；Docker 后端全量 435 passed、0 skipped；前端 10 files / 106 passed；生产构建 126 modules；Alembic 为 007 head 且 check 无差异；24 条 `/api/v1` method+path 路由、17 张 ORM 表；测试库 17 张业务表残留 0；开发库为 2 users / 3 papers / 2 tasks / 7 reviews / 0 metrics；三容器运行且 PostgreSQL healthy；health/login 200、无 token metrics 401；77 个本地 Markdown 链接、0 断链；最新提交仍为 `4659a0b8e634ec539c3d96994cf55e745c8d8b39`。用户明确授权的真实华为云 `glm-5.2` 最小烟测已成功；首次完整审阅因模型返回标准 JSON 围栏而安全失败，Codex 已完成严格单层围栏兼容和 SQL 参数日志脱敏，但未自动进行修复后的真实计费重试，长文本质量与生产费用仍未验收。
+P4.3 最终基线：MaaS 配置/CLI/Huawei LLM 定向 110 passed、0 skipped；真实审阅围栏修复定向 138 passed、0 skipped；Docker 后端全量 435 passed、0 skipped；前端 10 files / 106 passed；生产构建 126 modules；Alembic 为 007 head 且 check 无差异；24 条 `/api/v1` method+path 路由、17 张 ORM 表；测试库 17 张业务表残留 0；开发库为 2 users / 3 papers / 2 tasks / 7 reviews / 0 metrics；三容器运行且 PostgreSQL healthy；health/login 200、无 token metrics 401；77 个本地 Markdown 链接、0 断链；最新提交仍为 `4659a0b8e634ec539c3d96994cf55e745c8d8b39`。用户明确授权的真实华为云 `glm-5.2` 最小烟测已成功；首次完整审阅因模型返回标准 JSON 围栏而安全失败，码道已完成严格单层围栏兼容和 SQL 参数日志脱敏，但未自动进行修复后的真实计费重试，长文本质量与生产费用仍未验收。
 
 开始前完整阅读并以当前代码为准：AGENTS.md、README.md、.gitignore、docker-compose.yml、backend/paperlens/core/config.py、models/models.py、core/enums.py、api/papers.py、utils/storage.py、core/deps.py、tests/conftest.py、alembic 001～007、ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens/spec.md、tasks.md、design/05、08、09、docs/api-contract.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。
 
 ## 一、工作流和边界
 
 1. 严格按 AGENTS.md：dev-process-framework 先更新 systemDesign 01～06；本轮无 UI，page-mockup 只把 P07 标记为仍未实现；fullstack-testing 先更新 08；function-detail 更新 SDD 后再编码；sdd-workflow 新建 `ProjectDocs/sprint/实验数据上传与解析.md`。skill 不可用时明确记录并按相同顺序手工完成。
-2. 开始前记录 git status、最新提交、Docker 状态、007 Alembic 状态、路由/表数量、测试库残留、开发库只读计数和两个 Codex 提示词 SHA-256。
-3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 Codex 提示词文件；不得还原现有未提交改动。
+2. 开始前记录 git status、最新提交、Docker 状态、007 Alembic 状态、路由/表数量、测试库残留、开发库只读计数和两个 码道提示词 SHA-256。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词文件；不得还原现有未提交改动。
 4. 禁止读取、搜索、打印或复制本机 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止运行 `docker compose config`、`docker inspect`、`env`、`set` 或可能展开 secret 的日志命令。
 5. 禁止真实调用华为云，禁止运行 `maas-smoke`。pytest 必须继续由 conftest 强制 LLM/Embedding mock、`.invalid` endpoint 并移除继承 API Key；实验解析不得调用 LLMClient、EmbeddingClient 或任何网络。
 6. 不实现统计摘要、ExperimentResult、EXPERIMENT_ANALYSIS 任务、指标交叉验证、P07 前端、报告、管理员系统、OBS、FAISS/pgvector 或 P5.2～P8；不修改开发库业务数据，不删除 volume。
@@ -4672,12 +4690,12 @@ P4.3 最终基线：MaaS 配置/CLI/Huawei LLM 定向 110 passed、0 skipped；�
 
 最终逐项报告 skill/手工替代、依赖、迁移、解析边界、ZIP/OLE 安全、API、用户隔离、幂等/并发、storage 补偿、离线保证、定向/全量测试、前端、迁移、路由/表、HTTP、数据库残留、secret/Markdown 和明确未实现项。
 
-不要 git commit，不要修改 Codex 提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库，不要删除 volume，不要提前实现 P5.2～P8。
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库，不要删除 volume，不要提前实现 P5.2～P8。
 ~~~~
 
 ## 20 — P5.2 实验数据确定性统计摘要后端闭环
 
-> 来源：Codex 在 P5.1 独立审查、安全纠正和全量验收后更新（2026-07-14）
+> 来源：码道在 P5.1 独立审查、安全纠正和全量验收后更新（2026-07-14）
 
 ~~~~text
 # 码道下一阶段提示词：P5.2 实验数据确定性统计摘要后端闭环
@@ -4693,8 +4711,8 @@ P5.1 最终真实基线：解析/存储/API 定向 103 passed、0 skipped；P4.3
 ## 一、工作流、基线和禁止事项
 
 1. 严格按 AGENTS.md：dev-process-framework 先更新 systemDesign 01～06；本轮无 UI，page-mockup 只确认 P07 继续 PLANNED；fullstack-testing 先更新 08；function-detail 更新 SDD 后再编码；sdd-workflow 新建 `ProjectDocs/sprint/实验数据统计摘要.md`。skill 不可用时明确记录并按同序手工完成。
-2. 开始前记录 git status、HEAD、Docker 状态、008 current/check、路由/表数、测试库残留、开发库七表只读计数和两个 Codex 提示词 SHA-256。
-3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 Codex 提示词文件；不得还原现有未提交改动。
+2. 开始前记录 git status、HEAD、Docker 状态、008 current/check、路由/表数、测试库残留、开发库七表只读计数和两个 码道提示词 SHA-256。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词文件；不得还原现有未提交改动。
 4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 和可能展开 secret 的日志命令。
 5. 禁止真实调用华为云和 `maas-smoke`。pytest 继续强制 LLM/Embedding mock、`.invalid` endpoint 并移除继承 Key；统计服务不得构造 LLM/Embedding client 或访问网络。
 6. 不实现 MetricRecord 交叉验证、MATCH/MISMATCH、P07 前端、ExperimentFile 删除/下载、原始行预览、报告、管理员系统、OBS、FAISS/pgvector 或 P5.3～P8；不修改开发库业务数据，不删除 volume。
@@ -4787,10 +4805,902 @@ P5.1 最终真实基线：解析/存储/API 定向 103 passed、0 skipped；P4.3
 3. 实际报告 P5.2 定向 collection/result、P5.1/P4.3/P4.1 回归、Docker 全量、前端全量和构建；不能用历史结果冒充。
 4. 验证 009 current/head、check、可逆性；实际路由/表数；三容器/健康状态；health/login 200、无 token analysis/result 401。
 5. 测试库 17 表残留 0；开发库七表计数必须与开始时一致，experiment_files/results 不得因验证新增。
-6. 执行 Python 编译、git diff --check、高熵 secret 候选、生产 Web Storage/v-html、敏感日志、Markdown 路径/锚点检查；禁改目录和 HEAD 不变。两个 Codex 提示词在码道执行期间 hash 必须不变。
+6. 执行 Python 编译、git diff --check、高熵 secret 候选、生产 Web Storage/v-html、敏感日志、Markdown 路径/锚点检查；禁改目录和 HEAD 不变。两个 码道提示词在码道执行期间 hash 必须不变。
 7. 不读取 `.env`，不运行真实 MaaS，不修改开发库。受权限限制未执行的项目必须如实标明。
 
 最终逐项报告工作流、迁移、任务关联、统计定义、数值/内存边界、文件完整性复核、API、用户隔离、幂等并发、事务失败、离线保证、定向/全量测试、前端、迁移/路由/表、HTTP、数据库残留、secret/Markdown 和明确未实现项。
 
-不要 git commit，不要修改 Codex 提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库，不要删除 volume，不要提前实现交叉验证、实验前端或 P5.3～P8。
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库，不要删除 volume，不要提前实现交叉验证、实验前端或 P5.3～P8。
+~~~~
+
+## 21 — P5.3a 论文指标交叉验证后端闭环
+
+> 来源：码道独立审查 P5.2 后生成（2026-07-14）
+
+~~~~text
+# 码道下一阶段提示词：P5.3a 论文指标交叉验证后端闭环
+
+继续维护 D:\shixi\PaperLens 项目。
+
+本轮定义为 P5.3a：在已验收的 P4.1 MetricRecord 与 P5.2 ExperimentResult 确定性统计摘要基础上，实现“指定成功指标任务 → 确定性匹配统计列 → 生成可审计 MATCH/MISMATCH/UNVERIFIABLE 比较 → 原子写入 metric_comparisons → 查询”的纯后端闭环。不得猜测 BEST/FINAL/LAST 的实验含义；不做 P5.3b 实验前端，不做文件删除/下载/行预览，不做报告导出。
+
+P5.2 最终真实基线：P5.2 定向 72 passed、P5.1 回归 103、P4.3 MaaS/LLM/审阅回归 180、P4.1 指标回归 67，均 0 skipped；Docker 后端全量 599 passed、0 skipped；前端 10 files / 106 passed；生产构建 126 modules；Alembic 009 head 且 check 无差异；29 条 `/api/v1` method+path 路由、17 张业务表（18 张含 alembic_version）；测试库七张核心表残留 0；开发库为 2 users / 3 papers / 3 tasks / 14 review_results / 0 metrics / 0 experiment_files / 0 experiment_results；三容器运行且 PostgreSQL healthy；health/login 200、无 token analysis 401。009 已验证冲突原值保留并无损中止，以及 008→009→008→009。当前 HEAD 为 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`，这是 P5.2 开始前已有提交；本轮禁止新增提交。真实华为云 glm-5.2 最小烟测成功，但本轮禁止任何真实云调用。
+
+开始前完整阅读并以当前代码为准：AGENTS.md、README.md、docker-compose.yml、backend/paperlens/core/enums.py、config.py、models/models.py、schemas/metric.py、schemas/experiment_file.py、api/metrics.py、api/experiment_files.py、services/metric_service.py、experiment_statistics.py、experiment_analysis_service.py、tests/conftest.py、tests/db_helpers.py、alembic 001～009、ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens/spec.md、tasks.md、design/04/05/08/09、Sprint、P5.2 bugfix report、docs/api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。
+
+## 一、工作流与禁止事项
+
+1. 严格按 AGENTS.md：dev-process-framework 先更新 systemDesign 01～06；page-mockup 只确认本轮无 UI；fullstack-testing 更新 08；function-detail 更新 SDD；sdd-workflow 新建 `ProjectDocs/sprint/论文指标交叉验证.md`。skill 不可用时明确记录并手工同序完成。
+2. 开始前记录 git status/HEAD、Docker、009 current/check、路由/表数、测试库残留、开发库七表只读计数和两个 码道提示词 SHA-256。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词；不得还原现有未提交改动。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 和可能展开 secret 的日志命令。
+5. 禁止真实调用 MaaS。pytest 强制 LLM/Embedding mock 与 `.invalid` endpoint；交叉验证不得构造 LLM/Embedding client 或访问网络。
+6. 不实现 P5.3b 前端、删除/下载/行预览、报告、管理员系统、OBS、FAISS/pgvector、持久化任务队列或 P6～P8；不修改开发库业务数据，不删除 volume。
+
+## 二、确定性交叉验证契约
+
+1. 新增严格请求 `{"metric_task_id":"uuid"}`。metric_task 必须为当前用户、同一论文、SUCCEEDED 的 METRIC_EXTRACTION；其 MetricRecord 必须再次联查 paper/task/user 和来源归属。不存在、跨用户及 ADMIN 他人统一 404；类型、状态或论文冲突返回固定 409。
+2. ExperimentFile、P5.2 ExperimentResult、其 EXPERIMENT_ANALYSIS task、Paper 和 User 必须同属；result 必须为严格 version=1 摘要。不得读取 storage 文件、原始行、MetricRecord.raw_text 或 Evidence 正文来猜匹配。
+3. 指标名规范化固定为 Unicode NFKC → casefold → 仅保留 `char.isalnum()` 字符。`F1_score` 与 `f1 score` 可匹配；不得添加 acc→accuracy、ppl→perplexity、翻译或模糊相似度别名。规范化结果为空则 UNVERIFIABLE。
+4. 只使用 integer/float 摘要列。每个 MetricRecord 独立生成一个 comparison；同一规范指标名必须恰好对应 1 条该任务 MetricRecord 和 1 个数值列，否则状态 UNVERIFIABLE，reason 分别固定为 `AMBIGUOUS_PAPER_METRIC`、`NO_EXPERIMENT_COLUMN` 或 `AMBIGUOUS_EXPERIMENT_COLUMN`。
+5. checkpoint 映射仅允许：MEAN→summary stats.mean，MAX→stats.max。BEST、FINAL、LAST、UNKNOWN、null 或其他值均为 UNVERIFIABLE / `UNSUPPORTED_CHECKPOINT`，不得拿 mean/median/max 代替。
+6. 新增配置 `experiment_comparison_absolute_tolerance` 默认 1e-6、范围 0～1e12；`experiment_comparison_relative_tolerance` 默认 0.01、范围 0～1。同步 `.env.example` 与 Compose 默认透传，不输出配置环境。
+7. 可比较项：`diff = experiment_value - paper_value`；`absolute_diff = abs(diff)`；paper_value 非 0 时 `relative_diff = absolute_diff / abs(paper_value)`，为 0 时 relative_diff=null；`allowed_diff = max(abs_tolerance, abs(paper_value) * relative_tolerance)`；边界 `absolute_diff <= allowed_diff` 为 MATCH，否则 MISMATCH。
+8. 所有输入、过程和公开数字必须为有限 JSON number；拒绝 NaN/Infinity、溢出和布尔伪数值，不静默转 null/0/字符串。只允许 UNVERIFIABLE 项的 statistic、experiment_value、diff、absolute_diff、relative_diff、allowed_diff 为 null。
+9. 每项固定字段：metric_record_id、metric_task_id、metric_name、checkpoint_type、column_name、statistic（MEAN/MAX/null）、paper_value、experiment_value、diff、absolute_diff、relative_diff、allowed_diff、status、reason。MATCH/MISMATCH 的 reason=null；UNVERIFIABLE 必须有固定 reason。
+10. 输出按 `normalized_metric_name, metric_record.created_at, metric_record.id` 稳定排序。不得暴露 model output、raw_text、Evidence 正文、文件 hash、storage key、数据行或内部异常。
+
+## 三、持久化、幂等和事务
+
+1. 不新增迁移或表。P5.3a 只把严格 comparison 列表写入既有 `ExperimentResult.metric_comparisons`，保持 summary_stats 完全不变，column_analysis 继续 null。
+2. 新增独立 comparison service，不把匹配算法塞进 API、metric_service 或 P5.2 统计服务。
+3. POST 时锁定 ExperimentResult 行并重新验证全部归属与 metric task。metric_comparisons 为 null 时原子写入；已有且所有项 metric_task_id 与本次相同则 200 幂等返回；已有其他 task 来源则 409 `COMPARISON_ALREADY_EXISTS`，不得覆盖、删除或拼接。
+4. 两个同 metric_task_id 并发请求最终只写一份且响应为 201/200；不同 metric_task_id 竞争最多一方成功，另一方固定 409。
+5. flush/commit 失败必须 rollback，metric_comparisons 仍为 null；commit 结果未知时以新 Session 重查 result 和请求 task_id，已提交则返回成功，不得回滚式覆盖或删除。
+6. 没有 MetricRecord 返回 409 `NO_METRICS`。即使所有记录均 UNVERIFIABLE，也应成功持久化诚实结果，不伪造 MATCH/MISMATCH。
+
+## 四、API 与 Schema
+
+1. 新增 `POST /api/v1/experiment-files/{file_id}/comparisons`：首次 201，幂等 200。响应含 file_id、experiment_result_id、metric_task_id、comparisons、duplicate。
+2. 扩展 `GET /api/v1/experiment-files/{file_id}/result`，保留全部 P5.2 字段并新增 `metric_comparisons: list | null`；P5.2 尚未交叉验证时必须明确 null。
+3. comparison、POST 响应和 GET result 均使用 extra=forbid 严格 Pydantic Schema、有限数验证及跨字段 validator；UNVERIFIABLE 与可比较项字段关系必须被 Schema 强制。
+4. 既有认证、论文、审阅、指标、上传、P5.2 analysis/result 的其他行为不变。预计 method+path 路由 29→30，以实际为准。
+
+## 五、离线测试
+
+1. 先更新 08 测试设计再写测试；不得联网、skip/xfail、删除旧断言或 mock 掉目标匹配函数。
+2. 单元覆盖 NFKC/casefold/alnum、大小写和分隔符等价、禁止语义别名、MEAN/MAX、BEST/FINAL/LAST/UNKNOWN、零 paper value、负数、容差边界、MATCH/MISMATCH、稳定顺序和非有限/溢出。
+3. 覆盖 0/1/多 MetricRecord 与 0/1/多数值列；重复论文指标、重复规范列名、非数值列、空规范名均诚实 UNVERIFIABLE 且 reason 精确。
+4. PostgreSQL/API 覆盖 401、201、同源 200、不同源 409、无 P5.2 result、NO_METRICS、错误 task type/status/paper、跨 USER/ADMIN 404、关系篡改和严格响应无泄漏。
+5. 用真实两线程覆盖同源/异源并发；注入 JSON flush、commit 前失败和 commit 后抛错，验证原子性及 commit 未知回查。
+6. monkeypatch LLM/Embedding 工厂为一调用即失败，交叉验证仍通过；测试库结束 17 张业务表残留 0。
+7. P5.2 定向不少于 72；P5.1 103；P4.3 180；P4.1 67；Docker 后端全量不少于 599 且 0 skipped；前端 106 和生产构建继续通过。
+
+## 六、文档与最终验收
+
+1. 同步 systemDesign 01～08、SDD spec/tasks/design 05/08/09、独立 Sprint、README、docs/api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。
+2. 文档区分：P5.2 统计摘要已实现；P5.3a 确定性交叉验证已实现；P5.3b 实验前端未实现；BEST/FINAL/LAST 不可验证而非猜测。
+3. 实际报告 P5.3a 定向、P5.2/P5.1/P4.3/P4.1 回归、Docker 全量、前端和构建；不得用历史结果冒充。
+4. 验证 009 current/head/check、路由/表数、三容器/健康、health/login 200、无 token comparisons 401；不新增迁移。
+5. 测试库残留 0；开发库七表计数与开始一致，不得因验证新增 metrics/files/results。
+6. 执行 Python 编译、git diff --check、高熵 secret 候选、生产 Web Storage/v-html、敏感日志、Markdown 路径/锚点检查；禁改目录和 HEAD 不变。两个 码道提示词执行期间 hash 必须不变。
+
+最终逐项报告工作流、匹配规范、checkpoint 诚实降级、容差、Schema、API、用户隔离、幂等并发、事务失败、离线保证、全部测试、迁移/路由/表、HTTP、数据库残留、secret/Markdown 和明确未实现项。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库，不要删除 volume，不要提前实现 P5.3b 前端、文件操作、报告或 P6～P8。
+~~~~
+
+## 22 — P5.3b 实验数据前端与完整任务交互
+
+> 来源：码道独立审查并收口 P5.3a 后生成（2026-07-15）
+
+~~~~text
+# 码道下一阶段提示词：P5.3b 实验数据前端与完整任务交互
+
+继续维护 `D:\shixi\PaperLens` 项目。
+
+本轮定义为 P5.3b：在已验收的 P5.1 文件上传/可信结构、P5.2 确定性统计和 P5.3a 指标交叉验证后端基础上，实现论文级实验数据 Vue 页面，使登录用户能够上传和选择实验文件、发起/观察统计任务、查看统计摘要、选择成功指标任务并生成/查看交叉验证结果。本轮是前端闭环，不新增后端业务能力；不得实现文件删除/下载/原始行预览、column_analysis、报告导出、管理员系统或 P6～P8。
+
+P5.3a 最终真实基线：P5.3a 定向 74、P5.2 72、P5.1 103、P4.3 MaaS/LLM/审阅 180、P4.1 指标 67，均 0 skipped；Docker 后端全量 673 passed、0 skipped；前端 10 files / 106 passed；生产构建 126 modules；Alembic 009 head 且 check 无差异；30 条 `/api/v1` method+path、17 张业务表；测试库 17 表残留总数 0；开发库为 2 users / 3 papers / 3 tasks / 14 review_results / 0 metrics / 0 experiment_files / 0 experiment_results；三容器运行且 PostgreSQL healthy；health/login 200、无 token comparisons 401；77 个本地 Markdown 链接、0 断链。当前 HEAD 为 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`，本轮禁止新增提交。真实华为云 glm-5.2 最小烟测已成功，但本轮禁止任何真实云调用。
+
+开始前完整阅读并以当前代码为准：AGENTS.md、README.md、docker-compose.yml、frontend/src/api/index.ts、router/index.ts、App.vue、views/PaperDetailView.vue、MetricAnalysisView.vue、对应 tests、backend 的 experiment_files/tasks/metrics API 与 experiment_file/task/metric Schema、ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens/spec.md、tasks.md、design/05/09、Sprint、P5.3a bugfix report、docs/api-contract.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。
+
+## 一、工作流、基线和禁止事项
+
+1. 严格按 AGENTS.md：先用 dev-process-framework 更新 systemDesign 01～06；用 page-mockup 将 07 的 P07 设计校准为本轮实际 UI；用 fullstack-testing 先更新 08；用 function-detail 更新 SDD；开发过程中用 sdd-workflow 新建或更新 `ProjectDocs/sprint/实验数据前端.md`。skill 不可用时记录原因并手工按同序完成。
+2. 开始前记录 git status/HEAD、Docker、009 current/check、路由/表数、测试库残留、开发库七表只读计数和两个 码道提示词 SHA-256。现有未提交改动属于用户/码道，不得还原、覆盖或重新格式化无关文件。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词文件；不得删除 volume 或修改开发库业务数据。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 和可能展开 secret 的日志命令。
+5. 禁止真实调用 MaaS 或运行 maas-smoke。前端不得出现模型、endpoint、API Key 配置，不得把 token 或业务响应写入 localStorage/sessionStorage，不得使用 `v-html`。
+6. 本轮不新增迁移、表或后端路由；不实现文件删除/下载/原始行预览、拖取后台原始文件、column_analysis、报告导出、管理员系统、持久化任务队列、OCR、FAISS/pgvector 或 P6～P8。
+
+## 二、API 客户端与严格类型
+
+1. 在 `frontend/src/api/index.ts` 增加与后端当前 Schema 一致的 TypeScript 类型和函数：ExperimentFile 列表/详情/上传、ExperimentAnalysisTask、SummaryStats、ComparisonItem、ExperimentResult、POST comparisons。字段名、枚举、null 语义和 201/200 duplicate 必须与后端完全一致，不得自造兼容字段。
+2. 复用现有 axios 实例、HttpOnly refresh cookie 与内存 access token；不创建第二套认证客户端，不手工读取 cookie，不把认证状态持久化到 Web Storage。
+3. 上传使用 `multipart/form-data` 的 `file` 字段；列表只发送后端支持的 page/page_size；所有 paper_id/file_id/task_id 只来自受保护路由、服务端响应或当前选择，不允许用户输入任意资源 ID。
+4. 统一识别 401 刷新流程和现有错误结构。404 result 仅表示“尚无统计结果”；409/413/415/422 必须显示固定、可理解的页面提示，不展示底层 response、堆栈、路径、哈希或服务端内部详情。
+
+## 三、路由、入口与页面状态
+
+1. 新增受保护路由 `/papers/:id/experiment`，name 固定 `paper-experiment`，组件 `ExperimentDataView.vue`。在已 PARSED 的论文详情页新增“实验数据”入口；不重构现有 review/metrics 路由和全局认证守卫。
+2. 页面加载当前论文、实验文件列表和论文任务列表。只接受当前 route paper id 的响应；路由参数切换、文件切换、筛选切换和组件卸载后，旧请求不得覆盖新状态。
+3. 明确区分 loading、空列表、加载失败、未分析、PENDING/RUNNING、FAILED、SUCCEEDED、无成功指标任务、已有 comparison 和 comparison 失败。每个可恢复错误提供重试入口，不允许无限 loading 或静默失败。
+4. 文件列表按后端顺序展示文件名、CSV/XLSX/XLS、大小、行列数和创建时间。选择文件后加载详情并展示可信列结构（列名、dtype、nullable、null_count）；不显示完整 SHA-256、storage key、原始数据行或本机路径。
+
+## 四、上传与统计任务交互
+
+1. 上传控件只允许 `.csv,.xlsx,.xls`，前端提供 1～20MB 快速提示和重复点击锁，但服务端仍是最终校验者。上传成功或 duplicate 后刷新文件列表、选中返回文件并展示明确状态；失败后保留可重试能力，不缓存文件内容。
+2. 对选中文件调用 POST analysis。201 新建和 200 duplicate/复用都进入同一任务状态机；按钮在请求期间锁定，双击不得创建两次前端请求。
+3. 复用 GET task 轮询，固定单一计时器；PENDING/RUNNING 持续显示 progress，SUCCEEDED 停止轮询并刷新 result，FAILED 停止并显示安全错误。文件/路由切换、组件卸载和终态必须清理计时器；网络暂时失败显示可重试，不得后台无限高速重试。
+4. 页面初次加载若 GET result 已有 200，直接显示结果；若为 404 则显示“尚未分析”。不要为了探测状态自动创建分析任务。
+
+## 五、统计摘要与交叉验证 UI
+
+1. 统计表按后端 columns 原顺序展示 name、dtype、count、null_count、mean/stddev/min/max/median。非数值列的 stats 为 null，统一显示 `—`；零、负数和小数必须如实显示，格式化不能把有限值变成 NaN/Infinity 或擅自改成百分比。
+2. 指标任务选择器只包含当前论文、`METRIC_EXTRACTION`、`SUCCEEDED` 的任务，默认选最新一条；没有成功指标任务时显示前往现有指标页的链接，不调用 comparisons。
+3. 只有统计 result 已存在且选择了成功指标任务，才允许 POST comparisons。201 与 duplicate 200 都刷新/使用返回 comparisons；请求锁防双击。已有 metric_comparisons 时直接展示，并从 comparison 的 metric_task_id 确认来源；不得让用户误以为可覆盖为另一任务。
+4. comparison 表固定展示 metric_name、checkpoint_type、paper_value、column_name、statistic、experiment_value、diff、absolute_diff、relative_diff、allowed_diff、status/reason。MATCH 绿色、MISMATCH 红色、UNVERIFIABLE 中性/黄色；null 显示 `—`。
+5. reason 固定映射 `AMBIGUOUS_PAPER_METRIC`、`NO_EXPERIMENT_COLUMN`、`AMBIGUOUS_EXPERIMENT_COLUMN`、`UNSUPPORTED_CHECKPOINT`、`EMPTY_NORMALIZED_NAME` 为中文说明；不得把 UNVERIFIABLE 渲染成失败或伪造 MATCH/MISMATCH。`diff` 明确标注为“实验值 - 论文值”。
+6. 页面使用语义化 table、label、button、aria-live/status；键盘可操作，颜色不是唯一状态信号。沿用现有页面视觉，不引入新 UI 框架或大依赖。
+
+## 六、前端测试
+
+1. 先更新测试设计再写测试。新增 `ExperimentDataView.test.ts` 和 API/route 契约测试；不得联网、skip/xfail、删除旧断言或用空断言冒充覆盖。
+2. 覆盖受保护路由与论文详情入口、类型/API URL/参数/FormData、初始 loading/空/错误/404、文件列表和可信结构、上传成功/duplicate/校验失败/双击锁。
+3. 覆盖 analysis 201/200、PENDING→RUNNING→SUCCEEDED、FAILED、临时轮询错误重试、终态/切换/unmount 清理计时器、旧请求晚到不覆盖新文件或新 route。
+4. 覆盖统计表数值/null/顺序；指标任务只筛 SUCCEEDED METRIC_EXTRACTION、默认最新、无任务入口；comparisons 201/200/409、已有结果来源锁定、三种状态和五种 reason、零值与 null 格式。
+5. 断言不使用 localStorage/sessionStorage/v-html，不显示 storage key/hash/原始行/API Key/底层错误；现有认证、论文、审阅和指标前端测试全部保持通过。
+6. 实际运行 `npm test -- --run` 和 `npm run build`，报告真实 test files/tests/modules。后端 P5.3a 定向不得少于 74，Docker 后端全量不得少于 673 且 0 skipped；测试继续强制 mock，不调用真实云。
+
+## 七、文档与最终验收
+
+1. 同步 systemDesign 01～08、SDD spec/tasks/design 05/09、独立 Sprint、README、docs/api-contract.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。文档必须区分 P5.3a 后端已完成、P5.3b 前端本轮完成，以及仍未实现的文件操作/报告/管理员能力。
+2. 实际验证 009 current/head/check、30 条路由、17 张表、三容器和 PostgreSQL healthy、health/login 200、无 token experiment API 401；本轮无迁移、无后端路由变化。
+3. 测试结束 paperlens_test 17 表残留总数 0；开发库七表计数必须与开始时一致，不得因 UI/API 验收上传真实文件或创建任务。禁止用手工开发库点击冒充自动测试。
+4. 执行 TypeScript/Vite、Python/后端回归、git diff --check、secret 候选、生产 Web Storage/v-html、敏感日志、Markdown 本地路径/锚点检查；禁改目录和 HEAD 不变。两个 码道提示词在码道执行期间哈希必须不变。
+5. 最终逐项报告工作流、页面/API、上传、轮询与竞态、统计、比较、认证安全、前端与后端测试、迁移/路由/表、HTTP、数据库残留、静态扫描和明确未实现项。任何未执行项如实说明，不用历史结果冒充。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要提前实现文件删除/下载/预览、报告、管理员系统或 P6～P8。
+~~~~
+
+## 23 — P6.1 Markdown 审稿报告后端闭环
+
+> 来源：码道独立审查并收口 P5.3b 后生成（2026-07-15）
+
+~~~~text
+# 码道下一阶段提示词：P6.1 Markdown 审稿报告后端闭环
+
+继续维护 `D:\shixi\PaperLens` 项目。
+
+本轮定义为 P6.1：在已验收的论文解析、Evidence、结构化审阅、指标提取和 P5 实验分析闭环基础上，实现“选择确定性来源快照 → 生成安全 Markdown → ExportReport 原子状态机 → 状态查询 → 鉴权下载”的纯后端闭环。报告只汇总已持久化结构化结果，不调用 LLM/Embedding，不翻译模型原文。本轮只支持 MARKDOWN；不得实现 PDF/DOCX、报告前端、文件删除/行预览、管理员系统或 P8 部署能力。
+
+P5.3b 最终真实基线：P5.3b 前端定向 2 files / 48 passed；前端全量 12 files / 154 passed；生产构建 129 modules；Docker 后端全量 673 passed、0 skipped；Alembic 009 head、30 条 `/api/v1` method+path、17 张业务表；三容器运行且 PostgreSQL healthy。当前 HEAD 为 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`，工作区包含用户/码道已验收的 P5 未提交改动，本轮禁止创建提交或还原现有改动。真实华为云 glm-5.2 最小烟测曾成功，但本轮禁止任何真实云调用。
+
+开始前完整阅读并以当前代码为准：AGENTS.md、README.md、docker-compose.yml、backend/paperlens/models/models.py、enums.py、api/papers.py、api/tasks.py、api/experiment_files.py、services/review/metric/experiment 相关实现、utils/storage.py、schemas、现有 Alembic 001～009 和测试模式；ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens/spec.md、tasks.md、design/03/04/05/06/08/09；docs/product-requirements.md、api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md，以及 P5.3b bugfix report。
+
+## 一、工作流、基线与禁止事项
+
+1. 严格按 AGENTS.md：先用 dev-process-framework 更新 systemDesign 01～06；本轮无页面改动，在 07 明确记录“无 UI 影响”；用 fullstack-testing 先更新 08；用 function-detail 更新 SDD；用 sdd-workflow 新建 `ProjectDocs/sprint/Markdown审稿报告后端.md`。skill 不可用时如实记录并按相同顺序手工完成。
+2. 开始前记录 git status/HEAD、Docker、009 current/head/check、路由/表数、测试库残留、开发库关键表只读计数、`docs/CODEARTS_NEXT_PROMPT.md` 与归档 SHA-256。现有改动均属于用户/码道，不得覆盖、还原或批量格式化无关文件。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词；不得删除 volume 或修改开发库业务数据。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 等可能展开 secret 的命令。
+5. 禁止真实 MaaS/Embedding/外部网络。测试必须强制 mock，并让 LLM/Embedding 工厂一旦被调用就失败。
+6. 不实现 PDF/DOCX 转换、报告 Vue 页面、报告列表 UI、文件删除/下载/原始行预览、column_analysis、管理员 API/后台/审计、Celery/Redis、OBS 改造、OCR、FAISS/pgvector 或 P8。不要修改 P5 已验收行为。
+
+## 二、P6.1 来源选择与 Markdown 契约
+
+1. POST 只接受当前登录用户自己的 PARSED 论文。必须存在至少一个 `SUCCEEDED REVIEW` 任务且该任务至少有一条合法 ReviewResult，否则固定 409 `REVIEW_NOT_READY`，不创建 ExportReport。
+2. 审阅来源固定选 `completed_at NULLS LAST/created_at/id` 最新的成功 REVIEW 任务，只汇总该 task 的 ReviewResult，按固定维度顺序再按 id 排序；Finding 按 sequence/id 排序，Evidence 引用按 id 稳定排序。不得混合多个历史审阅任务。
+3. `include_metrics=true` 时只选择最新成功 METRIC_EXTRACTION 任务，并复核 task/record/source 的 paper/user 关系；无成功任务或零记录时生成明确“暂无指标数据”，不猜测或回退到其他任务。
+4. `include_experiment_analysis=true` 时汇总该用户/论文所有合法 SUCCEEDED ExperimentResult，按 ExperimentFile created_at/id 稳定排序；每个结果复核 file/result/analysis task/paper/user 关系。无结果时生成明确“暂无实验分析数据”。已有 comparisons 原样汇总，不重新计算、不覆盖。
+5. `language` 仅允许 `zh|en`，只切换模板标题、表头、固定状态/原因标签；论文标题、审阅 summary/finding、模型/数据集/指标名和文件名保持原文，不调用模型翻译。
+6. Markdown 固定包含：报告标题与生成信息、论文信息、逐维度评分/摘要/结论、按类型分组的 findings 与 Evidence 页码/短引用；可选指标表；可选实验文件统计摘要与交叉验证表。缺少可选数据要诚实显示空状态。
+7. 所有数据库文本先规范换行并做 Markdown/HTML 安全转义；表格单元格转义 `|` 和换行，禁止原始 HTML、脚本、data/javascript URL 或未转义标题破坏结构。不得把 storage_key、hash、内部路径、token、原始异常、MetricRecord.raw_text、整页正文或实验原始行写入报告。
+8. 输出必须确定性：同一来源快照与选项生成逐字节相同的 UTF-8（无 BOM、LF 换行、末尾单个换行）内容和 SHA-256。限制输出大小，使用配置的安全上限；超限固定失败，不静默截断审阅结论。
+
+## 三、ExportReport 模型、迁移与状态机
+
+1. 审查现有 ExportReport。通过 010 迁移补足 P6.1 必需的 `language`、两个 include 选项和严格 `source_snapshot`；为 report_type、状态/字段关系、file_size/content_hash 增加数据库约束。迁移必须兼容空表和可能的历史行，upgrade/downgrade 不得静默丢失非空报告数据。
+2. `source_snapshot` 只保存审计所需 id 与版本信息：review_task_id、可选 metric_task_id、按顺序的 experiment_result/file/task id；不得保存正文、Finding 内容、storage_key 或 secret。API 不公开 source_snapshot、content_hash、storage_key。
+3. 在写入前计算确定性 Markdown bytes/content_hash。相同 user/paper/report_type/language/include 选项/来源内容的 PENDING/GENERATING/READY 请求必须数据库级收口为一条：首个 201，复用 200 `duplicate=true`；FAILED 不永久阻止相同来源重试。
+4. 并发不能依赖进程锁。使用约束/索引与 IntegrityError 回查；同源两线程最多一行和一个对象。不同来源快照可各自创建，不互相覆盖。
+5. 状态固定 `PENDING → GENERATING → READY` 或 `FAILED`。后台任务原子认领；临时文件只在受控临时目录创建，storage key 只由服务端随机 report id 组成，绝不拼接用户文件名或标题。
+6. 写入存储后重新读取并验证 size/SHA-256，再原子提交 READY、file_size、completed_at。flush/commit/storage 失败必须 rollback/清理未归属对象；commit 结果未知用新 Session 回查，已 READY 时不得删除已提交对象。失败只保存固定安全 error_message。
+7. 如继续使用 FastAPI BackgroundTasks，文档必须明确它不是持久化队列，进程重启恢复后置到 P8；不得伪报生产级可靠性。
+
+## 四、API、Schema 与下载安全
+
+1. 新增 `POST /api/v1/papers/{paper_id}/exports`。请求 extra=forbid：`report_type` 本轮只允许 MARKDOWN，`language=zh|en`，两个 include 布尔默认 true。返回固定 `id/paper_id/report_type/language/include_metrics/include_experiment_analysis/status/file_size/error_message/created_at/completed_at/duplicate`；不返回内部字段。
+2. 新增 `GET /api/v1/exports/{export_id}`，仅所有者可见，USER/ADMIN 访问他人统一 404。PENDING/GENERATING/READY/FAILED 使用同一严格公开 Schema，error_message 只能是固定安全集合。
+3. 新增 `GET /api/v1/exports/{export_id}/download`。仅 READY 且完整性复核成功可下载；未就绪固定 409，缺失/损坏对象固定安全失败且不得返回本机路径。响应为 attachment、`text/markdown; charset=utf-8`、`X-Content-Type-Options: nosniff`，下载名经安全规范化并提供合理 UTF-8 兼容策略。
+4. 下载必须通过现有 StorageBackend/read_path，不绕过抽象直接拼接上传根目录；在发送前复核数据库 file_size/content_hash。不得提供任意 Range/路径参数或把 storage_key 暴露为 URL。
+5. 全部 UUID 路径保持严格 UUID4 和现有统一错误结构。既有认证、论文、审阅、指标、实验 API 行为不变。预计公开路由 30→33，以实际收集结果为准。
+
+## 五、离线测试
+
+1. 先更新 08 测试设计再写测试。不得联网、skip/xfail、删除旧断言、用 SQLite 代替需要锁/约束的 PostgreSQL 测试，或 mock 掉目标报告生成器。
+2. 单元覆盖 zh/en 模板、稳定排序、换行/表格/Markdown/HTML 转义、Unicode、零/负/小数/null、五种 comparison reason、空可选章节、确定性 bytes/hash、输出上限和禁止字段。
+3. 来源图覆盖：无 REVIEW、多个历史 review 只取最新、review/result/finding/evidence 篡改；metrics 最新任务与 source 篡改；多个实验结果稳定排序及 file/task/user/paper 篡改。关系异常必须固定失败，不能跨用户汇总。
+4. API/PostgreSQL 覆盖 401、UUID 422、他人 USER/ADMIN 404、非 PARSED/无 review 409、PDF/DOCX/extra 字段 422、首次 201、同源 200、状态查询、未就绪 409、READY 下载 headers/body、FAILED 安全错误、对象缺失/损坏。
+5. 用真实两线程覆盖同源请求；注入 render、临时文件、storage save/read/delete、flush、commit 前失败和 commit 后抛错，验证一行一对象、状态原子性、补偿和 commit unknown 回查。
+6. 断言报告/API/日志不含 storage_key、content_hash、本机路径、SQL/Traceback、API Key/token/Authorization、raw_text、整页正文或实验原始行；monkeypatch LLM/Embedding 工厂为一调用即失败，生成仍通过。
+7. 实际运行 P6.1 定向、P5.3a 74、P5.2 72、P5.1 103、P4.3 180、P4.1 67 和 Docker 后端全量；不得少于现有 673 且 0 skipped。前端 12 files / 154 与构建 129 modules 必须继续通过。
+
+## 六、文档与最终验收
+
+1. 同步 systemDesign 01～08、SDD spec/tasks/design 06/08/09、独立 Sprint、README、docs/api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。07 只记录本轮无页面变化；P08 报告页面仍为规划。
+2. 文档明确 P6.1 只完成 Markdown 后端；PDF/DOCX 与报告前端留 P6.2；管理员系统留 P7；BackgroundTasks 重启恢复留 P8。
+3. 实际验证 010 upgrade/head/check 与 `009→010→009→010`；如果 downgrade 会因已有报告数据而无损中止，必须单独测试。报告真实路由和业务表数。
+4. 测试结束 paperlens_test 全部业务表残留 0；开发库关键表计数与开始一致，不得用开发库手工生成报告冒充验收。三容器/PostgreSQL healthy、health/login 200、无 token exports 401。
+5. 执行 Python 编译、前端 TypeScript/Vite、git diff --check、高熵 secret 候选、Web Storage/v-html、敏感日志和 Markdown 本地路径/锚点检查；禁改目录与 HEAD 不变。两个 码道提示词在码道执行期间 SHA-256 必须不变。
+6. 最终逐项报告来源选择、模板/转义、模型/迁移、幂等并发、状态机与事务恢复、API/下载安全、全部测试、路由/表、HTTP、数据库残留、静态扫描和未实现项。未执行项必须如实说明，不得用历史结果冒充。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要提前实现 PDF/DOCX、报告前端、管理员系统或 P8。
+~~~~
+
+## 24 — P6.2 PDF/DOCX 报告与用户端导出闭环
+
+~~~~markdown
+# 码道下一阶段提示词：P6.2 PDF/DOCX 报告与用户端导出闭环
+
+继续维护 `D:\shixi\PaperLens` 项目。
+
+本轮固定为 P6.2，且必须在一个轮次内完成：在已验收的 P6.1 Markdown 来源快照、确定性 bytes、ExportReport 原子状态机和安全下载基础上，增加确定性 PDF/DOCX 生成、当前论文的报告历史分页 API，以及受保护的 P08 报告导出 Vue 页面。不得把 PDF、DOCX、列表 API 或前端拆成额外返工轮次。不得实现管理员系统、持久化任务队列或 P8 部署能力。
+
+P6.1 码道最终真实基线：Docker 后端全量 `771 passed`、0 skipped/failed；P6.1 生成单元 72、PostgreSQL API/来源/并发/补偿 25、迁移 1；前端 12 files / 154 passed，生产构建 129 modules；Alembic `011_export_report_p61_integrity` head 且 check 无差异；33 条 `/api/v1` method+path、18 张业务表；三容器运行且 PostgreSQL healthy；开发库只读计数 `2u/4p/4t/21rr/0m/0ef/0er/0export`，paperlens_test 全表残留 0。当前 HEAD 仍为 `525828b42707f7d1ef5c8efe1f308ce4bdac5454`，工作区包含用户、码道已验收的 P5/P6.1 未提交改动，禁止创建提交、覆盖或还原。
+
+开始前完整阅读并以当前代码为准：AGENTS.md、P6.1 新增/修改代码、010/011 迁移、P6.1 单元/API/迁移测试、P6.1 Sprint 与 bugfix report；ProjectDocs/systemDesign/01～08、specs_SDD/PaperLens/spec.md、tasks.md、design/06/07/08/09/10；docs/product-requirements.md、api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md；前端现有 api/router/PaperDetailView、ReviewResultView、MetricAnalysisView、ExperimentDataView 及其竞态隔离测试。
+
+## 一、工作流、基线与禁止事项
+
+1. 严格按 AGENTS.md：先用 dev-process-framework 更新 systemDesign 01～06；用 page-mockup 更新 07 的 P08 最终页面；用 fullstack-testing 先更新 08；用 function-detail 更新 SDD spec/tasks/design 06/07/08/09/10；用 sdd-workflow 新建 `ProjectDocs/sprint/PDF-DOCX报告与导出前端.md`。skill 不可用时如实记录并按同一顺序手工完成。
+2. 开始前记录 git status/HEAD、Docker、011 current/head/check、路由/表数、测试库残留、开发库关键表只读计数，以及两个 码道提示词 SHA-256。现有改动均属于用户/码道，不得覆盖、还原或批量格式化无关文件。
+3. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词；不得删除 volume 或修改开发库业务数据。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 等可能展开 secret 的命令。
+5. 禁止真实 MaaS/Embedding/外部网络。测试必须强制 mock，并让 LLM/Embedding 工厂一旦被调用就失败。
+6. 不实现报告删除、批量导出、邮件分享、模板自定义、管理员 API/后台/审计、Celery/Redis、BackgroundTasks 重启恢复、OBS 改造、OCR、FAISS/pgvector、实验原始行/column_analysis 或 P8。不得改变 P5 与 P6.1 已验收语义。
+
+## 二、共享报告文档与确定性 PDF/DOCX
+
+1. 保留 P6.1 的来源选择、完整来源图复核、Evidence 页码/短引用、安全转义、创建前渲染、source_hash/content_hash、同源并发和存储补偿契约。PDF/DOCX 必须使用同一个可信结构化报告文档或 P6.1 的确定性输出作为来源，禁止重新查询或重新解释数据库内容。
+2. 请求 `report_type` 扩展为严格 `MARKDOWN|PDF|DOCX`。三种格式在相同 user/paper/language/include/source 下各自拥有独立 ExportReport；同格式同源同 bytes 幂等 200，不同来源 201，FAILED 可重试。
+3. PDF/DOCX bytes 必须在插入 PENDING 前完成生成并计算 SHA-256；后台任务只保存创建时 bytes，不得在后台再次转换。超过 max_report_size_bytes 固定 413 且不建行。
+4. 转换必须是纯 Python、离线且无 shell。可以在 requirements.txt 固定加入兼容 Python 3.13 的 `reportlab` 与 `python-docx`，禁止调用 pandoc、LibreOffice、浏览器打印、远端字体或系统命令。新增依赖必须锁定版本并记录许可证/用途。
+5. PDF 必须具备 `%PDF-` 签名、可选择/提取的中英文文本、稳定分页、页码、标题和表格；不得包含 JavaScript、附件、表单、外部资源或可执行动作。使用内置或仓库内合法字体，禁止下载运行时字体；必须用 PyMuPDF 真实解析验证文本与页数。
+6. DOCX 必须是合法 OPC ZIP，可由 python-docx 重开；保留标题层级、段落、列表和表格，不包含宏、OLE、外部 relationship、远程图片或自定义 XML。任何 ZIP entry 名必须固定且无路径穿越。
+7. 输出必须逐字节确定性。PDF 固定 creator/producer/creation/modification 信息和文档 id，不读取当前时钟；DOCX 固定 core properties，清除易变 rsid/修订信息，并按 entry 名排序、固定 ZIP timestamp/权限/压缩参数重新打包。同一来源和选项即使跨秒、跨 Session 生成也必须 bytes/hash 相同。
+8. 论文标题、summary/finding、模型/数据集/指标名和文件名保持原文，不调用模型翻译。长文本、长单词、Unicode、空可选章节、表格跨页必须布局可读，不允许静默丢段、截断审阅结论或生成空白页风暴。
+
+## 三、012 迁移、模型与状态机
+
+1. 新增 `012_export_report_pdf_docx.py`，不得改写已应用 011 的 revision id。调整 P6.1 source 行的 report_type CHECK，使 source_snapshot 非空的 MARKDOWN/PDF/DOCX 均合法；保留历史 source_snapshot=null 骨架行兼容。
+2. 不新增业务表。优先不新增列；若转换确有必要，必须先证明无法由 report_type/content_hash/source_hash 表达，并提供兼容迁移。最终 Alembic head 应为 012、业务表仍 18 张。
+3. 既有 `uq_active_export_source` 已包含 report_type，继续保证三格式分别幂等。不得退化为只按用户/论文/选项永久锁死，也不得删除 READY 文件来覆盖旧来源。
+4. 012 upgrade 必须兼容空表、历史 PDF/DOCX 骨架行和已有 P6.1 MARKDOWN 行；downgrade 遇到 source_snapshot 非空的 PDF/DOCX 行必须在修改 schema 前无损中止，不能 DELETE/UPDATE 报告或对象。
+5. PENDING→GENERATING 的条件 UPDATE 单认领、storage 回读逐字节/size/hash 校验、READY commit unknown 回查、未归属对象清理与固定 FAILED 文案必须覆盖全部三种格式。不得复制出三套互相漂移的状态机。
+
+## 四、API、报告历史与下载契约
+
+1. 扩展现有 POST，仍为 extra=forbid。公开 ExportReportResponse 保持同一严格字段集合且不返回 source_snapshot/source_hash/content_hash/storage_key。
+2. 新增 `GET /api/v1/papers/{paper_id}/exports?page=1&page_size=20`。仅论文所有者可见，USER/ADMIN 访问他人统一 404；严格分页 1～100，按 created_at DESC/id DESC；返回固定 `items/total/page/page_size`，item 复用公开 ExportReport 字段且 duplicate 固定 false。
+3. 状态 GET 行为不变。FAILED 只返回固定安全错误；历史骨架异常数据不能导致 500 或泄露内部字段。
+4. 下载按 report_type 返回：Markdown `text/markdown; charset=utf-8`、PDF `application/pdf`、DOCX `application/vnd.openxmlformats-officedocument.wordprocessingml.document`。安全文件名只由 report id 和服务端固定扩展组成；保留 attachment、nosniff、private/no-store 和发送前 size/hash 复核。
+5. 不增加任意路径、文件名、模板、URL、Range 或转换参数。预计公开路由 33→34，以实际收集结果为准。
+
+## 五、P08 用户端导出页面
+
+1. 新增受认证路由 `/papers/:id/export` 与 `ReportExportView.vue`，在 PaperDetailView 增加“导出报告”入口；复用现有论文元信息和视觉语言，不重构无关页面或引入新 UI 库。
+2. 页面配置包含格式 MARKDOWN/PDF/DOCX、语言 zh/en、include_metrics、include_experiment_analysis；仅 PARSED 论文允许提交。没有成功审阅时展示可行动提示并链接审阅页，不在前端伪造结果。
+3. 页面从新的分页 API恢复报告历史，显示格式、状态、文件大小、创建/完成时间与操作。PENDING/GENERATING 只显示“等待生成/生成中”，不得伪造百分比；FAILED 显示固定安全文案并允许用户重新提交相同配置。
+4. POST 201/200 均 upsert 到列表；只轮询当前页中的 PENDING/GENERATING id，默认 3 秒。使用 paper generation、request generation 和 export id 拒绝路由切换、翻页、重复提交或组件卸载后的陈旧响应；终态立即停止对应轮询，卸载清理 timer。
+5. 下载必须走现有认证 Axios，使用 blob/arraybuffer 和服务端 Content-Disposition 或安全 fallback 文件名；创建对象 URL 后触发下载并在 finally revoke。禁止把 access token 放进查询串、window.open URL、local/session storage 或 DOM。
+6. 创建、列表、状态和下载错误映射为固定、可行动的中文文案；不得展示原始后端 message、SQL、Traceback、路径或响应正文。按钮具备 loading/disabled，重复点击不得创建额外请求。
+7. 更新前端 API TypeScript 严格联合类型和分页响应，所有响应再次校验 paper/export 上下文。不得使用 `any`、`v-html`、Web Storage 或长期缓存报告 blob。
+
+## 六、离线测试
+
+1. 先更新 08 测试设计再写测试。不得联网、skip/xfail、删除旧断言、用 SQLite 代替 PostgreSQL 约束测试，或 mock 掉目标转换器/报告状态机。
+2. 转换单元覆盖 zh/en、Unicode、长文本/分页、Evidence、指标/实验表格、空章节；PDF 用 PyMuPDF 解析真实文本/页数，DOCX 用 zipfile/XML 与 python-docx 重开验证结构。
+3. 确定性测试必须跨秒或注入不同时钟重复生成，分别断言 PDF/DOCX bytes 和 SHA-256 完全相同；扫描 PDF metadata、DOCX core properties/ZIP timestamps/rsid，禁止当前时间、绝对路径、secret、外部关系、宏、脚本或原始 HTML。
+4. PostgreSQL/API 覆盖三格式 201/200、新来源、FAILED 重试、真实两线程同格式只一行一对象、不同格式各一行；012 历史行 upgrade、空库往返、非空 PDF/DOCX downgrade 无损中止。
+5. 下载覆盖三种 MIME、扩展名、headers、body/hash、未就绪、缺失和损坏；列表覆盖分页/排序/空列表、严格参数、USER/ADMIN 跨用户 404、内部字段不公开。
+6. 注入 PDF/DOCX render、临时文件、storage save/read/delete、flush、commit 前失败和 commit 后抛错，验证固定 FAILED、无未归属对象、commit unknown READY 不误删。
+7. 前端组件覆盖三格式配置、严格请求、201/200 upsert、历史分页、轮询终止、路由/翻页/重复请求竞态、FAILED 重试、blob 下载与 revoke、401/404/409/413 固定文案、无 v-html/Web Storage/token URL。
+8. 实际运行 P6.2 定向、P6.1 72+25+1、P5.3a 74、P5.2 72、P5.1 103、P4.3 180、P4.1 67 和 Docker 后端全量；不得少于当前 771 且 0 skipped。前端全量不得少于 12 files / 154，生产构建不得少于 129 modules。
+
+## 七、文档与最终验收
+
+1. 同步 systemDesign 01～08、SDD spec/tasks/design 06/07/08/09/10、独立 Sprint、README、docs/api-contract.md、data-model.md、architecture.md、security-design.md、PROGRESS.md、IMPLEMENTATION_STATUS.md。页面文档必须与最终组件一致，不保留伪进度百分比。
+2. 文档明确 P6 完成 Markdown/PDF/DOCX 与用户端导出闭环；报告删除/分享不在范围；完整管理员系统下一阶段 P7；BackgroundTasks 重启恢复仍留 P8。
+3. 实际验证 012 upgrade/head/check、空库 `011→012→011→012`、历史行兼容和非空 PDF/DOCX downgrade 无损中止；报告真实路由/表数。
+4. 测试结束 paperlens_test 全部业务表残留 0；开发库关键表计数与开始一致。三容器/PostgreSQL healthy、backend/frontend HTTP 200、无 token 创建/列表/下载 401。
+5. 执行 Python 编译、前端 TypeScript/Vite、git diff --check、高熵 secret 候选、PDF/DOCX 外部关系/宏/脚本、Web Storage/v-html、敏感日志、绝对路径和锚点检查；禁改目录与 HEAD 不变。两个 码道提示词在码道执行期间 SHA-256 必须不变。
+6. 最终逐项报告转换器与确定性、012/模型、三格式幂等状态机、列表/下载 API、P08 竞态与下载安全、全部测试、路由/表、HTTP、数据库残留、静态扫描和明确未实现项。未执行项必须如实说明，不得用历史结果冒充。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要拆分 P6.2，也不要提前实现管理员系统或 P8。
+~~~~
+
+---
+
+## 25 — P7.1 管理员 API 与不可变审计后端
+
+> 来源：码道独立审查并收口 P6.2 后生成（2026-07-15）
+
+~~~~text
+# 码道下一阶段提示词：P7.1 管理员 API 与不可变审计后端
+
+## 任务目标
+
+本轮固定为 P7.1，且必须在一个码道轮次内完成：在 P3.5 已验收的注册登录、AuthSession、USER/ADMIN RBAC 与 P6 已完成的全部用户功能基础上，实现管理员专用的仪表盘、用户管理、论文/任务/报告只读管理列表，以及用户角色/账号状态变更和不可变审计日志。不得把迁移、管理员权限、用户变更、审计或只读管理 API 拆成额外返工轮次。
+
+本轮是纯后端闭环。P7.2 管理后台 Vue 页面、P7.3 管理员端到端权限验收仍按既定轮次执行；不得提前实现或增加新轮次。
+
+## 一、开始前边界与固定基线
+
+1. 先完整阅读根目录 `AGENTS.md`，并严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行；如技能脚本不可用，如实记录并按同一顺序手工完成。P7.1 不改页面，但仍需由 page-mockup 明确记录“P7.2 才新增管理员页面”。
+2. 开始前记录 git status/HEAD、Docker、012 current/head/check、路由/表数、测试库残留、开发库关键表只读计数，以及两个 码道提示词 SHA-256。现有改动均属于用户/码道，不得覆盖、还原或批量格式化无关文件。
+3. 当前验收基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic 012；34 条 `/api/v1` method+path；17 张 ORM 应用表、含 alembic_version 共 18 张物理表；Docker 后端 830 passed/0 skipped；前端 13 files/173 passed；构建 132 modules；开发库只读计数 `2/4/4/21/0/0/0/0`；测试库零残留；三个容器运行且 PostgreSQL healthy。变化必须按实际结果报告，不得机械写预估数。
+4. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、AGENTS.md 和两个 码道提示词；禁止删除 volume 或修改既有开发库业务数据。
+5. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie、密码/refresh/reset token 或完整环境；禁止 `docker compose config`、`docker inspect`、`env`、`set` 等可能展开 secret 的命令。
+6. 禁止真实 MaaS/Embedding/外部网络。测试必须强制 mock，并让 LLM/Embedding 工厂一旦被调用就失败。
+7. 不实现管理后台 Vue 页面、管理员冒充用户、密码查看/重置、默认管理员、邮件、MFA、论文/报告删除、任务取消、批量操作、报告分享、任意 SQL/排序字段、Celery/Redis、OBS、FAISS/pgvector 或 P8。ADMIN 在普通业务 API 中仍不得绕过资源所有权；跨用户访问只能走本轮显式 `/admin` API。
+
+## 二、先更新设计与 SDD
+
+1. 在编码前更新 `ProjectDocs/systemDesign/01～08`：确定管理员用例、显式管理边界、013 数据模型、API、实施计划、需求规格、P7.1 无页面影响和测试矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md` 与相关 design 文档；新建 `ProjectDocs/sprint/管理员API与审计后端.md`，状态先置进行中，验收后再完成。
+3. 设计必须明确：P7.1 仅提供管理员后端；P7.2 使用这些 API 构建管理页面；P7.3 做权限/E2E 收口。不得把已有 P3.5 认证错误标为未实现。
+
+## 三、013 迁移与不可变审计模型
+
+1. 新增 `013_admin_audit_log.py`，不得改写 001～012 revision id。新增 `admin_audit_logs` 一张表，不修改或回填既有业务行；最终应为 18 张 ORM 应用表、含 alembic_version 共 19 张物理表。
+2. 最小字段：UUID id；`actor_user_id` String(128) FK users.id RESTRICT；固定 action；固定 resource_type；`resource_id` String(128)；长度 8～500 的 reason；非空、严格小对象 `before_state`/`after_state` JSONB；created_at。不得保存密码哈希、token/hash、cookie、论文正文、storage_key、source_snapshot/content_hash、原始异常、请求 header/IP/user-agent 或任意环境值。
+3. action 本轮只允许 `USER_ROLE_CHANGED`、`USER_STATUS_CHANGED`；resource_type 本轮只允许 `USER`。before/after 只能是 `{"role": ..., "status": ...}`，不得保存 email/display_name 等可变 PII 快照。
+4. 建立 actor、resource、action、created_at DESC/id DESC 所需索引和 CHECK。ORM 与迁移必须一致。
+5. 审计表必须 append-only：应用无 UPDATE/DELETE 路径；数据库以 PostgreSQL trigger 拒绝 UPDATE/DELETE，TRUNCATE 仅测试清理使用。变更用户、撤销 session/reset token 和插入审计必须在同一事务内，任一步失败全部回滚。
+6. 013 upgrade 兼容空库和现有 012 数据，不得 UPDATE/DELETE 用户或业务表。downgrade 若审计表非空，必须在修改 schema 前无损中止；空表允许 `012→013→012→013` 往返。不得为通过 downgrade 测试删除审计记录。
+
+## 四、管理员认证与用户变更规则
+
+1. 复用现有 `require_admin` 和真实 AuthContext。未认证统一 401；已认证 USER 统一 403；DISABLED、已撤销 session、refresh replay 等继续由 P3.5 拒绝，不能只相信 JWT role claim。
+2. 新增 `PATCH /api/v1/admin/users/{user_id}`，请求 extra=forbid，字段为可选 `role: USER|ADMIN`、可选 `status: ACTIVE|DISABLED`、必填 reason 8～500；role/status 至少一个出现。空变更或值相同返回 200、`changed=false`，不写审计。
+3. 用户变更必须数据库串行化：以确定顺序 `FOR UPDATE` 锁定当前 ACTIVE ADMIN 集合与目标用户，处理并发管理员操作。任何提交结果未知都用新 Session 回查用户状态和对应 audit id，不能重复审计或误报失败。
+4. 禁止管理员把自己降为 USER 或设为 DISABLED；任何操作后必须至少保留一个 ACTIVE ADMIN。两个管理员并发互相降级/禁用时最多一个成功，另一个固定 409，绝不能出现零 ACTIVE ADMIN。
+5. 目标不存在固定 404；不泄露是否存在于非管理员接口。角色/状态非法、extra、reason 过短/过长/控制字符为 422；最后管理员/自操作冲突为固定安全 409。
+6. 实际 role 或 status 变化后，在同一事务中撤销目标用户全部未撤销 AuthSession，固定 revoke_reason，不输出 sid/token_hash；使旧 access/refresh 立即失败。设为 DISABLED 时同时使未使用且未过期的 PasswordResetToken 失效；重新启用不会恢复旧 session/token。
+7. 同一次 PATCH 同时改变 role/status 只创建一条还是两条审计必须固定：要求每个实际变化字段各一条 audit，使用同一事务和同一 reason，排序由 created_at/id 确定。不得审计失败或 no-op 请求。
+8. API 只能返回严格公开 UserAdminResponse 与本次 `changed/audit_ids`；不得返回 password_hash、session/token hash、reset token、内部 SQL/路径或底层异常。
+
+## 五、8 条管理员 API
+
+本轮新增以下 8 条 method+path，预期总数 34→42，以实际收集为准：
+
+1. `GET /api/v1/admin/dashboard`：返回固定聚合计数。用户按 role/status，论文按 status，任务按 task_type/status，报告按 report_type/status；数字均为非负整数，不返回用户内容或最近原文。
+2. `GET /api/v1/admin/users?page=1&page_size=20&role=&status=&q=`：q 只匹配 normalized email/display_name，长度 1～100；按 created_at DESC/id DESC。item 可含 id/email/display_name/role/status/failed_login_count/locked_until/created_at/updated_at、active_session_count、paper/task/export_count，不含任何 secret/hash。
+3. `GET /api/v1/admin/users/{user_id}`：同一严格用户字段与资源计数；目标不存在 404。
+4. `PATCH /api/v1/admin/users/{user_id}`：按第四节执行角色/状态变更、session/reset 失效与原子审计。
+5. `GET /api/v1/admin/papers?page&page_size&status&user_id&q`：只读管理列表，固定字段 id/user_id/owner_email/title/filename/file_size/page_count/status/created_at/updated_at；FAILED 只映射固定公开错误，不返回 storage_key/file_hash/正文/表格/Evidence。
+6. `GET /api/v1/admin/tasks?page&page_size&task_type&status&user_id&paper_id`：只读列表，固定字段 id/user_id/paper_id/task_type/status/progress/固定安全 error_message/created_at/started_at/completed_at；不返回模型输入输出、论文内容或 token usage。
+7. `GET /api/v1/admin/exports?page&page_size&report_type&status&user_id&paper_id`：只读列表，复用安全公开字段并补 user_id；FAILED 固定文案；不返回 storage_key/source_snapshot/source_hash/content_hash。
+8. `GET /api/v1/admin/audit-logs?page&page_size&actor_user_id&action&resource_id&created_from&created_to`：按 created_at DESC/id DESC，返回 actor 的当前 id/email、固定 action/resource、reason、严格 before/after、created_at；时间必须带时区且 from<=to。
+
+所有列表统一严格 page>=1、1<=page_size<=100、固定 total/page/page_size/items；只接受白名单 filter，不接受任意 sort/order/field/include。不存在的关联不得导致 500；使用聚合/批量查询避免逐行 N+1。所有响应 schema `extra=forbid`。
+
+## 六、事务、隐私与并发边界
+
+1. 管理员列表是显式跨用户能力，但只暴露运维所需最小元数据。普通论文/任务/报告 API 的 USER/ADMIN 所有权行为必须保持原样，禁止把 `require_admin` 变成全局旁路。
+2. role/status 变更、session/reset 失效、两条可能的 audit 插入必须单事务。flush/commit 前失败 rollback；commit 后抛错用 audit id + target state 回查。并发请求不得产生重复 audit、部分变更或漏撤销 session。
+3. before/after 来自锁定后的数据库值，不接受客户端 JSON。reason 只保存到数据库和管理员响应，不写应用日志。日志仅允许固定阶段、actor id、target id、action 与异常类型，不记录 email/reason/header/token/内容。
+4. Dashboard 和列表必须使用有限投影，不加载 deferred raw_text、structured_data、source_snapshot 或文件对象。任何计数/筛选不得调用 LLM、Embedding、StorageBackend 或网络。
+5. 失败响应只使用固定公开 AppError code/message；数据库异常、constraint 名、SQL、Traceback、绝对路径和审计 reason 不得回显给普通用户或日志。
+
+## 七、测试要求
+
+1. 新增 013 migration、admin service、schemas、router 的单元与 PostgreSQL API 测试；更新 `_BUSINESS_TABLES`、默认 Alembic revision 和清理/零残留检查。
+2. 覆盖 8 路由的 401、USER 403、ADMIN 200、UUID/路径/分页/筛选/时间/extra 422，以及响应禁止字段递归扫描。
+3. 覆盖 dashboard 精确计数、users q/filter/pagination/stable order、paper/task/export 跨用户聚合、空列表和孤立/历史兼容行，不得用 vacuous `len>0` 冒充字段正确。
+4. 覆盖用户 role/status 单变更、双变更、no-op、目标 404、自降级/自禁用、最后 ACTIVE ADMIN、DISABLED 旧 access/refresh/reset 立即失效、重新启用不恢复旧凭据。
+5. 至少使用真实 PostgreSQL 两线程验证：两个管理员并发互相降级/禁用不能产生零 ACTIVE ADMIN；同目标并发请求只有串行一致结果；audit 数量、before/after、session 撤销与最终用户状态完全一致。
+6. 注入 audit flush、user flush、session/reset update、commit 前失败和 commit 后抛错；验证原子 rollback 或 commit unknown 回查，不出现用户变了但无 audit、audit 有了但 session 未撤销、重复 audit。
+7. 直接 SQL 尝试 UPDATE/DELETE audit 必须被 trigger 拒绝；API 不存在 audit mutation 路由。013 测试覆盖现有 012 数据不变、空库往返、非空 audit downgrade 无损中止。
+8. 测试中 LLM/Embedding/Storage 工厂一旦被管理员路径调用就失败。不得读取真实 Key，不得向外网发请求。
+9. 实际运行 P7.1 定向、P6.2 34+25+1、P6.1、P5、P4、P3.5 认证回归和 Docker 后端全量；不得少于当前 830 且 0 skipped。前端全量必须保持至少 13 files/173，构建至少 132 modules。
+
+## 八、文档、运行验收与交付
+
+1. 完成后同步 `ProjectDocs/systemDesign/01～08`、SDD spec/tasks/design、Sprint、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、`docs/api-contract.md`、`docs/architecture.md`、`docs/data-model.md`、`docs/security-design.md` 和 README；不得把 P7.2 页面或 P7.3 E2E 写成已完成。
+2. 文档明确 P7.1 只完成管理员后端；P7.2 下一轮实现管理后台仪表盘、用户与内容列表、角色/状态操作和审计查询；P7.3 做权限与危险操作确认/E2E。
+3. 实际验证 013 current/head/check、空库往返、现有数据兼容、非空 audit downgrade 无损中止；报告真实路由、ORM/物理表数。
+4. 只读核对开发库关键表计数，不创建管理员、不变更任何现有用户 role/status、不写审计；测试数据只进入 `paperlens_test`，结束必须 18 张应用表残留总数 0。
+5. 执行 Python 编译、前端 TypeScript/Vite、git diff --check、secret/Web Storage/v-html/敏感日志/绝对路径扫描、Markdown 链接检查；禁改目录与 HEAD 不变。两个 码道提示词在码道执行期间 SHA-256 必须不变。
+6. 最终逐项报告 013/审计不可变性、管理员认证、用户变更与凭据失效、8 API、并发/事务、全部测试、迁移、路由/表、HTTP、数据库残留和明确未实现项。未执行项必须如实说明，不得用历史结果冒充。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要拆分 P7.1，也不要提前实现 P7.2/P7.3 或 P8。
+~~~~
+
+---
+
+## 26 — P7.1 论文阅读学习工作台与证据化学习解释
+
+> 来源：用户校正产品目标为“帮助我阅读论文学习”后，由码道重新整理产品方向与固定轮次并生成（2026-07-15）。本节取代第 25 节作为下一轮执行提示词；第 25 节仅保留历史，不应再交给码道。
+
+~~~~text
+# 码道下一阶段提示词：P7.1 论文阅读学习工作台与证据化学习解释
+
+## 任务目标
+
+本轮固定为 P7.1，且必须在一个码道轮次内完成：把 PaperLens 的产品主线从“辅助审稿”校正为“帮助个人用户阅读论文并学习”，在已验收的 PDF 解析、章节/页面、Evidence、认证隔离和 Huawei MaaS LLMClient 基础上，实现受保护的论文阅读工作台，以及针对当前章节、当前页面或单条 Evidence 的中文/英文总结、通俗解释和翻译闭环。
+
+结构化审阅、指标提取、实验分析和三格式报告全部保留，分别作为“批判性阅读”“实验理解”和“学习成果导出”的既有高级能力；不得删除、改表重做或破坏 P2～P6。原 P7.1 管理员后端提示词已被本轮替代，但不增加总轮数：P7.2 仍用于论文内多轮问答，P7.3 用于高亮/书签/笔记/知识卡/论文库与学习进度，完整管理员后端+前端+不可变审计合并到既定 P8.1，P8.2～P8.4 继续用于全链路、可靠性性能和华为云部署安全收口。
+
+## 一、开始前边界与固定基线
+
+1. 先完整阅读根目录 `AGENTS.md` 和当前真实代码，再严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行。先核对 码道已写入的产品方向校正文档；如技能脚本不可用，如实记录并按相同顺序手工完成，不得跳过文档阶段直接编码。
+2. 开始前记录 git status/HEAD、Docker、Alembic 012 current/head/check、路由/表数、测试库残留、开发库关键表只读计数，以及 `docs/CODEARTS_NEXT_PROMPT.md` 和 `docs/CODEARTS_PROMPT_ARCHIVE.md` 的 SHA-256。现有全部修改属于用户/码道，不得覆盖、还原或批量格式化无关文件。
+3. 当前验收基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic 012；34 条 `/api/v1` method+path；17 张 ORM 应用表、含 alembic_version 共 18 张物理表；Docker 后端 830 passed/0 skipped；前端 13 files/173 passed；构建 132 modules；开发库只读计数 `2/4/4/21/0/0/0/0`（users/papers/tasks/reviews/metrics/files/results/exports）；测试库 17 张应用表残留总数 0；backend/frontend/postgres 运行且 PostgreSQL healthy。所有新结果必须按实际收集值报告，不得机械复制预估数字。
+4. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个 码道提示词文件；禁止删除 Docker volume、删除用户文件或修改既有开发库业务数据。
+5. 禁止读取、搜索、打印、复制或推断 `.env`、API Key、JWT secret、Authorization、cookie、密码、refresh/reset token 或完整环境；禁止运行 `docker compose config`、`docker inspect`、`env`、`set` 等可能展开 secret 的命令。
+6. 本轮禁止真实 MaaS、真实 Embedding 和任何外部网络。所有自动测试强制使用可控 Mock/注入客户端；不得因为本机已配置 huawei_maas 就产生付费调用。
+7. 不实现自由文本提问、多轮会话、联网补充、笔记/高亮/书签/知识卡、论文库标签搜索、管理员 API/页面/审计、报告重做、文件删除、Celery/Redis、OBS、FAISS/pgvector、OCR 或 P8 能力；不得将上述内容拆成 P7.1 的额外返工轮次。
+
+## 二、先同步设计、SDD 与 Sprint
+
+1. 编码前复核并按实际方案更新 `ProjectDocs/systemDesign/01～08`：个人论文阅读学习助手定位、P7.1 架构、013 数据模型、3 个 API、固定轮次、FR-13、P09 页面和完整测试矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`、`design/design.md`、`design/07～10` 和 `design/13-论文阅读学习.md`。每个任务必须引用具体 FR、设计、API、数据表和页面章节。
+3. 更新 `ProjectDocs/sprint/论文阅读学习工作台.md`：开始编码时置为进行中，只有本轮真实验收全部通过后才置为完成；未执行项不得打勾。
+4. 更新 README、`docs/product-requirements.md`、architecture、api-contract、data-model、security-design、IMPLEMENTATION_STATUS 和 PROGRESS。历史 P2～P6 结果保留；规划中的 P7.2/P7.3/P8.1 不得写成已实现。
+
+## 三、013 迁移与学习数据模型
+
+1. 新增单一 Alembic revision `013_learning_explanations.py`，down_revision=012；禁止修改 001～012 revision id 或在旧迁移中塞新逻辑。
+2. 新增 `learning_explanations`：
+   - `id` UUID 主键；`user_id` String(128) FK users RESTRICT；`paper_id` UUID FK papers CASCADE。
+   - `mode` 仅 `SUMMARY|EXPLAIN|TRANSLATE`；`scope_type` 仅 `SECTION|PAGE|EVIDENCE`；`output_language` 仅 `zh|en`。
+   - nullable `section_id`、`page_number`、`evidence_id`，通过 CHECK 保证 scope 严格互斥：SECTION 只允许 section_id；PAGE 只允许 page_number 且 >=1；EVIDENCE 只允许 evidence_id。section/evidence 外键删除策略必须与论文级 CASCADE 一致且由迁移/ORM 同步定义。
+   - `request_hash` 固定 64 位小写十六进制，由服务端 canonical scope + source hash + mode + language 生成，不从请求接收且不公开。
+   - `status` 仅 `PENDING|RUNNING|SUCCEEDED|FAILED`；nullable `answer` Text、`key_points` JSONB、`terms` JSONB、`error_message` Text、`started_at`、`completed_at`，以及 UTC `created_at`。
+   - CHECK 保证终态：PENDING 不声明结果/错误/完成时间；RUNNING 已有 started_at 且无结果/错误/完成时间；SUCCEEDED 有 started_at/completed_at、非空 answer、非空 JSON 数组 key_points/terms、无错误；FAILED 有 started_at/completed_at、固定非空 error_message、无 answer/key_points/terms。
+   - 索引覆盖 user/paper、paper/created_at DESC/id DESC、status；部分唯一索引 `user_id + paper_id + request_hash` 只覆盖 PENDING/RUNNING/SUCCEEDED，使同请求活动/成功最多一行，FAILED 可重试。
+3. 新增 `learning_citations`：`explanation_id` FK learning_explanations CASCADE、`evidence_id` FK evidences RESTRICT、`sequence` 正整数；复合主键 explanation_id+evidence_id，且 explanation_id+sequence 唯一。服务层必须验证 Citation 与 Explanation 属于同一 paper/user。
+4. ORM、枚举、关系、约束名、索引名与迁移完全一致。不得把学习结果写进 ReviewResult/ReviewFinding，不得给 AnalysisTask 伪造 REVIEW 类型，也不得存 prompt、全文快照、模型原始响应、token usage、API Key、底层异常、storage_key 或任意 secret。
+5. 013 upgrade 必须兼容当前 012 开发库并且不 UPDATE/DELETE/回填既有业务行。空学习表支持 `012→013→012→013`；任一学习表非空时 downgrade 必须在任何 DDL 前无损中止，不能为了测试先删数据。
+6. 完成后预计为 19 张 ORM 应用表、含 alembic_version 共 20 张物理表；必须以实际统计为准。同步测试清理清单和残留检查。
+
+## 四、服务端来源解析与安全模型输入
+
+1. 新建独立 learning service/schema/router，不把业务逻辑塞进 papers.py、tasks.py 或 review_service.py。复用现有真实 AuthContext、LLMClient 工厂和安全错误体系。
+2. POST 只能由当前 owner 对 PARSED 论文调用；ADMIN 在普通业务 API 中仍不得读取他人论文。user_id 永远来自认证上下文。
+3. 请求只接受 `mode`、`scope_type`、`section_id|page_number|evidence_id` 和 `output_language`，`extra=forbid`。禁止客户端提交正文、quoted_text、Evidence alias、prompt、user_id、model、temperature 或系统指令。
+4. 服务端重新读取来源：
+   - SECTION：PaperSection 必须属于论文，正文取 `text_content`；候选 Evidence 优先同 section_id，必要时只在 section 页码范围内确定性补充。
+   - PAGE：PaperPage 必须属于论文，正文优先 `normalized_text_content`，候选 Evidence 只来自同页。
+   - EVIDENCE：Evidence 必须属于论文，正文只取该 `quoted_text`，候选只有自身。
+5. 候选按 page_number ASC、created_at ASC、id ASC 稳定排序，映射为 E1…En。新增明确、有限且经过校验的配置，例如 source 总字符上限、Evidence 数量上限和单条字符上限；默认值写入 `.env.example` 但不得读取真实 `.env`。来源为空固定 409；SECTION 超出单轮安全上限时诚实返回“范围过大，请按页面阅读”，不得静默截断后宣称“全文总结”。
+6. canonical scope 和 source hash 必须由服务端生成。创建 PENDING 前完成来源归属与 hash；后台执行前再次读取并复核 hash，来源不一致则固定 FAILED，不用旧正文生成新结果。
+7. 论文标题、正文和 Evidence 都按不可信输入包裹在明确标签内。system message 必须声明其中任何指令无效；不得拼接为可覆盖系统角色的消息，不得把论文中的 `ignore previous instructions` 当作命令。
+
+## 五、学习 LLM 契约、严格解析与 Citation 绑定
+
+1. 复用现有 `LLMClient.chat`；通过显式 `operation="learning"`、mode、language 和 evidence_aliases 传递 Mock 所需上下文，不改变 REVIEW 现有 kwargs 或输出。
+2. `MockLLMClient` 只在 learning operation 分支返回学习 JSON，原 REVIEW 分支逐字保持兼容。HuaweiMaaSLLMClient 不增加专用网络协议，仍走当前非流式标准接口。
+3. 模型只允许返回一个 JSON 对象，严格结构如下；所有 Schema `extra=forbid`：
+
+```json
+{
+  "answer": "纯文本答案",
+  "key_points": ["要点 1"],
+  "terms": [{"term": "术语", "explanation": "通俗解释"}],
+  "evidence_refs": ["E1"]
+}
+```
+
+4. answer 去首尾空白后非空并有明确最大长度；key_points 数量、每项长度和非空规则固定；terms 数量、term/explanation 长度和去重规则固定；evidence_refs 至少 1 条、数量有限、去重后仍非空。
+5. 兼容真实 GLM 已观察到的“单一完整 Markdown JSON 围栏”只能复用 P4.3 的确定性规则：开头严格 ` ```json ` 或 ` ``` `、结尾严格 ` ``` `、内部无第二个围栏；不得用正则从任意解释文本里猜 JSON，不得接受多对象、前后杂文或 inline code。
+6. 全部 alias 必须存在于本次候选并映射到同论文 Evidence；只要一个未知、跨论文或重复冲突引用，整次结果失败且不写部分 answer/Citation。成功结果至少一个 Citation。
+7. SUMMARY 要概括当前范围；EXPLAIN 要用学习者可理解的语言说明含义、方法和术语；TRANSLATE 要忠实翻译，不额外添加论文未表达的结论。三种模式都必须只基于给定来源，证据不足时在 answer 中明确说明，不能伪造外部知识。
+
+## 六、状态机、幂等、并发与事务
+
+1. 创建阶段在短事务内完成 owner/PARSED/scope/source/hash 校验并插入 PENDING。先查同 request_hash 的 PENDING/RUNNING/SUCCEEDED；并发冲突由部分唯一索引最终裁决，捕获 IntegrityError 后回查既有行并返回 200 duplicate=true。FAILED 不阻止新建 201。
+2. 后台只通过 `UPDATE ... WHERE status='PENDING'` 原子认领 RUNNING；未认领不得调用模型。认领提交后结束事务，再加载只读来源、rollback/close 事务后调用 LLM，外部网络期间绝不能持有数据库事务或行锁。
+3. 模型响应先在内存完整解析、验证和绑定。随后用新事务重新加载 Explanation、Paper、scope 和全部 Evidence，复核 user/paper/request_hash/source hash；一次性写 answer/key_points/terms、全部 Citation、SUCCEEDED 和 completed_at。
+4. 任一 flush/commit 前错误整批 rollback，再用独立会话安全写 FAILED。commit 抛错或结果未知时必须用新 Session 回查终态、结果和 Citation 数量：已成功则不得覆盖为 FAILED，未成功才补偿；不得产生 SUCCEEDED 无 Citation、Citation 部分写入或重复 Citation。
+5. FAILED 只保存固定“学习解释生成失败，请稍后重试”等公开文案；日志只写 explanation id、paper id、固定阶段和异常类型，不记录正文、标题、answer、prompt、原始响应、引用文本、email、header、token、hash 或 secret。
+
+## 七、3 个 API 契约
+
+本轮只新增以下 3 条 method+path，预计总数 34→37，以实际收集为准：
+
+1. `POST /api/v1/papers/{paper_id}/learning-explanations`
+   - 严格请求字段按第四节；新建返回 201，复用活动/成功返回 200，并返回 `duplicate`。
+   - 响应返回 id/paper_id/mode/scope/status/timestamps/duplicate，不返回 request_hash、source hash、prompt 或来源正文。
+2. `GET /api/v1/learning-explanations/{explanation_id}`
+   - 仅 owner；不存在/跨用户统一 404。
+   - PENDING/RUNNING 不返回结果；FAILED 只返回固定 error_message；SUCCEEDED 返回 answer、key_points、terms 和按 sequence 排序的 citations。
+   - Citation 仅返回安全字段 `evidence_id/page_number/evidence_type/quoted_text/char_start/char_end`，并可供前端原文定位。
+3. `GET /api/v1/papers/{paper_id}/learning-explanations?page=1&page_size=20`
+   - 严格 `page>=1`、`1<=page_size<=100`，按 created_at DESC/id DESC，返回 items/total/page/page_size。
+   - list item 只返回元数据、状态、固定错误和时间，不批量返回完整 answer、terms 或引用正文；点击历史再调用详情，避免列表放大。
+
+全部路径 UUID 保持严格 UUID4 和现有统一错误结构；非法 extra/scope/mode/language/page 为 422，论文未解析、来源为空/过大为固定 409，认证 401，资源不存在或越权 404。不得让底层 Pydantic/SQL/网络异常原文进入 API。
+
+## 八、P09 论文阅读学习工作台
+
+1. 新增受保护路由 `/papers/:id/read` 和 `PaperReadingView.vue`。PaperDetailView 对 PARSED 论文增加醒目的“开始阅读”入口；原“审阅”显示文案改为“批判性阅读”，route name、URL、API 和历史数据保持兼容。
+2. 桌面端三栏：左侧章节目录，中间正文阅读区，右侧学习助手；阅读区是视觉主体。窄屏允许目录/助手折叠或按顺序堆叠，但不得遮挡正文。
+3. 左栏按 sequence 展示章节层级和页码；默认选择首章节。中栏支持章节全文与页面模式、上一页/下一页/合法页码跳转；不要在页面初次加载时请求所有页。
+4. 右栏固定提供总结/解释/翻译、当前章节/当前页面/已选 Evidence 三种范围（只有上下文存在时可选）、zh/en 和开始按钮。提交内容只含实体 id，不含正文。
+5. 创建后每 3 秒轮询详情，仅 PENDING/RUNNING 继续；成功显示纯文本 answer、要点列表、术语卡和引用，失败显示固定错误与重试。禁止 `v-html`、不执行模型 Markdown、脚本、URL 或样式。
+6. Citation 点击后在当前工作台切到对应页，使用 `normalized_text_content + char_start/char_end + quoted_text` 的安全三段文本节点高亮并 scrollIntoView；区间不一致时显示降级提示且不猜错误位置。不得通过 v-html 高亮。
+7. 提供解释历史，每页 20 条、总数、上一页/下一页、状态和重新打开详情；历史失败有独立重试，不阻断正文阅读。
+8. paper、section/page、explanation create/poll、history page 各自使用请求代数和明确的 paper/scope/id 校验。切换论文、章节、页面、历史项或卸载后，旧 Promise/Timer 不得覆盖新状态；所有 timer 在终态和卸载时清理。
+9. 使用现有 Axios 鉴权与安全错误映射，不使用 localStorage/sessionStorage、token query、v-html 或原始服务端 error。不要引入新 UI 框架或无关依赖。
+
+## 九、测试要求
+
+1. 新增 013 migration、models、schemas、source resolver、prompt/parser、service、router 和 Vue 页面/API/路由测试；更新 `_BUSINESS_TABLES`、默认 Alembic revision 和清理逻辑。
+2. 迁移测试覆盖：现有 012 数据不变；空表往返；非空任一学习表 downgrade 在 DDL 前无损中止；ORM/数据库 CHECK/FK/索引一致；19 张应用表最终零残留。
+3. 来源测试覆盖 SECTION/PAGE/EVIDENCE 正常路径、跨用户、跨论文、错误 section/evidence、页码越界、空正文、无 Evidence、超长 SECTION、source hash 变化，且所有拒绝发生在 LLM 工厂调用前。
+4. 模型测试覆盖三 mode/双语言、prompt 注入论文内容、HTML、控制字符、严格 JSON、允许的单围栏，以及多对象、前后杂文、额外围栏、extra、空 answer、超长字段、错误类型、0 引用、未知/重复/跨论文 alias。不得用只断言“非空”的 vacuous 测试冒充契约验证。
+5. API 覆盖 3 路由的 401/404/409/422/200/201、UUID4、extra、scope 互斥、分页稳定排序、响应禁止字段和 USER/ADMIN 所有权；断言拒绝路径不构造 LLM/Embedding/Storage。
+6. PostgreSQL 并发至少验证：同 request_hash 两线程最多一条活动/成功行且双方得到同 id；FAILED 可重试；后台双认领只调用一次 LLM；成功写入与 Citation 原子一致；flush/commit/commit-unknown 故障不产生部分结果或误报 FAILED。
+7. 前端覆盖：受保护路由和详情入口、三栏/空态、章节与页面切换、scope 请求体不含正文、创建/轮询/成功/失败重试、历史真实分页参数、Citation 高亮/降级、乱序响应、路由切换、卸载 timer 清理、纯文本渲染和安全错误。
+8. 测试必须注入 Mock；LLM/Embedding/Storage 工厂在不应触发的路径一旦调用就失败。不得读取真实 Key，不得向外网发请求。
+9. 实际运行 P7.1 定向、P6/P5/P4/P3.5 回归和 Docker 后端全量；后端不得少于当前 830 且 0 skipped。前端全量不得少于 13 files/173，生产构建不得少于 132 modules。只能报告本轮真实执行结果。
+
+## 十、运行验收与交付
+
+1. 实际执行 Python 编译、Docker 后端全量、前端全量、生产构建、`alembic current/heads/check`、013 空/非空 downgrade 测试、路由/ORM/物理表统计、测试库残留和 `git diff --check`。
+2. 只读核对开发库既有关键表计数；允许正常 Alembic schema upgrade，但不得创建学习结果、修改用户/论文/任务/审阅/指标/实验/报告业务行。测试数据只进入 `paperlens_test`，结束 19 张应用表残留总数必须为 0。
+3. 只检查前端/后端源码是否存在 Web Storage、v-html、secret、敏感日志、绝对路径和原始模型响应泄漏；不要搜索或读取 `.env`。
+4. 验收完成后同步全部设计、SDD、Sprint、README 和 docs 状态。明确：P7.1 已完成哪些学习能力；P7.2 问答、P7.3 学习沉淀、P8.1 管理员系统仍未实现。
+5. 最终逐项报告 013、来源解析、模型契约/Citation、状态机/并发、3 API、P09 页面、全部测试、迁移、路由/表、HTTP、数据库残留、Git/禁改目录和未实现项。未执行项必须如实说明，不得用历史结果冒充。
+6. HEAD 必须不变；两个 码道提示词文件在码道执行期间 SHA-256 必须与开始记录一致。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改既有开发库业务数据，不要删除 volume，不要把 P7.1 拆成新轮次，也不要提前实现 P7.2/P7.3/P8.1～P8.4。
+
+~~~~
+
+---
+
+## 27 — P7.2 当前论文多轮问答与证据化会话
+
+> 来源：P7.1 经 码道独立修正和全量验收后生成（2026-07-15）。本节为下一轮唯一执行提示词。
+
+~~~~text
+# 码道下一阶段提示词：P7.2 当前论文多轮问答与证据化会话
+
+## 任务目标
+
+本轮固定为 P7.2，且必须在一个码道轮次内完成：在已验收的 P7.1 阅读工作台、LearningExplanation、Evidence、认证隔离、LLMClient 和 EmbeddingClient 基础上，实现只围绕当前用户当前论文的多轮问答。用户可以新建会话、连续提问、查看会话与轮次历史；每个有依据的回答必须绑定服务端检索到的真实 Evidence，无足够论文依据时必须明确降级，不能用模型常识伪装成论文结论。
+
+不得返工 P2～P7.1，不得删除或改写现有学习解释。P7.3 的高亮/书签/笔记/知识卡/论文库/进度、P8.1 管理员后端+页面+不可变审计以及 P8.2～P8.4 均保持后续轮次，不因本轮扩张或增加轮数。
+
+## 一、开始前边界与固定基线
+
+1. 完整阅读根目录 `AGENTS.md` 和真实代码，严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行。先更新设计，再编码；如技能脚本不可用，记录后按相同顺序手工完成。
+2. 开始前记录 git status/HEAD、Docker、Alembic 014 current/head/check、路由/表、测试库残留、开发库关键表只读计数，以及两个 码道提示词文件 SHA-256。现有全部未提交改动属于用户/码道，不得覆盖、还原或批量格式化。
+3. 当前真实基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic `014_learning_contract_hardening`；37 条 `/api/v1` method+path；19 张 ORM 应用表、20 张物理表；Docker 后端 866 passed/0 failed/0 skipped；前端 14 files/183 passed；生产构建 135 modules；测试库 19 张应用表残留 0；开发库只读计数 `3/8/5/28/0/0/0/0/1/0`（users/papers/tasks/reviews/metrics/files/results/exports/learning/citations）；三容器运行且 PostgreSQL healthy。最终只能报告实际结果。
+4. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个 码道提示词文件；禁止删除 Docker volume、用户文件或开发库业务数据。
+5. 禁止读取、搜索、打印、复制或推断 `.env`、API Key、JWT secret、Authorization、cookie、密码或 token；禁止 `docker compose config`、`docker inspect`、`env`、`set` 等可能展开 secret 的命令。
+6. 本轮禁止真实 MaaS、真实 Embedding 和外网。自动测试只用可控 Mock/注入客户端；不得因本机配置 huawei_maas 产生计费调用。
+7. 不实现开放域/联网问答、跨论文问答、消息编辑/删除/分享、会话删除、流式输出、语音、附件、笔记/知识卡、管理员功能、Celery/Redis、FAISS/pgvector、OCR、OBS 或 P8 能力。
+
+## 二、设计、SDD 与 Sprint
+
+1. 编码前更新 `ProjectDocs/systemDesign/01～08`：P7.2 用例、架构、015 数据模型、5 个 API、实施计划、FR-14、P09 问答区域和完整测试矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`、`design/design.md`、`design/07～10`，新增 `design/14-论文内问答.md`。任务必须引用具体 FR、API、表和页面章节。
+3. 新建/更新 `ProjectDocs/sprint/论文内多轮问答.md`，编码时置为进行中，只有真实全量验收通过后才标记完成。
+4. 完成后同步 README、product-requirements、architecture、api-contract、data-model、security-design、IMPLEMENTATION_STATUS 和 PROGRESS。P7.3/P8.1 不得写成已实现。
+
+## 三、015 会话、轮次与引用模型
+
+1. 新增单一 revision `015_paper_qa_conversations.py`，down_revision=014；不得修改 001～014。
+2. `paper_qa_conversations`：UUID id；user_id FK users RESTRICT；paper_id FK papers CASCADE；UTC created_at/updated_at；索引 user+paper、paper+updated_at DESC/id DESC。普通业务 API 中 USER/ADMIN 都只能访问自己论文的会话。
+3. `paper_qa_turns`：UUID id；conversation_id FK conversation CASCADE；user_id RESTRICT；paper_id CASCADE；sequence 正整数；client_request_id UUID；question Text；output_language zh/en；status PENDING/RUNNING/SUCCEEDED/FAILED；nullable context_hash 64 位小写十六进制、answer Text、grounded bool、error_message、started_at/completed_at；UTC created_at。
+4. CHECK 保证 question 去空白后非空且有明确上限；conversation_id+sequence 唯一；user_id+conversation_id+client_request_id 唯一；同一 conversation 只允许一个 PENDING/RUNNING 的部分唯一索引。状态约束：PENDING 无上下文/答案/错误/时间；RUNNING 有 started_at、其余结果为空；SUCCEEDED 有 started/completed/context_hash、非空 answer、grounded，且无错误；FAILED 有 started/completed、固定“论文问答生成失败，请稍后重试”，无 answer/grounded/context_hash。
+5. `paper_qa_citations`：turn_id CASCADE、evidence_id RESTRICT、sequence 正整数；复合主键 turn+evidence，turn+sequence 唯一；服务层验证 Turn/Conversation/Paper/User/Evidence 全图一致。
+6. 有依据结果 `grounded=true` 必须至少一个 Citation；证据不足结果 `grounded=false` 必须零 Citation。该跨表规则由同一成功事务与服务测试强制。
+7. 不存 prompt、完整上下文快照、Embedding 向量、模型原始响应、token usage、API Key、底层异常或 secret。ORM/迁移的列、FK、CHECK、索引名完全一致。
+8. 015 upgrade 不修改任何既有业务行。空 P7.2 表支持 `014→015→014→015`；任一 P7.2 表非空时 downgrade 在任何 DDL 前无损中止。预计 22 张 ORM 应用表、23 张物理表，以实测为准。
+
+## 四、问题创建、检索与上下文
+
+1. 新建独立 qa schema/router/service/retriever，不把逻辑塞入 learning_service、papers.py 或 review_service。复用真实 AuthContext、LLMClient、EmbeddingClient 和安全错误体系。
+2. 新建会话只允许 owner 的 PARSED 论文。会话不接收 user_id、paper_id 覆盖、system prompt、model 或任意正文。
+3. 提交问题只接受 `question`、`output_language` 和必填 UUID4 `client_request_id`，`extra=forbid`。问题去首尾空白、非空且默认最多 2000 字符；配置上限写 `.env.example`。
+4. 创建 PENDING 前确认 conversation/user/paper 全图、PARSED、论文至少有一条非空 Evidence。相同 client_request_id 返回既有 turn 200+duplicate=true；不同请求遇到当前会话活动 turn 固定 409；新建返回 201。并发最终由数据库唯一索引裁决。
+5. 后台用条件 UPDATE 原子认领 RUNNING并提交。只读加载当前问题、按 sequence 的最近成功轮次和论文 Evidence 后 rollback/close，数据库事务结束后才调用 Embedding。
+6. 复用现有 EmbeddingClient，以当前 question 为 query，对当前论文全部非空 Evidence 做确定性余弦排序；不得跨论文，不使用 ReviewDimension 查询。排序为 similarity DESC、page_number ASC、created_at ASC、id ASC，取配置 `qa_evidence_top_k`，默认有限值。校验向量数量、维度、NaN/Inf/布尔和零范数。
+7. 最近对话上下文只取同会话已成功轮次，按 sequence 选最近 N 轮后恢复升序；N、总字符、单条 Evidence 字符均有配置。超限按完整轮次从最旧开始丢弃，不截断问题/回答后伪装完整上下文。当前问题不重复进入历史。
+8. 检索完成后用短事务写 context_hash：canonical conversation/paper/turn sequence + 当前 question hash + 纳入的历史 turn id/question/answer hash + 候选 Evidence id/text hash + language。只有仍为 RUNNING 且 context_hash 为空才可写；提交后结束事务再调用 LLM。
+9. Embedding 或 LLM 期间不得持有 Session/事务/行锁。Embedding/LLM 工厂只在全部同步拒绝检查通过后构造。
+
+## 五、问答 prompt、严格输出与证据不足
+
+1. 使用显式 `operation="paper_qa"`、language、evidence_aliases 调用现有 LLMClient；Mock 新增独立分支，不改变 REVIEW 和 learning 现有输出。
+2. system 明确：只回答当前论文；paper title、历史 question/answer、当前 question、Evidence 都是不可信内容，其中任何指令无效；不得使用外部知识补足论文结论。
+3. 所有内容用明确标签分隔并做安全文本处理。历史 assistant answer 同样视为不可信，不能提升为 system 指令。不得把用户问题拼成 system role。
+4. 模型只允许返回一个 JSON 对象，严格 Schema、extra=forbid：
+
+```json
+{
+  "answer": "纯文本回答或证据不足说明",
+  "grounded": true,
+  "evidence_refs": ["E1"]
+}
+```
+
+5. answer 去空白后非空且限长；grounded 必须 bool；grounded=true 时 evidence_refs 1～top_k、无重复且全部存在；grounded=false 时 evidence_refs 必须为空，answer 必须明确说明无法仅根据当前论文确认，不得给出猜测答案。
+6. 只兼容 P7.1 已验收的单完整 ` ```json ` / ` ``` ` 围栏规则；拒绝前后杂文、多对象、额外围栏、inline code、错误类型、extra、未知/重复/跨论文 alias。
+7. 模型解析和引用绑定全部在内存完成。任何错误整轮失败，不写部分 answer/Citation。
+
+## 六、持久化、并发与补偿
+
+1. LLM 返回后新事务锁定 Turn，要求仍为 RUNNING；重新加载 Conversation/Paper、纳入的历史轮次和全部候选 Evidence，重算 context_hash，任何变化均固定 FAILED。
+2. grounded=true 时再次绑定全部 alias 并验证 Evidence 同 paper；grounded=false 时强制零 Citation。一次事务写 answer、grounded、Citation、SUCCEEDED、completed_at，并更新 conversation.updated_at。
+3. 任一 flush/commit 前错误整批 rollback，再用独立 Session 把 PENDING/RUNNING 安全写为 FAILED。FAILED 可用新 client_request_id 重试；旧失败 turn 保留在历史。
+4. commit 抛错或结果未知时用新 Session 回查 turn 终态、answer、grounded、Citation 数量；已经成功不得覆盖 FAILED，未成功才补偿。不得出现 SUCCEEDED 与 Citation/grounded 不一致。
+5. 日志只写 turn id、conversation id、paper id、固定 stage 和异常类型，不记录问题、历史、标题、answer、Evidence、prompt、原始响应、email、header、token、hash 或 secret。
+
+## 七、5 个 API 契约
+
+本轮只新增以下 5 条 method+path，预计 37→42，以实际统计为准：
+
+1. `POST /api/v1/papers/{paper_id}/qa-conversations`：owner+PARSED 新建空会话，201。
+2. `GET /api/v1/papers/{paper_id}/qa-conversations?page=1&page_size=20`：按 updated_at DESC/id DESC 返回当前用户会话元数据、turn_count、last_question_preview/last_status；不批量返回答案正文。
+3. `GET /api/v1/qa-conversations/{conversation_id}?page=1&page_size=20`：owner-only；按 sequence ASC 分页返回 turns。PENDING/RUNNING 无结果；FAILED 固定错误；SUCCEEDED 返回 answer、grounded 和安全 Citation 字段 `evidence_id/sequence/page_number/evidence_type/quoted_text/char_start/char_end`。
+4. `POST /api/v1/qa-conversations/{conversation_id}/turns`：严格请求字段；新建 201，client_request_id 复用 200+duplicate，其他活动冲突 409。
+5. `GET /api/v1/qa-turns/{turn_id}`：轮询单轮详情，响应规则与会话详情中的 turn 一致。
+
+全部路径严格 UUID4；分页 page>=1、1<=page_size<=100。认证 401，非法请求 422，未解析/无 Evidence/活动冲突 409，不存在或跨用户统一 404。响应不得公开 question 之外的 prompt/context_hash/向量/模型参数/内部错误；普通 ADMIN 也不能通过业务 API 读取他人会话。
+
+## 八、P09 前端问答区
+
+1. 不新建割裂的页面；在 PaperReadingView 右侧助手增加“学习解释 / 论文问答”切换。P7.1 总结/解释/翻译行为和测试保持不变。
+2. 问答区提供会话分页列表、新建会话、当前会话消息时间线、问题输入、zh/en、发送和失败重试。首次进入不自动创建空会话或调用模型。
+3. 每次发送由浏览器 `crypto.randomUUID()` 生成 client_request_id；重试失败问题生成新 id。请求只发 question/language/id，不发论文正文、历史、Evidence 或 token query。
+4. 新 turn 每 3 秒串行轮询；终态停止。grounded=true 显示纯文本 answer 和可点 Citation；grounded=false 显示明确“当前论文证据不足”样式且没有伪引用。
+5. Citation 复用 P7.1 已验收的切页、三段文本节点高亮、scrollIntoView 和区间不一致降级，不使用 v-html。
+6. 会话列表和 turn 历史均真实 20 条分页。切换 paper/tab/conversation/page、发送新问题或卸载时，paper/conversation/turn/poll 各自代数令牌使旧 Promise/Timer 失效；timer 全部清理。
+7. 模型和用户文本一律 Vue 文本插值；不执行 Markdown/HTML/URL/CSS。错误使用固定安全映射，不展示原始服务端 error。不得使用 localStorage/sessionStorage、引入 UI 框架或无关依赖。
+
+## 九、测试要求
+
+1. 覆盖 015 migration、ORM/数据库约束、schema、conversation/turn service、Evidence 检索、上下文预算、prompt/parser、5 API 和 Vue 问答交互；更新测试表清理与默认 revision。
+2. 迁移覆盖 014 既有数据不变、空表往返、任一 P7.2 表非空 downgrade 无损中止、CHECK/FK/索引一致、22 张应用表最终零残留。
+3. 拒绝测试覆盖 401、USER/ADMIN 跨用户、跨论文 conversation/evidence、非 PARSED、无 Evidence、空/超长问题、extra/UUID/分页，且 LLM/Embedding/Storage 工厂一旦被调用就失败。
+4. 检索测试覆盖当前论文隔离、确定性排序、top_k、双语言问题、注入文本、向量数量/维度/NaN/Inf/布尔/零范数；不得只断言“返回非空”。
+5. 上下文测试覆盖只取成功轮次、最近 N 轮、完整轮次预算、顺序、context_hash 在问题/历史/Evidence 变化后改变，以及模型前后来源变化固定失败。
+6. 模型测试覆盖有依据/证据不足、严格 JSON/单围栏、HTML/控制字符、extra、多对象、杂文、空/超长、grounded 类型、0/未知/重复 alias 和 grounded/ref 冲突。
+7. PostgreSQL 并发覆盖相同 client_request_id 同 id、不同 id 同会话最多一个活动 turn、sequence 唯一、双认领只调用一次 Embedding/LLM、FAILED 新 id 可重试、成功/Citation 原子性及 flush/commit/commit-unknown 补偿。
+8. 前端覆盖 tab 不破坏 P7.1、会话新建/列表分页/切换、turn 历史分页、请求体无正文、client_request_id、创建/轮询/成功/证据不足/失败重试、Citation 高亮/降级、乱序响应、路由/tab/会话切换和卸载清理、纯文本/XSS 与安全错误。
+9. 实际运行 P7.2 定向、P7.1/P6/P5/P4/P3.5 回归和 Docker 后端全量；后端不得少于 866 且 0 skipped，前端不得少于 14 files/183，构建不得少于 135 modules。只报告真实结果。
+
+## 十、运行验收与交付
+
+1. 执行 Python 编译、Docker 后端全量、前端全量、生产构建、alembic current/heads/check、015 往返/无损中止、路由/ORM/物理表、测试库残留和 git diff --check。
+2. 只读核对开发库关键表计数；允许 schema upgrade，不得创建会话/turn、修改既有业务行。测试数据只进 `paperlens_test`，结束 22 张应用表残留总数为 0。
+3. 静态检查 Web Storage、v-html、secret、敏感日志、绝对路径、原始问题/模型响应泄漏，但不得搜索或读取 `.env`。
+4. 同步设计、SDD、Sprint、README 和 docs；明确 P7.2 已实现、P7.3/P8.1～P8.4 未实现。
+5. 最终逐项报告 015、检索/上下文/模型契约、状态机/并发、5 API、P09 问答区、测试、迁移、路由/表、HTTP、数据库、Git/禁改目录和未实现项。未执行项如实说明。
+6. HEAD 保持不变；两个 码道提示词文件在码道执行期间 SHA-256 保持开始值。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要把 P7.2 拆成新轮次，也不要提前实现 P7.3/P8.1～P8.4。
+~~~~
+
+---
+
+## 28 — P7.3 个人学习沉淀与论文库
+
+> 来源：码道在 P7.2 独立审查与修正完成后生成（2026-07-15）
+
+~~~~text
+# 码道下一阶段提示词：P7.3 个人学习沉淀与论文库
+
+## 任务目标
+
+本轮固定为 P7.3，且必须在一个码道轮次内完成：在已验收的 P7.1 阅读工作台和 P7.2 当前论文问答基础上，实现用户自己的高亮、书签、笔记、知识卡、论文库组织与阅读进度。用户应能在阅读论文时保存学习痕迹，在论文库查看和整理学习状态，并从原文高亮/笔记继续制作与复习知识卡。
+
+P7.3 是纯用户学习数据闭环，不调用 LLM/Embedding，不返工审阅、指标、实验、导出、认证或问答。P8.1 完整管理员后端+前端+不可变审计和 P8.2～P8.4 仍保持后续固定轮次，不增加码道轮数。
+
+## 一、开始前边界与固定基线
+
+1. 完整阅读根目录 `AGENTS.md` 和真实代码，严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行：先同步设计，再编码，最后同步 Sprint 和状态文档。
+2. 开始前记录 git status/HEAD、Docker、Alembic current/heads/check、路由/表、测试库残留、开发库只读计数，以及两个 码道提示词文件 SHA-256。现有未提交改动全部属于用户/码道，不得覆盖、还原或批量格式化。
+3. 当前验收基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic `015_paper_qa_conversations`；42 条 `/api/v1` method+path；22 张 ORM 应用表、23 张物理表；Docker 后端 909 passed/0 failed/0 skipped；前端 14 files/189 passed；生产与 Docker 构建 135 modules；测试库 22 张业务表残留 0；三容器运行且 PostgreSQL healthy。
+4. 当前开发库只读计数为 `3/9/5/28/0/0/0/0/2/3/0/0/0`（users/papers/tasks/reviews/metrics/files/results/exports/learning/learning citations/qa conversations/turns/citations）。不得删除、修正或伪造这些业务数据；P7.3 自动测试只进 `paperlens_test`。
+5. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个 码道提示词文件；禁止删除 volume、用户文件或开发库业务行。
+6. 禁止读取、搜索、打印、复制或推断 `.env`、API Key、JWT secret、Authorization、cookie、密码或 token；禁止可能展开 secret 的命令。本轮禁止真实 MaaS、Embedding 和外网，也不得新增任何模型调用。
+7. 不实现管理员能力、协作分享、公开笔记、自动知识卡生成、间隔重复算法、全文搜索引擎、富文本/Markdown 编辑器、PDF.js/bbox 覆盖层、WebSocket、Celery/Redis、FAISS/pgvector、OBS 或 P8 能力。
+
+## 二、设计、SDD 与 Sprint
+
+1. 编码前更新 `ProjectDocs/systemDesign/01～08`：P7.3 用例、架构、016 数据模型、17 个 API、实施计划、FR-15、论文库与 P09 学习记录区域、测试矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`、`design/design.md`、`design/07～10`，新增 `design/15-个人学习沉淀与论文库.md`；任务必须引用 FR、API、表和页面章节。
+3. 新建 `ProjectDocs/sprint/个人学习沉淀与论文库.md`，编码时为进行中，只有真实全量验收通过后才标记完成。
+4. 完成后同步 README、product-requirements、architecture、api-contract、data-model、security-design、IMPLEMENTATION_STATUS 和 PROGRESS；P8.1～P8.4 不得写成已实现。
+
+## 三、016 数据模型与不变量
+
+新增单一 revision `016_personal_learning_library.py`，down_revision=015；不得修改 001～015。只新增以下 5 张表，预计 27 张 ORM 应用表、28 张物理表，以实测为准。
+
+1. `paper_library_entries`：`user_id + paper_id` 复合主键；paper CASCADE、user RESTRICT；`reading_status` 仅 TO_READ/READING/COMPLETED/ARCHIVED；`favorite` bool；nullable `collection_name` 去空白后 1～100；nullable `last_page`、`furthest_page` 正整数且 last_page<=furthest_page；nullable UTC `last_read_at/completed_at`；created_at/updated_at。COMPLETED 必须有 completed_at，其他状态必须无 completed_at。
+2. `paper_highlights`：UUID id；user_id/paper_id；page_number 正整数；char_start>=0、char_end>char_start；服务端派生的非空 quoted_text 与 64 位小写 `source_hash`；color 仅 YELLOW/GREEN/BLUE/PINK；created_at/updated_at。唯一 `user+paper+page+char_start+char_end`。
+3. `paper_bookmarks`：UUID id；user_id/paper_id；page_number 正整数；nullable label 去空白后 1～100；created_at。唯一 `user+paper+page`。
+4. `paper_notes`：UUID id；user_id/paper_id；anchor_type 仅 PAPER/PAGE/HIGHLIGHT；nullable page_number、highlight_id；content 去空白后 1～20000；created_at/updated_at。CHECK：PAPER 两个锚点均空；PAGE 只有 page_number；HIGHLIGHT 只有 highlight_id。服务层复核 Highlight/User/Paper 全图。
+5. `paper_knowledge_cards`：UUID id；user_id/paper_id；nullable source_note_id、source_highlight_id，最多一个来源；front 去空白 1～2000；back 去空白 1～10000；mastery_status 仅 NEW/LEARNING/MASTERED；nullable last_reviewed_at；archived bool；created_at/updated_at。服务层复核来源同 user/paper。
+6. 所有索引覆盖 owner+paper、分页排序和论文库筛选；ORM、迁移的列/FK/CHECK/unique/index 名完全一致。普通业务 API 中 USER/ADMIN 都只能访问自己的论文和学习数据。
+7. 不保存任意 CSS、HTML、Markdown、URL、客户端 quoted_text、论文正文快照、prompt、向量、模型输出或 secret。016 upgrade 不修改既有业务行。
+8. 空 P7.3 表支持 `015→016→015→016`；任一 P7.3 表非空时 downgrade 必须在任何 DDL 前无损中止。
+
+## 四、论文库与阅读进度规则
+
+1. 论文库列表以当前用户全部 Paper 为真集，LEFT JOIN 可选 library entry；没有 entry 时返回默认 TO_READ、favorite=false、无 collection/progress，不能为列表读取而写库。
+2. library entry PATCH 只接受 `reading_status/favorite/collection_name` 的可选字段，至少一个字段；extra=forbid。collection_name 空白转 null。设置 COMPLETED 时服务端写 completed_at；离开 COMPLETED 时清空。
+3. reading progress PATCH 只接受 `page_number`。论文必须 PARSED 且 1<=page<=page_count；upsert entry，`last_page=page_number`、`furthest_page=max(old,page)`、last_read_at=now；TO_READ 自动变 READING，COMPLETED/ARCHIVED 不被自动改写。
+4. 响应的 `progress_percent` 由 furthest_page/page_count 确定性计算并限制 0～100，不持久化；page_count 为空时为 0。列表同时返回 highlight/bookmark/note/card 数量，禁止 N+1 无上限查询。
+5. 论文库支持 page/page_size、reading_status、favorite、精确 collection_name 和 title/filename 关键字；排序为 favorite DESC、last_read_at DESC NULLS LAST、paper.created_at DESC、paper.id DESC。所有筛选长度有上限。
+
+## 五、高亮、书签、笔记与知识卡规则
+
+1. 高亮创建只接受 `page_number/char_start/char_end/color`；服务端加载当前论文 `PaperPage.normalized_text_content`（无则 text_content），校验范围与最大选中文本 5000 字，派生 quoted_text 和 `source_hash=sha256(paper_id+page+全文hash+范围+quoted_text)`。不得相信客户端引文。
+2. 高亮列表按 page_number ASC、char_start ASC、id ASC，可选 page_number，20 条分页。删除只允许 owner；被 Note/Card 引用时固定 409，不级联丢学习数据。
+3. 书签创建只接受 page_number 和可选 label，校验论文页范围；相同页重复返回既有 200+duplicate=true，新建 201。列表按 page ASC，删除 owner-only。
+4. Note 创建严格按 anchor_type 接受对应锚点和 content；PATCH 只允许 content 且至少一个字段；锚点创建后不可偷换。列表可按 anchor_type/page_number/highlight_id 筛选，created_at DESC/id DESC 分页；删除被 Card 引用时 409。
+5. Card 创建接受 front/back、可选且互斥的 source_note_id/source_highlight_id；PATCH 只允许 front/back/mastery_status/archived，至少一个字段。mastery_status 变化时服务端更新 last_reviewed_at；列表支持 mastery_status/archived，updated_at DESC/id DESC 分页；删除必须 owner-only。
+6. 所有写入前复核 User/Paper/Page/Highlight/Note/Card 全图；flush/commit 失败 rollback，公开固定错误，不泄漏底层异常。并发重复高亮/书签由数据库唯一约束裁决并恢复既有对象。
+7. 所有用户内容为纯文本。后端限制控制字符和长度；日志只写资源 id、paper id、固定 stage、异常类型，不写 quoted_text、note、front/back、标题、email、header、token 或 secret。
+
+## 六、17 个 API 契约
+
+预计公开路由 42→59，以实测为准。全部路径 UUID4、owner-only；未认证 401，非法请求 422，不存在/越权统一 404，来源被引用或资源状态冲突 409；分页 page>=1、1<=page_size<=100。
+
+1. `GET /api/v1/library/papers`：论文库筛选分页和确定性进度/计数。
+2. `PATCH /api/v1/papers/{paper_id}/library-entry`：upsert 组织状态。
+3. `PATCH /api/v1/papers/{paper_id}/reading-progress`：记录当前页与最远页。
+4. `POST /api/v1/papers/{paper_id}/highlights`。
+5. `GET /api/v1/papers/{paper_id}/highlights`。
+6. `DELETE /api/v1/highlights/{highlight_id}`：204。
+7. `POST /api/v1/papers/{paper_id}/bookmarks`：201 或重复 200。
+8. `GET /api/v1/papers/{paper_id}/bookmarks`。
+9. `DELETE /api/v1/bookmarks/{bookmark_id}`：204。
+10. `POST /api/v1/papers/{paper_id}/notes`。
+11. `GET /api/v1/papers/{paper_id}/notes`。
+12. `PATCH /api/v1/notes/{note_id}`。
+13. `DELETE /api/v1/notes/{note_id}`：204。
+14. `POST /api/v1/papers/{paper_id}/knowledge-cards`。
+15. `GET /api/v1/papers/{paper_id}/knowledge-cards`。
+16. `PATCH /api/v1/knowledge-cards/{card_id}`。
+17. `DELETE /api/v1/knowledge-cards/{card_id}`：204。
+
+列表统一返回 `items/total/page/page_size`。响应不公开 source_hash、内部所有权冗余字段或底层错误。删除 API 必须真实 204 空 body；不得用 GET 产生写入。
+
+## 七、前端论文库与学习记录
+
+1. 不新增割裂的重复论文页：把现有 PaperListView/`/papers` 升级为“论文库”，导航“论文”改为“论文库”。保留旧 route name 和深链兼容。首页副标题从过时的“学术论文审阅助手”改为“AI 驱动的个人论文阅读学习助手”。
+2. 论文库提供关键字、状态、收藏、集合筛选，真实 20 条分页；卡片显示解析状态、reading_status、收藏、collection、最远阅读进度、最后阅读时间和四类学习记录数量。更新失败不得乐观伪成功。
+3. PaperReadingView 右侧增加第三个“学习记录”标签，不破坏 P7.1/P7.2。提供当前页书签、高亮列表、笔记列表/编辑/删除、知识卡创建/编辑/掌握状态/归档/删除，各列表真实分页、加载、空态、安全错误和确认删除。
+4. 高亮仅在 PAGE 模式允许。使用浏览器 Selection/Range 计算 contentRef 内纯文本的 normalized 字符区间；拒绝跨容器、折叠、空白、反向无效或 >5000 字选择。请求不发送 quoted_text。创建后从服务端响应显示并可再次定位。
+5. 保存的 Highlight/Citation 点击均复用切页、三段文本节点 `<mark>`、scrollIntoView 和区间不一致降级；不得 v-html。多来源同时存在时只突出当前选择，避免重叠 mark 破坏 offset。
+6. 每次成功加载真实页面后串行调用 reading-progress；路由/页码变化使用代数令牌，旧进度响应不能覆盖新论文。进度失败显示非阻断可重试提示，不影响正文阅读。
+7. 创建 Note 可锚定论文、当前页或当前高亮；创建 Card 可手填 front/back 并可选择当前 Note/Highlight 来源。用户文本只用 Vue 文本插值，不执行 Markdown/HTML/URL/CSS。
+8. paper/library/highlight/bookmark/note/card/progress 各自请求代数；切换 paper/tab/page/filter/pagination 或卸载时旧 Promise 失效，timer/listener 全部清理。不得 localStorage/sessionStorage、UI 框架或无关依赖。
+
+## 八、测试要求
+
+1. 覆盖 016 migration、ORM/数据库约束、全部 schema/service/17 API、PaperListView、PaperReadingView 和 Selection offset 工具；更新测试表清理与默认 revision。
+2. 迁移覆盖 015 既有数据不变、空表往返、任一新表非空降级无损中止、CHECK/FK/unique/index 一致和 27 张应用表最终零残留。
+3. owner/拒绝测试覆盖 USER/ADMIN 跨用户、跨论文 page/highlight/note/card、非 PARSED、页越界、空/超长/控制字符、extra、非法 enum/UUID/分页，以及错误路径零部分写。
+4. 高亮覆盖服务端派生引文/source_hash、normalized fallback、Unicode/换行 offset、重复并发、来源文本变化后的定位降级、被引用删除 409；不得只断言“创建成功”。
+5. 论文库/进度覆盖默认 LEFT JOIN 零写入、筛选排序、计数无串用户、furthest 单调、last_page 可回退、TO_READ→READING、COMPLETED/ARCHIVED 保持、并发 upsert。
+6. Note/Card 覆盖锚点 CHECK、来源全图、PATCH 字段白名单、mastery 时间、被引用删除、纯文本/XSS 和分页。
+7. 前端覆盖首页/导航文案、论文库筛选分页/更新失败、学习记录 tab、Selection 正反例、请求体无引文、书签重复、CRUD、确认删除、进度竞态、Citation/Highlight 定位、乱序响应与卸载清理。
+8. 回归 P7.2 会话/问答、P7.1 学习解释、认证、导出、实验、指标和审阅。自动测试禁止真实 LLM/Embedding/Storage/外网。
+9. 实际运行 P7.3 定向、Docker 后端全量、前端全量和生产/Docker 构建；后端不得少于 909 且 0 skipped，前端不得少于 14 files/189，构建不得少于 135 modules。只报告实际结果。
+
+## 九、运行验收与交付
+
+1. 执行 Python 编译、Docker 后端全量、前端全量、生产与 Docker 构建、alembic current/heads/check、016 往返/无损中止、路由/ORM/物理表、测试库残留和 git diff --check。
+2. 只读核对开发库关键表计数；允许 schema upgrade，不得创建任何 P7.3 业务行或修改既有数据。测试数据只进 `paperlens_test`，结束 27 张应用表残留总数为 0。
+3. 静态检查 Web Storage、v-html、secret、敏感日志、绝对路径、原始用户文本泄漏和危险 URL，但不得搜索或读取 `.env`。
+4. 最终逐项报告 016、论文库/进度、四类学习记录、17 API、页面、测试、迁移、路由/表、HTTP、数据库、Git/禁改目录和未实现项。未执行项如实说明。
+5. HEAD 保持不变；两个 码道提示词文件在码道执行期间 SHA-256 必须保持开始值。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要把 P7.3 拆成新轮次，也不要提前实现 P8.1～P8.4。
+~~~~
+
+---
+
+## 29 — P8.1 完整管理员系统与不可变审计
+
+> 来源：P7.3 经 码道独立修正和全量验收后生成（2026-07-16）。本节为下一轮唯一执行提示词。
+
+~~~~text
+# 码道下一阶段提示词：P8.1 完整管理员系统与不可变审计
+
+## 任务目标
+
+本轮固定为 P8.1，且必须在一个码道轮次内完成：在 P3.5 已验收的注册、登录、AuthSession、USER/ADMIN RBAC，以及 P2～P7.3 全部用户能力基础上，实现可实际使用的管理员后端、Vue 管理页面、用户角色/状态管理、跨用户内容只读治理和不可变审计。不得把后端、前端、迁移、权限、并发或审计拆成额外码道返工轮次。
+
+P8.2 仍只用于用户端/管理员端 E2E、任务恢复和全链路一致性，P8.3 用于性能可靠性，P8.4 用于华为云部署和综合安全；不得提前实现或增加轮次。
+
+## 一、开始前边界与固定基线
+
+1. 完整阅读根目录 `AGENTS.md` 和真实代码，严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行：先更新设计与页面/测试方案，再编码，最后同步 Sprint；修复缺陷时按 `bug-fix-reporter` 留痕。
+2. 开始前记录 git status/HEAD、Docker、Alembic current/heads/check、API/表数、测试库残留、开发库关键表只读计数，以及两个 码道提示词文件 SHA-256。现有未提交改动都属于用户/码道，不得覆盖、还原或批量格式化。
+3. 当前真实基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic `016_personal_learning_library`；59 条 `/api/v1` method+path；27 张 ORM 应用表、28 张物理表；Docker 后端 977 passed/0 failed/0 skipped；前端 16 files/197 passed；生产与 Docker 构建 136 modules；测试库 27 张应用表残留 0；三容器运行且 PostgreSQL healthy，后端/前端 HTTP 200。最终只报告实际结果。
+4. 开发库只读计数为 `3/9/5/28/0/0/0/0/2/3/0/0/0/0/0/0/0/0`，依次为 users/papers/tasks/reviews/metrics/files/experiment results/exports/learning explanations/learning citations/qa conversations/qa turns/qa citations/library entries/highlights/bookmarks/notes/cards。不得修改、删除或伪造这些业务数据；自动测试只进入 `paperlens_test`。
+5. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个 码道提示词文件；禁止删除 volume、用户文件或开发库业务数据。
+6. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie、密码、refresh/reset token 或完整环境；禁止可能展开 secret 的命令。禁止真实 MaaS/Embedding/外网，管理员路径若构造 LLM/Embedding/Storage client，测试必须立即失败。
+7. 本轮不做管理员冒充、查看/重置密码、默认管理员、批量操作、论文/报告删除、任务取消、任意 SQL/排序字段、用户内容预览、邮件/MFA、Celery/Redis、OBS 或 P8.2～P8.4。ADMIN 在普通业务 API 中仍不能绕过 owner；跨用户访问只能走显式 `/admin` API。
+
+## 二、设计、SDD 与 Sprint 先行
+
+1. 编码前同步 `ProjectDocs/systemDesign/01～08`，明确管理员用例、017 模型、8 条 API、页面状态/危险操作确认、权限边界、并发事务和测试矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md` 与相关 design；新增管理员系统详细设计和 `ProjectDocs/sprint/完整管理员系统与不可变审计.md`，开始时置进行中，真实验收后再完成。
+3. 文档不得把 P3.5 登录注册或 P7.3 学习闭环写成未实现；不得把 P8.2 的 E2E/恢复、P8.3 性能或 P8.4 部署提前声明完成。
+
+## 三、017 迁移与 append-only 审计
+
+1. 新增 `017_admin_audit_logs.py`，只新增 `admin_audit_logs`，不改写 001～016 revision，不回填既有业务行。预期为 28 张 ORM 应用表、29 张物理表，以实际为准。
+2. 最小字段：UUID id；actor_user_id String(128) FK users.id RESTRICT；固定 action；resource_type；resource_id；8～500 字且无控制字符的 reason；非空严格小对象 before_state/after_state JSONB；created_at。建立 actor、resource、action、created_at DESC/id DESC 查询索引和严格 CHECK，ORM/迁移名称完全一致。
+3. action 只允许 `ADMIN_BOOTSTRAPPED`、`USER_ROLE_CHANGED`、`USER_STATUS_CHANGED`；resource_type 只允许 USER。before/after 只允许 role/status，不保存 email、display_name、密码/hash/token/cookie、正文、storage key、source snapshot、请求 header/IP/user-agent、异常或环境值。
+4. 表必须 append-only：应用层无 UPDATE/DELETE 路由；PostgreSQL trigger 拒绝 UPDATE/DELETE。用户变更、session/reset 失效和 audit 插入必须同一事务，任一步失败全部回滚。
+5. upgrade 兼容现有 016 数据。downgrade 先统计审计表，非空时在任何 DDL 前无损拒绝；空表允许 `016→017→016→017` 往返，不得为通过测试删除真实审计记录。
+
+## 四、管理员授权、首次引导与用户变更
+
+1. 复用真实 AuthContext/require_admin。无认证 401，已认证 USER 403；DISABLED、session 撤销、refresh replay 等继续由 P3.5 服务端状态拒绝，不能只信 JWT role claim。前端路由守卫只改善体验，后端始终权威。
+2. 提供显式运维 CLI `python -m paperlens.cli admin-bootstrap --user-id <UUID> --reason <text>`：只允许把已存在、ACTIVE 的 USER 提升为首个 ADMIN，且仅当数据库没有 ACTIVE ADMIN 时成功；锁定用户集合，以目标用户 id 作为 actor_user_id，创建一条 ADMIN_BOOTSTRAPPED 审计并撤销旧 session，同事务完成。已有 ACTIVE ADMIN、目标非法/不存在/禁用、并发第二次执行都安全失败。不得创建默认账号、读取密码或接受 email 模糊匹配。自动验收不得在开发库执行该 CLI。
+3. `PATCH /api/v1/admin/users/{user_id}` 只接受可选 role USER|ADMIN、可选 status ACTIVE|DISABLED 和必填 reason；extra=forbid，role/status 至少一个。相同值返回 200/changed=false 且不写审计。
+4. 以确定顺序 `FOR UPDATE` 锁定 ACTIVE ADMIN 集合和目标。禁止管理员自降级或自禁用；任何提交后至少保留一个 ACTIVE ADMIN。两个管理员并发互相降级/禁用时最多一个成功，另一个固定 409，绝不能出现零 ACTIVE ADMIN。
+5. 每个实际变化字段各写一条 audit；before/after 来自锁定后的数据库。角色或状态变化后撤销目标全部活动 AuthSession；禁用时同时使未使用 PasswordResetToken 失效，重新启用不恢复旧凭据。失败/no-op 不审计。
+6. flush/commit 前异常 rollback；commit 后抛错用新 Session 和预生成 audit id 回查最终状态，不能重复审计或误报。日志不记录 email、reason、token、内容、SQL，只允许 stage/actor id/target id/action/异常类型。
+
+## 五、恰好 8 条管理员 API
+
+新增以下 8 条 method+path，预计总数 59→67，以最终收集为准。所有响应 Schema extra=forbid；列表统一 page>=1、1<=page_size<=100、固定 total/page/page_size/items，按 created_at DESC/id DESC 稳定排序；只接受白名单筛选，不接受任意 sort/order/include；聚合/批量查询避免逐行 N+1。
+
+1. `GET /api/v1/admin/dashboard`：用户按 role/status、论文按 status、任务按 task_type/status、报告按 report_type/status的非负聚合计数，不返回用户内容或最近正文。
+2. `GET /api/v1/admin/users?page&page_size&role&status&q`：q 长度 1～100，只匹配规范化 email/display_name；返回 id/email/display_name/role/status/failed_login_count/locked_until/created_at/updated_at，以及 active_session、paper、task、export 计数，禁止任何 hash/token。
+3. `GET /api/v1/admin/users/{user_id}`：同一严格用户字段和资源计数；不存在 404。
+4. `PATCH /api/v1/admin/users/{user_id}`：执行第四节角色/状态变更、凭据失效与原子审计，返回 changed 和本次 audit_ids。
+5. `GET /api/v1/admin/papers?page&page_size&status&user_id&q`：只读跨用户元数据；仅 id/user_id/owner_email/title/filename/file_size/page_count/status/created_at/updated_at；不得返回 storage_key/file_hash/正文/Table/Evidence，FAILED 只映射固定安全错误。
+6. `GET /api/v1/admin/tasks?page&page_size&task_type&status&user_id&paper_id`：只读固定元数据；不返回模型输入输出、论文内容、原始错误或 token usage。
+7. `GET /api/v1/admin/exports?page&page_size&report_type&status&user_id&paper_id`：只读安全字段；不返回 storage_key/source_snapshot/source_hash/content_hash，FAILED 只显示固定文案。
+8. `GET /api/v1/admin/audit-logs?page&page_size&actor_user_id&action&resource_id&created_from&created_to`：返回 actor 当前 id/email、固定 action/resource、reason、严格 before/after 和 created_at；时间必须带时区且 from<=to。
+
+普通论文、任务、导出、学习、问答等 API 的 USER/ADMIN owner 行为必须保持不变。管理员只读查询使用有限列投影，不加载 deferred raw_text、structured_data、source_snapshot 或文件对象。
+
+## 六、Vue 管理后台
+
+1. 新增受保护 `/admin` 路由和 `AdminDashboardView`；导航仅对当前 ADMIN 显示“管理后台”。刷新页面时等待认证恢复后再判定，USER 进入显示无权限并返回安全页面；401 清理本地认证状态，403 不泄露数据。不得把角色写入 Web Storage 或只靠前端授权。
+2. 页面包含四个一级区域：总览、用户、内容、审计。内容区含论文/任务/报告三个子页签。每个列表必须有加载、空、错误、重试、筛选、真实分页和防快速切换乱序覆盖；离开页面/切页/筛选时旧响应不得覆盖当前状态。
+3. 总览展示固定计数卡，不展示正文、问题、笔记或最近用户内容。用户列表/详情展示第五节白名单字段和资源计数。
+4. 角色/状态操作必须打开确认对话框，明确目标与后果，要求输入 8～500 字 reason；提交中禁用重复操作。成功后只按服务端响应刷新；失败/no-op 显示明确安全文案。前端也禁止自降级/自禁用按钮，但以后端 409 为准。
+5. 论文/任务/报告只读，不能链接到绕过 owner 的普通详情页，也不提供删除、下载、取消或冒充入口。审计列表只读展示 before→after，不提供编辑/删除。
+6. 全部服务端文本使用 Vue 转义插值；禁止 v-html、Web Storage、token query、直接 innerHTML、服务端错误透传。复用现有视觉样式并保证桌面/窄屏可用。
+
+## 七、测试要求
+
+1. 新增 017 迁移、admin schema/service/router/CLI 的 PostgreSQL 测试；更新 `_BUSINESS_TABLES`、默认 revision 和零残留检查。覆盖空表往返、任一 audit 非空降级拒绝、ORM/DB 约束索引同名、直接 SQL UPDATE/DELETE 被 trigger 拒绝。
+2. 8 条 API 全覆盖 401、USER 403、ADMIN 200、UUID/分页/筛选/时间/extra 422，以及响应禁止字段递归扫描。Dashboard 用精确计数；各列表验证筛选、空页、稳定排序、真实分页和无 N+1，不能用 vacuous 断言。
+3. 覆盖 CLI 首次提升、已有管理员、目标异常和真实 PostgreSQL 并发仅一次成功；不得在开发库运行。覆盖 role/status 单变更、双变更、no-op、404、自降级/自禁用、最后管理员、旧 access/refresh/reset 立即失效及不恢复。
+4. 两线程验证互相降级/禁用不能产生零 ACTIVE ADMIN；同目标并发结果串行一致。注入 audit/user/session/reset flush、commit 前失败与 commit 后抛错，验证用户、凭据和 audit 不出现部分提交或重复。
+5. 前端覆盖路由/导航权限、四区域、三内容页签、精确请求参数、分页/筛选、确认 reason、成功/no-op/401/403/409/422/未知错误、重复点击、乱序响应和卸载清理；递归确认无危险字段、v-html/Web Storage/token URL。
+6. 运行 P8.1 后端定向、全部迁移测试、P3.5 认证与 P2～P7.3 关键回归、Docker 后端完整全量；必须不少于 977、0 failed、0 skipped。运行前端定向和完整全量，不少于 16 files/197 passed，并执行本地及 Docker 生产构建，不少于 136 modules。
+7. 自动测试只使用测试库和 Mock。管理员路径若访问真实网络、MaaS、Embedding、Storage 或开发库业务行必须失败。
+
+## 八、文档、运行验收与交付
+
+1. 完成后同步 `ProjectDocs/systemDesign/01～08`、SDD spec/tasks/design、Sprint、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、api-contract/architecture/data-model/security-design 和 README。明确 P8.1 实际完成项以及 P8.2～P8.4 未完成项。
+2. 实际验证 017 current/head/check、空表往返、非空审计降级拒绝、trigger 不可变性、路由/表数、Python 编译、前端 TypeScript/Vite、Markdown 本地链接、git diff --check 和敏感信息/危险渲染扫描。
+3. 只读核对开发库关键表计数；允许正常 schema upgrade，但不得引导管理员、变更角色/状态或写审计。测试结束 `paperlens_test` 的全部应用表残留必须为 0。
+4. 重建并保持 backend/frontend/postgres 运行，PostgreSQL healthy，后端 health 和前端 HTTP 200。不得以宿主机通过代替 Docker 结果。
+5. HEAD 必须不变、不得创建提交；禁改目录无差异；两个 码道提示词在执行期间 SHA-256 必须保持开始值。
+6. 最终逐项报告 017/不可变审计、CLI、授权与最后管理员并发、8 API、管理页面、全部测试、迁移、路由/表、HTTP、测试库残留、开发库只读计数、Git/禁改目录和未实现项。未执行必须如实说明，不能用历史结果冒充。
+
+不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要拆分 P8.1，也不要提前实现 P8.2～P8.4。
 ~~~~

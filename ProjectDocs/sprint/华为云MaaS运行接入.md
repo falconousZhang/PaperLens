@@ -23,4 +23,4 @@ P4.3 将已实现的 HuaweiMaaSLLMClient 接入 Docker 运行配置，提供离�
 
 ## 独立审查
 
-码道初版存在 huawei 配置检查 AttributeError、Docker 三项测试跳过、占位 Key 可通过、CLI 烟测覆盖不真实、失败回显底层异常、pytest 继承真实 MaaS 配置及 ProjectDocs/SDD/Sprint 漏同步。Codex 已按授权直接修正并完成全量验收与最小真实连通性验证。
+码道初版存在 huawei 配置检查 AttributeError、Docker 三项测试跳过、占位 Key 可通过、CLI 烟测覆盖不真实、失败回显底层异常、pytest 继承真实 MaaS 配置及 ProjectDocs/SDD/Sprint 漏同步。码道已按授权直接修正并完成全量验收与最小真实连通性验证。

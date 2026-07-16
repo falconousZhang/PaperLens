@@ -63,6 +63,9 @@ function createTestRouter() {
       { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
       { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
       { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+      { path: '/papers/:id/experiment', name: 'paper-experiment', component: { template: '<div/>' } },
+      { path: '/papers/:id/export', name: 'paper-export', component: { template: '<div/>' } },
+      { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
       { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],
   })
@@ -108,13 +111,14 @@ describe('PaperDetailView', () => {
     expect(api.listEvidences).toHaveBeenCalledWith('test-uuid-1')
   })
 
-  it('shows review and metric navigation for a parsed paper', async () => {
+  it('shows review, metric, experiment and export navigation for a parsed paper', async () => {
     const wrapper = mountView()
     await flushPromises()
     const links = wrapper.findAll('.tabs .tab-link')
-    expect(links.map(link => link.text())).toEqual(['审阅', '指标'])
+    expect(links.map(link => link.text())).toEqual(['批判性阅读', '指标', '实验数据', '导出报告', '开始阅读'])
     expect(links[0]!.attributes('href')).toBe('/papers/test-uuid-1/review')
     expect(links[1]!.attributes('href')).toBe('/papers/test-uuid-1/metrics')
+    expect(links[3]!.attributes('href')).toBe('/papers/test-uuid-1/export')
   })
 
   it('clicking page-2 evidence loads page 2 and highlights', async () => {
@@ -473,6 +477,9 @@ describe('PaperDetailView', () => {
         { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
         { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
         { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers/:id/experiment', name: 'paper-experiment', component: { template: '<div/>' } },
+        { path: '/papers/:id/export', name: 'paper-export', component: { template: '<div/>' } },
+        { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
         { path: '/papers', name: 'papers', component: { template: '<div/>' } },
       ],
     })
@@ -494,6 +501,9 @@ describe('PaperDetailView', () => {
         { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
         { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
         { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers/:id/experiment', name: 'paper-experiment', component: { template: '<div/>' } },
+        { path: '/papers/:id/export', name: 'paper-export', component: { template: '<div/>' } },
+        { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
         { path: '/papers', name: 'papers', component: { template: '<div/>' } },
       ],
     })
@@ -514,6 +524,9 @@ describe('PaperDetailView', () => {
         { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
         { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
         { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
+        { path: '/papers/:id/experiment', name: 'paper-experiment', component: { template: '<div/>' } },
+        { path: '/papers/:id/export', name: 'paper-export', component: { template: '<div/>' } },
+        { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
         { path: '/papers', name: 'papers', component: { template: '<div/>' } },
       ],
     })

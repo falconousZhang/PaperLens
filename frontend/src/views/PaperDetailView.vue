@@ -23,8 +23,11 @@
       <button :class="{ active: tab === 'sections' }" @click="tab = 'sections'">章节</button>
       <button :class="{ active: tab === 'pages' }" @click="openPages">页面</button>
       <button :class="{ active: tab === 'evidences' }" @click="tab = 'evidences'">证据</button>
-      <router-link :to="{ name: 'paper-review', params: { id: paper.id } }" class="tab-link">审阅</router-link>
+      <router-link :to="{ name: 'paper-review', params: { id: paper.id } }" class="tab-link">批判性阅读</router-link>
       <router-link :to="{ name: 'paper-metrics', params: { id: paper.id } }" class="tab-link">指标</router-link>
+        <router-link :to="{ name: 'paper-experiment', params: { id: paper.id } }" class="tab-link">实验数据</router-link>
+        <router-link :to="{ name: 'paper-export', params: { id: paper.id } }" class="tab-link">导出报告</router-link>
+        <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="tab-link tab-link-primary">开始阅读</router-link>
     </div>
 
     <div v-if="evidenceNotFoundMsg" class="evidence-not-found">{{ evidenceNotFoundMsg }}</div>
@@ -323,5 +326,7 @@ h2 { color: #1a1a2e; }
 .back-link { display: inline-block; margin-top: 1.5rem; color: #1a1a2e; }
 .tab-link { padding: 0.5rem 1.5rem; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; cursor: pointer; text-decoration: none; color: #333; font-size: inherit; }
 .tab-link:hover { background: #f0f0ff; }
+.tab-link-primary { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+.tab-link-primary:hover { background: #2a2a4e; }
 .evidence-not-found { background: #fff3e0; color: #e65100; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem; }
 </style>

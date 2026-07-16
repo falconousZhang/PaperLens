@@ -536,9 +536,27 @@ P3.3 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 }
 ```
 
-不存在和跨用户统一 404。`GET /api/v1/experiment-files/{file_id}/result` 属 P5.2，当前未实现。
+不存在和跨用户统一 404。
 
-### 8.4 删除实验数据文件
+### 8.4 创建实验统计任务
+
+✅ **CURRENT (P5.2)**: `POST /api/v1/experiment-files/{file_id}/analysis`
+
+新建返回 201；活动任务或已有结果返回 200 与 `duplicate=true`。非 PARSED 为 409，规模超限为 413；不存在、跨用户及 ADMIN 他人访问统一 404。
+
+### 8.5 获取实验统计结果
+
+✅ **CURRENT (P5.3a)**: `GET /api/v1/experiment-files/{file_id}/result`
+
+返回 `id/file_id/task_id/summary_stats/metric_comparisons/created_at`。未执行交叉验证时 metric_comparisons=null，完成后为严格比较数组；不暴露文件哈希、storage key、原始行、column_analysis 或来源正文。
+
+### 8.6 创建指标交叉验证
+
+✅ **CURRENT (P5.3a)**: `POST /api/v1/experiment-files/{file_id}/comparisons`
+
+请求只允许 `{"metric_task_id":"uuid4"}`。首次 201、同源幂等 200；响应固定 `file_id/experiment_result_id/metric_task_id/comparisons/duplicate`。异源 `COMPARISON_ALREADY_EXISTS`、无指标 `NO_METRICS`、错误类型/状态/论文均为固定 409；不存在及跨 USER/ADMIN 为 404。
+
+### 8.7 删除实验数据文件
 
 📋 **PLANNED**: `DELETE /api/v1/experiment-files/{file_id}`
 
@@ -548,9 +566,9 @@ P3.3 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 
 ### 9.1 生成导出报告
 
-📋 **PLANNED**: `POST /api/v1/papers/{paper_id}/exports`
+✅ **CURRENT (P6.1～P6.2)**: `POST /api/v1/papers/{paper_id}/exports`
 
-**请求参数**:
+**请求参数:**
 
 ```json
 {
@@ -561,40 +579,72 @@ P3.3 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 }
 ```
 
-**响应** `201`:
+新来源返回 `201`；相同用户/论文/格式/选项/source_hash/content_hash 的 PENDING/GENERATING/READY 幂等返回 `200`，FAILED 可重试。非 PARSED、无合法审阅或来源图异常为 409，不存在/跨用户为 404。请求 extra=forbid，report_type 只允许 MARKDOWN/PDF/DOCX。
+
+**响应** `201` 或幂等 `200`:
 
 ```json
 {
   "id": "uuid",
+  "paper_id": "uuid",
   "report_type": "MARKDOWN",
   "status": "PENDING",
-  "created_at": "2026-07-12T12:00:00Z"
+  "language": "zh",
+  "include_metrics": true,
+  "include_experiment_analysis": true,
+  "file_size": null,
+  "error_message": null,
+  "created_at": "2026-07-12T12:00:00Z",
+  "completed_at": null,
+  "duplicate": false
 }
 ```
 
 ### 9.2 获取导出状态
 
-📋 **PLANNED**: `GET /api/v1/exports/{export_id}`
+✅ **CURRENT (P6.1～P6.2)**: `GET /api/v1/exports/{export_id}`
 
 **响应** `200`:
 
 ```json
 {
   "id": "uuid",
+  "paper_id": "uuid",
   "report_type": "MARKDOWN",
   "status": "READY",
+  "language": "zh",
+  "include_metrics": true,
+  "include_experiment_analysis": true,
   "file_size": 20480,
   "error_message": null,
   "created_at": "2026-07-12T12:00:00Z",
-  "completed_at": "2026-07-12T12:01:00Z"
+  "completed_at": "2026-07-12T12:01:00Z",
+  "duplicate": false
 }
 ```
 
 ### 9.3 下载导出报告
 
-📋 **PLANNED**: `GET /api/v1/exports/{export_id}/download`
+✅ **CURRENT (P6.1～P6.2)**: `GET /api/v1/exports/{export_id}/download`
 
 **响应** `200`: 文件流
+
+- Content-Type: MARKDOWN `text/markdown; charset=utf-8`；PDF `application/pdf`；DOCX `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- Content-Disposition: `attachment; filename="{sanitized_filename}"`
+- X-Content-Type-Options: `nosniff`
+- Cache-Control: `private, no-store`
+- 仅 status=READY 可下载；非 READY 为 409，不存在/跨用户为 404
+- 发送前通过 StorageBackend 回读并复核 file_size/content_hash；公开 API 永不返回 source_snapshot/source_hash/content_hash/storage_key
+
+### 9.4 获取论文导出历史
+
+✅ **CURRENT (P6.2)**: `GET /api/v1/papers/{paper_id}/exports?page=1&page_size=20`
+
+- page 从 1 开始，page_size 范围 1～100
+- 仅论文所有者可见，USER/ADMIN 跨用户统一 404
+- 按 created_at DESC、id DESC 排序
+- 返回 `items/total/page/page_size`；item 不含 duplicate 和任何内部快照、哈希或对象 key
+- 页面只轮询当前页；PENDING/GENERATING 全部结束后停止
 
 ## 10. 健康检查 API
 
@@ -637,6 +687,43 @@ P3.3 只返回当前用户论文下、通过 AnalysisTask.user_id 再次隔离�
 
 ---
 
-**文档版本**: v1.0
+## 12. 阅读学习 API（P7.1 COMPLETED）
+
+### 12.1 创建解释
+
+`POST /api/v1/papers/{paper_id}/learning-explanations`
+
+```json
+{
+  "mode": "EXPLAIN",
+  "scope_type": "SECTION",
+  "section_id": "uuid",
+  "page_number": null,
+  "evidence_id": null,
+  "output_language": "zh"
+}
+```
+
+客户端不能发送 text、prompt、user_id、evidence_refs 或 model。新建 201；同活动/成功请求复用 200。论文不存在、跨用户或 scope 不归属统一 404；论文未解析或来源不足为固定 409；非法互斥字段为 422。
+
+### 12.2 获取解释
+
+`GET /api/v1/learning-explanations/{explanation_id}` 返回 id/paper_id/mode/scope/status/answer/key_points/terms/citations/error_message/timestamps/duplicate。Citation 只含安全 Evidence 字段；PENDING/RUNNING 不含结果，FAILED 只含固定错误。
+
+### 12.3 获取历史
+
+`GET /api/v1/papers/{paper_id}/learning-explanations?page=1&page_size=20` 按 created_at DESC/id DESC，返回 items/total/page/page_size；page_size 1～100。全部接口都要求真实登录用户和资源所有权。
+
+**文档版本**: v1.3
 **创建日期**: 2026-07-13
-**最后更新**: 2026-07-14
+**最后更新**: 2026-07-15
+
+## 13. P7.2 论文问答接口
+
+1. `POST /api/v1/papers/{paper_id}/qa-conversations`：请求 `{}`，创建空会话。
+2. `GET /api/v1/papers/{paper_id}/qa-conversations?page=1&page_size=20`：items/total/page/page_size 和摘要元数据。
+3. `GET /api/v1/qa-conversations/{conversation_id}?page=1&page_size=20`：按 sequence ASC 返回 turns/total/page/page_size。
+4. `POST /api/v1/qa-conversations/{conversation_id}/turns`：只接受 question/output_language/client_request_id；201 或幂等 200。
+5. `GET /api/v1/qa-turns/{turn_id}`：轮询安全详情。
+
+UUID4、分页、401/404/409/422 和响应字段遵循 systemDesign/04。GET 不公开 client_request_id/context_hash；Citation 只公开 Evidence 定位安全字段。

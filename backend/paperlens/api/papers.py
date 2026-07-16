@@ -156,12 +156,12 @@ async def upload_paper(
             try:
                 storage.delete(storage_key)
             except Exception:
-                logger.warning("Failed to delete unowned storage object %s", storage_key, exc_info=True)
+                logger.warning("Failed to delete unowned storage object", exc_info=True)
         if tmp_path and not tmp_transferred and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
             except Exception:
-                logger.warning("Failed to delete upload temporary file %s", tmp_path, exc_info=True)
+                logger.warning("Failed to delete upload temporary file", exc_info=True)
         try:
             await file.close()
         except Exception:

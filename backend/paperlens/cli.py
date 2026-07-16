@@ -8,6 +8,7 @@ from paperlens.core.config import settings
 from paperlens.core.database import SessionLocal
 from paperlens.core.enums import UserRole
 from paperlens.models.models import User
+from paperlens.services import admin_service
 
 
 def promote_admin(email: str, claim_legacy_data: bool = False) -> None:
@@ -38,6 +39,21 @@ def promote_admin(email: str, claim_legacy_data: bool = False) -> None:
             print(f"User '{email}' is already an admin.")
         else:
             print(f"User '{email}' has been promoted to admin.")
+    finally:
+        db.close()
+
+
+def admin_bootstrap(user_id: str, reason: str) -> None:
+    db = SessionLocal()
+    try:
+        audit_id = admin_service.admin_bootstrap(db, user_id=user_id, reason=reason)
+        print(f"Admin bootstrapped successfully. Audit ID: {audit_id}")
+    except Exception as exc:
+        db.rollback()
+        code = getattr(exc, "status_code", 1)
+        msg = getattr(exc, "message", str(exc))
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(code if isinstance(code, int) and code != 200 else 1)
     finally:
         db.close()
 
@@ -151,6 +167,10 @@ def main() -> None:
         help="Transfer demo-user data to this admin",
     )
 
+    bootstrap_parser = subparsers.add_parser("admin-bootstrap", help="Bootstrap the first admin user")
+    bootstrap_parser.add_argument("--user-id", required=True, help="UUID of the user to promote")
+    bootstrap_parser.add_argument("--reason", required=True, help="Reason for bootstrapping (8-500 chars)")
+
     subparsers.add_parser("maas-config-check", help="Validate MaaS LLM configuration without network access")
 
     smoke_parser = subparsers.add_parser("maas-smoke", help="Send a minimal chat request to MaaS LLM (billable)")
@@ -164,6 +184,8 @@ def main() -> None:
 
     if args.command == "promote-admin":
         promote_admin(args.email, args.claim_legacy_data)
+    elif args.command == "admin-bootstrap":
+        admin_bootstrap(args.user_id, args.reason)
     elif args.command == "maas-config-check":
         maas_config_check()
     elif args.command == "maas-smoke":
