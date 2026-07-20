@@ -2,28 +2,33 @@ from __future__ import annotations
 
 import datetime
 import re
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AdminUserPatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    role: str | None = Field(default=None, pattern="^(USER|ADMIN)$")
-    status: str | None = Field(default=None, pattern="^(ACTIVE|DISABLED)$")
+    role: Literal["USER", "ADMIN"] | None = None
+    status: Literal["ACTIVE", "DISABLED"] | None = None
     reason: str = Field(min_length=8, max_length=500)
 
-    @field_validator("reason")
+    @field_validator("reason", mode="before")
     @classmethod
-    def reason_no_control_chars(cls, v: str) -> str:
-        if re.search(r"[\x00-\x1f]", v):
+    def normalize_reason(cls, v: str) -> str:
+        if not isinstance(v, str):
+            return v
+        normalized = v.strip()
+        if re.search(r"[\x00-\x1f\x7f]", normalized):
             raise ValueError("reason must not contain control characters")
-        return v
+        return normalized
 
-    @field_validator("role", "status")
-    @classmethod
-    def at_least_one_change(cls, v: str | None, info) -> str | None:
-        return v
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.role is None and self.status is None:
+            raise ValueError("role or status is required")
+        return self
 
 
 class AdminDashboardResponse(BaseModel):
@@ -105,8 +110,11 @@ class AdminTaskItem(BaseModel):
     user_id: str
     task_type: str
     status: str
+    progress: int
+    error_message: str | None
+    started_at: datetime.datetime | None
+    completed_at: datetime.datetime | None
     created_at: datetime.datetime
-    updated_at: datetime.datetime | None
 
 
 class AdminTaskListResponse(BaseModel):
@@ -126,6 +134,8 @@ class AdminExportItem(BaseModel):
     user_id: str
     report_type: str
     status: str
+    file_size: int | None
+    error_message: str | None
     created_at: datetime.datetime
     completed_at: datetime.datetime | None
 

@@ -50,6 +50,9 @@ def _response(explanation: LearningExplanation, duplicate: bool) -> LearningExpl
         section_id=explanation.section_id,
         page_number=explanation.page_number,
         evidence_id=explanation.evidence_id,
+        selection_text=explanation.selection_text,
+        selection_start=explanation.selection_start,
+        selection_end=explanation.selection_end,
         status=explanation.status,
         duplicate=duplicate,
         answer=explanation.answer if explanation.status == LearningStatus.SUCCEEDED else None,
@@ -72,6 +75,8 @@ def _list_item(explanation: LearningExplanation) -> LearningExplanationListItem:
         section_id=explanation.section_id,
         page_number=explanation.page_number,
         evidence_id=explanation.evidence_id,
+        selection_start=explanation.selection_start,
+        selection_end=explanation.selection_end,
         status=explanation.status,
         error_message=_FAILED_MESSAGE if explanation.status == LearningStatus.FAILED else None,
         created_at=explanation.created_at,
@@ -101,6 +106,9 @@ def create_learning_api(
         page_number=body.page_number,
         evidence_id=str(body.evidence_id) if body.evidence_id else None,
         db=db,
+        selection_text=body.selection_text,
+        selection_start=body.selection_start,
+        selection_end=body.selection_end,
     )
 
     response = _response(explanation, duplicate)
@@ -134,6 +142,25 @@ def get_learning_explanation_api(
     return _response(explanation, False)
 
 
+@router.delete("/learning-explanations/{explanation_id}", status_code=204)
+def delete_learning_explanation_api(
+    explanation_id: UUID4 = Path(...),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    explanation = db.get(LearningExplanation, str(explanation_id))
+    if explanation is None or explanation.user_id != user_id:
+        raise AppError("NOT_FOUND", "学习解释不存在", 404)
+    if explanation.status in (LearningStatus.PENDING, LearningStatus.RUNNING):
+        raise AppError("TASK_RUNNING", "解释正在生成，暂时无法删除", 409)
+    try:
+        db.delete(explanation)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise AppError("DELETE_FAILED", "删除学习解释失败，请稍后重试", 500)
+
+
 @router.get(
     "/papers/{paper_id}/learning-explanations",
     response_model=LearningExplanationListResponse,
@@ -142,6 +169,7 @@ def list_learning_explanations_api(
     paper_id: UUID4 = Path(...),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    page_number: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
@@ -157,6 +185,8 @@ def list_learning_explanations_api(
         )
         .order_by(LearningExplanation.created_at.desc(), LearningExplanation.id.desc())
     )
+    if page_number is not None:
+        query = query.filter(LearningExplanation.page_number == page_number)
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return LearningExplanationListResponse(

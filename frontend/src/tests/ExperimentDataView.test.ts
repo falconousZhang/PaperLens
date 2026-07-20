@@ -159,6 +159,7 @@ function createTestRouter() {
     routes: [
       { path: '/papers/:id/experiment', name: 'paper-experiment', component: ExperimentDataView },
       { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+      { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
       { path: '/papers/:id/metrics', name: 'paper-metrics', component: { template: '<div/>' } },
       { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],

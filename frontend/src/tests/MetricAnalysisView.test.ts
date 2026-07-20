@@ -149,6 +149,7 @@ function createTestRouter() {
     routes: [
       { path: '/papers/:id/metrics', name: 'paper-metrics', component: MetricAnalysisView },
       { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+      { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
       { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],
   })
@@ -421,7 +422,7 @@ describe('MetricAnalysisView', () => {
     await flushPromises()
     const rows = wrapper.findAll('.metrics-table tbody tr')
     expect(rows[0]!.text()).toContain('查看证据')
-    expect(rows[0]!.find('.evidence-link').attributes('href')).toBe('/papers/paper-1?evidence=ev-1')
+    expect(rows[0]!.find('.evidence-link').attributes('href')).toBe('/papers/paper-1/read?evidence=ev-1')
     expect(rows[1]!.text()).toContain('表格 tbl-1 / 0-based 行 3')
     expect(rows[1]!.find('a').exists()).toBe(false)
     expect(rows[2]!.text()).toContain('来源不可用')

@@ -25,7 +25,7 @@ from paperlens.models.models import (
     PaperPage,
     PaperSection,
 )
-from paperlens.services.llm_client import LLMClient, get_llm_client
+from paperlens.services.llm_client import LLMClient, LLMError, get_llm_client
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ _MAX_KEY_POINT_CHARS = 600
 _MAX_TERMS = 20
 _MAX_TERM_CHARS = 120
 _MAX_TERM_EXPLANATION_CHARS = 600
+_LEARNING_PROMPT_VERSION = "page-learning-v3"
 
 
 class LLMLearningTerm(BaseModel):
@@ -55,8 +56,8 @@ class LLMLearningOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: str = Field(min_length=1, max_length=_MAX_ANSWER_CHARS)
-    key_points: list[str] = Field(min_length=1, max_length=_MAX_KEY_POINTS)
-    terms: list[LLMLearningTerm] = Field(min_length=1, max_length=_MAX_TERMS)
+    key_points: list[str] = Field(max_length=_MAX_KEY_POINTS)
+    terms: list[LLMLearningTerm] = Field(max_length=_MAX_TERMS)
     evidence_refs: list[str] = Field(min_length=1, max_length=50)
 
     @field_validator("answer", mode="before")
@@ -138,7 +139,15 @@ def _resolve_section_source(paper_id: str, section_id: str, db: Session) -> Lear
     return _validated_source(section.text_content or "", _as_candidates(rows))
 
 
-def _resolve_page_source(paper_id: str, page_number: int, db: Session) -> LearningSource:
+def _resolve_page_source(
+    paper_id: str,
+    page_number: int,
+    db: Session,
+    mode: str | None = None,
+    selection_text: str | None = None,
+    selection_start: int | None = None,
+    selection_end: int | None = None,
+) -> LearningSource:
     page = (
         db.query(PaperPage)
         .filter(PaperPage.paper_id == paper_id, PaperPage.page_number == page_number)
@@ -147,15 +156,83 @@ def _resolve_page_source(paper_id: str, page_number: int, db: Session) -> Learni
     if page is None:
         raise AppError("NOT_FOUND", "页面不存在", 404)
 
+    page_text = (
+        page.text_content or page.normalized_text_content or ""
+        if mode == LearningMode.TRANSLATE
+        else page.normalized_text_content or page.text_content or ""
+    )
+    evidence_pages = [page_number]
+    if selection_text is not None:
+        selected = selection_text.strip()
+        available_texts = (
+            page.normalized_text_content or "",
+            page.text_content or "",
+        )
+        has_exact_range = (
+            selection_start is not None
+            and selection_end is not None
+            and selection_end > selection_start
+            and any(
+                selection_end <= len(text)
+                and text[selection_start:selection_end] == selected
+                for text in available_texts
+            )
+        )
+        is_legacy_match = (
+            selection_start is None
+            and selection_end is None
+            and any(selected in text for text in available_texts)
+        )
+        if not selected or not (has_exact_range or is_legacy_match):
+            raise AppError("INVALID_SELECTION", "所选文字不属于当前页，请重新选择", 422)
+        source_text = f"SELECTED TEXT FROM PAGE {page_number}:\n{selected}"
+    elif mode == LearningMode.SUMMARY:
+        headings = [
+            section.title.strip()
+            for section in (
+                db.query(PaperSection)
+                .filter(
+                    PaperSection.paper_id == paper_id,
+                    PaperSection.start_page == page_number,
+                )
+                .order_by(PaperSection.sequence.asc(), PaperSection.id.asc())
+                .all()
+            )
+            if section.title and section.title.strip()
+        ]
+        next_page = (
+            db.query(PaperPage)
+            .filter(
+                PaperPage.paper_id == paper_id,
+                PaperPage.page_number == page_number + 1,
+            )
+            .first()
+        )
+        next_text = (
+            next_page.normalized_text_content or next_page.text_content or ""
+            if next_page is not None
+            else ""
+        )
+        heading_block = "\n".join(f"- {title}" for title in headings) or "- No extracted heading"
+        source_parts = [
+            f"CURRENT PAGE {page_number}:\n{page_text}",
+            f"HEADINGS THAT BEGIN ON CURRENT PAGE:\n{heading_block}",
+        ]
+        if next_text.strip():
+            source_parts.append(
+                f"NEXT PAGE {page_number + 1} FOR CONTINUATION ONLY:\n{next_text}"
+            )
+            evidence_pages.append(page_number + 1)
+        source_text = "\n\n".join(source_parts)
+    else:
+        source_text = page_text
     rows = (
         _ordered_evidence_query(db, paper_id)
-        .filter(Evidence.page_number == page_number)
+        .filter(Evidence.page_number.in_(evidence_pages))
         .limit(settings.learning_max_evidences)
         .all()
     )
-    return _validated_source(
-        page.normalized_text_content or page.text_content or "", _as_candidates(rows)
-    )
+    return _validated_source(source_text, _as_candidates(rows))
 
 
 def _resolve_evidence_source(paper_id: str, evidence_id: str, db: Session) -> LearningSource:
@@ -187,11 +264,23 @@ def resolve_source(
     page_number: int | None,
     evidence_id: str | None,
     db: Session,
+    mode: str | None = None,
+    selection_text: str | None = None,
+    selection_start: int | None = None,
+    selection_end: int | None = None,
 ) -> LearningSource:
     if scope_type == LearningScopeType.SECTION and section_id is not None:
         return _resolve_section_source(paper_id, section_id, db)
     if scope_type == LearningScopeType.PAGE and page_number is not None:
-        return _resolve_page_source(paper_id, page_number, db)
+        return _resolve_page_source(
+            paper_id,
+            page_number,
+            db,
+            mode=mode,
+            selection_text=selection_text,
+            selection_start=selection_start,
+            selection_end=selection_end,
+        )
     if scope_type == LearningScopeType.EVIDENCE and evidence_id is not None:
         return _resolve_evidence_source(paper_id, evidence_id, db)
     raise AppError("VALIDATION_ERROR", "学习范围不合法", 422)
@@ -206,6 +295,8 @@ def compute_request_hash(
     page_number: int | None = None,
     evidence_id: str | None = None,
     evidence_list: tuple[EvidenceCandidate, ...] | list[EvidenceCandidate] = (),
+    selection_start: int | None = None,
+    selection_end: int | None = None,
 ) -> str:
     source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
     evidence_hashes = [
@@ -222,9 +313,12 @@ def compute_request_hash(
                 "section_id": section_id,
                 "page_number": page_number,
                 "evidence_id": evidence_id,
+                "selection_start": selection_start,
+                "selection_end": selection_end,
             },
             "source_hash": source_hash,
             "evidences": evidence_hashes,
+            "prompt_version": _LEARNING_PROMPT_VERSION,
             "mode": str(mode),
             "language": output_language,
         },
@@ -245,6 +339,8 @@ def _request_hash_for(explanation: LearningExplanation, source: LearningSource) 
         page_number=explanation.page_number,
         evidence_id=explanation.evidence_id,
         evidence_list=source.evidences,
+        selection_start=explanation.selection_start,
+        selection_end=explanation.selection_end,
     )
 
 
@@ -266,11 +362,30 @@ def build_learning_prompt(
     if not evidence_blocks:
         raise ValueError("at least one evidence candidate is required")
 
-    language_instruction = "Respond in Chinese." if output_language == "zh" else "Respond in English."
+    target_language = "Chinese" if output_language == "zh" else "English"
+    language_instruction = f"Write the answer in {target_language}."
     mode_descriptions = {
-        LearningMode.SUMMARY: "Summarize only the supplied paper content.",
-        LearningMode.EXPLAIN: "Explain its meaning, method, and terms in learner-friendly language.",
-        LearningMode.TRANSLATE: "Translate faithfully without adding claims that are absent from the source.",
+        LearningMode.SUMMARY: (
+            "Summarize every heading listed under HEADINGS THAT BEGIN ON CURRENT PAGE. Start each summary "
+            "paragraph with the exact original heading followed by a colon. Use the next-page content only "
+            "to finish material that continues from the current page; do not summarize unrelated headings "
+            "that begin on the next page. If no heading was extracted, summarize the current page by its "
+            "visible structure. Do not quote the source. Put the organized summary in answer, the core ideas "
+            "in key_points, and return an empty terms array."
+        ),
+        LearningMode.EXPLAIN: (
+            "Teach only the selected passage in learner-friendly language. Explain its underlying mechanism "
+            "and why it works, then include at least one concrete example or analogy. Put the explanation and "
+            "examples in answer, the principles in key_points, and define important terms in terms."
+        ),
+        LearningMode.TRANSLATE: (
+            f"Translate every part of the supplied page into {target_language}. Do not summarize, omit, "
+            "reorder, embellish, or infer content. Preserve headings, paragraphs, lists, captions, equation "
+            "labels, citation markers, numbers, symbols, and proper nouns. Keep ambiguous technical names in "
+            "the original language instead of guessing. Format answer as Markdown using heading markers and "
+            "blank lines so the original title and body hierarchy remains clear. Return empty key_points and "
+            "terms arrays."
+        ),
     }
     mode_description = mode_descriptions[LearningMode(mode)]
 
@@ -282,7 +397,8 @@ def build_learning_prompt(
         "The exact shape is: "
         '{"answer":"text","key_points":["point"],"terms":'
         '[{"term":"term","explanation":"plain explanation"}],"evidence_refs":["E1"]}. '
-        "All four fields are required. Do not add fields. Cite one or more supplied aliases."
+        "All four fields are required. Do not add fields. Cite one or more supplied aliases in "
+        "evidence_refs for internal grounding; never insert source quotations or evidence labels into answer."
     )
     user_message = (
         f"{mode_description}\n\n"
@@ -394,6 +510,9 @@ def create_learning_explanation(
     page_number: int | None,
     evidence_id: str | None,
     db: Session,
+    selection_text: str | None = None,
+    selection_start: int | None = None,
+    selection_end: int | None = None,
 ) -> tuple[LearningExplanation, bool]:
     paper = db.get(Paper, paper_id)
     if paper is None or paper.user_id != user_id:
@@ -401,8 +520,18 @@ def create_learning_explanation(
     if paper.status != "PARSED":
         raise AppError("PAPER_NOT_READY", "论文尚未解析完成", 409)
 
+    selection_text = selection_text.strip() if selection_text else None
     source = resolve_source(
-        paper_id, scope_type, section_id, page_number, evidence_id, db
+        paper_id,
+        scope_type,
+        section_id,
+        page_number,
+        evidence_id,
+        db,
+        mode=mode,
+        selection_text=selection_text,
+        selection_start=selection_start,
+        selection_end=selection_end,
     )
     request_hash = compute_request_hash(
         scope_type,
@@ -413,6 +542,8 @@ def create_learning_explanation(
         page_number=page_number,
         evidence_id=evidence_id,
         evidence_list=source.evidences,
+        selection_start=selection_start,
+        selection_end=selection_end,
     )
 
     existing = _find_active_learning(db, user_id, paper_id, request_hash)
@@ -429,6 +560,9 @@ def create_learning_explanation(
         section_id=section_id,
         page_number=page_number,
         evidence_id=evidence_id,
+        selection_text=selection_text,
+        selection_start=selection_start,
+        selection_end=selection_end,
         request_hash=request_hash,
         status=LearningStatus.PENDING,
     )
@@ -551,6 +685,10 @@ def _load_inference_context(explanation_id: str):
             explanation.page_number,
             explanation.evidence_id,
             db,
+            mode=explanation.mode,
+            selection_text=explanation.selection_text,
+            selection_start=explanation.selection_start,
+            selection_end=explanation.selection_end,
         )
         if _request_hash_for(explanation, source) != explanation.request_hash:
             raise ValueError("learning source changed")
@@ -623,6 +761,10 @@ def _persist_success(
             explanation.page_number,
             explanation.evidence_id,
             db,
+            mode=explanation.mode,
+            selection_text=explanation.selection_text,
+            selection_start=explanation.selection_start,
+            selection_end=explanation.selection_end,
         )
         if _request_hash_for(explanation, source) != explanation.request_hash:
             raise ValueError("learning source changed")
@@ -697,6 +839,7 @@ def run_learning_task(
             mode=context["mode"],
             language=context["output_language"],
             evidence_aliases=list(aliases),
+            timeout_seconds=settings.learning_llm_timeout_seconds,
         )
         stage = "parse"
         parsed = parse_llm_learning_output(response.get("content", ""))
@@ -708,11 +851,13 @@ def run_learning_task(
         stage = "persist"
         _persist_success(explanation_id, parsed)
     except Exception as exc:
+        failure_reason = str(exc) if isinstance(exc, LLMError) else "internal_error"
         logger.error(
-            "Learning task failed explanation_id=%s paper_id=%s stage=%s exception_type=%s",
+            "Learning task failed explanation_id=%s paper_id=%s stage=%s exception_type=%s failure_reason=%s",
             explanation_id,
             paper_id,
             stage,
             type(exc).__name__,
+            failure_reason,
         )
         _mark_learning_failed(explanation_id)

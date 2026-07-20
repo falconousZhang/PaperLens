@@ -238,7 +238,7 @@
 | P3.5-09 | schemas/auth.py（Register/Login/ForgotPassword/ResetPassword/ChangePassword/UpdateProfile 请求 + UserResponse/AuthTokenResponse/MessageResponse） | ✅ 已完成 |
 | P3.5-10 | api/auth.py（10 个端点 + refresh cookie 管理） | ✅ 已完成 |
 | P3.5-11 | core/deps.py（get_current_user/get_current_user_id/require_admin） | ✅ 已完成 |
-| P3.5-12 | cli.py promote-admin 命令（--email --claim-legacy-data） | ✅ 已完成 |
+| P3.5-12 | 早期 promote-admin 命令 | ♻️ 已由 P8.1 安全 admin-bootstrap 完全替代 |
 | P3.5-13 | papers.py/tasks.py 删除 `_get_user_id()`，所有端点添加 `user_id: str = Depends(get_current_user_id)` | ✅ 已完成 |
 | P3.5-14 | 认证 API/服务/JWT/密码/CLI 安全测试 | ✅ 定向 42 passed |
 | P3.5-15 | test_health.py/test_review_tasks.py 适配（创建测试用户+auth headers、覆盖依赖、other-user FK） | ✅ 已完成 |
@@ -441,9 +441,9 @@
 
 | 编号 | 交付物 | 状态 |
 |------|--------|------|
-| P8-01 | 完整管理员后端 + Vue 管理后台 + 用户角色/状态 + 不可变审计 | ⬜ 未开始，发布前必做 |
-| P8-02 | 用户端/管理员端 E2E、任务恢复与全链路一致性 | ⬜ 未开始 |
-| P8-03 | 性能、可靠性、限流和可观测性调优 | ⬜ 未开始 |
-| P8-04 | 华为云部署（ECS/RDS/OBS/ModelArts）、备份恢复与综合安全审计 | ⬜ 未开始 |
+| P8-01 | 完整管理员后端 + Vue 管理后台 + 用户角色/状态 + 不可变审计 | ✅ 已完成并经码道独立收口（017；后端 1030；前端 200） |
+| P8-02 | 用户端/管理员端状态一致性、任务恢复与隔离烟测清单 | ✅ 已完成并经码道独立收口（后端 3；前端 2；构建 140 modules；健康接口 200） |
+| P8-03 | 性能、可靠性、限流和可观测性调优 | ✅ 已完成并经码道独立收口（P8.3 3；查询回归 2；镜像构建/隔离 HTTP 通过） |
+| P8-04 | 华为云部署（ECS/RDS/OBS/ModelArts）、备份恢复与综合安全审计 | ✅ 已完成并经码道独立收口（后端 3；生产双镜像/启动/Compose 通过） |
 
-P7.3 已新增 016、5 张个人学习表和 17 条 API，完成论文库、进度、高亮、书签、笔记、知识卡及前端学习记录闭环。最终结果为后端 977 passed、前端 16 files/197 passed、构建 136 modules、59 条 API、27 张 ORM 应用表和测试库残留 0。P8.1～P8.4 仍未实现。
+P8.1 已新增 017、admin_audit_logs、8 条管理员 API、admin-bootstrap 和 Vue 管理后台；审计在数据库层拒绝 UPDATE/DELETE，管理员变更通过事务锁与锁后权限复核保证至少一个 ACTIVE ADMIN。P8.2 已实现 RecoveryService、安全重放/保守失败、七类页面共享轮询和刷新恢复。P8.3 已完成严格 request id、应用内有限限流、安全路由模板日志、health/live+ready、数据库连接池、ThreadPoolExecutor 恢复并发和审阅/问答 N+1 收口。P8.4 已完成 OBSStorage、生产 fail-closed 配置、Secret 入口、非 root 双镜像、Compose/Nginx、部署与恢复资产；定向 3 passed，后端/前端生产镜像构建及只读启动、Compose 静态校验均通过。既定开发轮次全部完成，下一步为用户真实华为云部署和小额业务验收。

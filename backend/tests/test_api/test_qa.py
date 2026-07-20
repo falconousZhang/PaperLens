@@ -153,6 +153,27 @@ async def test_create_qa_conversation():
 
 
 @requires_db
+async def test_delete_empty_qa_conversation():
+    ctx = _setup_qa_context("qa-delete@example.com")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            f"/api/v1/papers/{ctx.paper_id}/qa-conversations",
+            json={},
+            headers=_auth(ctx.token),
+        )
+        deleted = await client.delete(
+            f"/api/v1/qa-conversations/{created.json()['id']}",
+            headers=_auth(ctx.token),
+        )
+        fetched = await client.get(
+            f"/api/v1/qa-conversations/{created.json()['id']}",
+            headers=_auth(ctx.token),
+        )
+    assert deleted.status_code == 204
+    assert fetched.status_code == 404
+
+
+@requires_db
 async def test_create_conversation_rejects_client_fields():
     ctx = _setup_qa_context("qa-conv-extra@example.com")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -559,6 +580,8 @@ async def test_run_qa_turn_succeeds():
         assert updated.status == QATurnStatus.SUCCEEDED
         assert updated.answer is not None
         assert updated.grounded is not None
+        conversation = db.get(PaperQAConversation, updated.conversation_id)
+        assert conversation.paper_memory == "Mock reusable full-paper memory"
     finally:
         db.close()
 
@@ -603,7 +626,7 @@ async def test_run_qa_turn_rejects_changed_evidence_before_persistence():
             finally:
                 mutation_db.close()
             return {
-                "content": '{"answer":"The accuracy is 95%.","grounded":true,"evidence_refs":["E1"]}'
+                "content": '{"answer":"The accuracy is 95%.","grounded":true,"evidence_refs":["E1"],"paper_memory":"Paper memory"}'
             }
 
     from paperlens.services.embedding_client import MockEmbeddingClient

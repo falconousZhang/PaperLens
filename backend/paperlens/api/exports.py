@@ -171,14 +171,10 @@ def download_export_api(
 
     try:
         storage = get_storage()
-        local_path = storage.read_path(report.storage_key)
+        with storage.materialize(report.storage_key) as local_path:
+            with open(local_path, "rb") as f:
+                content = f.read()
     except (FileNotFoundError, OSError, ValueError, NotImplementedError):
-        raise AppError("EXPORT_NOT_READY", "报告文件缺失", 409)
-
-    try:
-        with open(local_path, "rb") as f:
-            content = f.read()
-    except OSError:
         raise AppError("EXPORT_NOT_READY", "报告文件缺失", 409)
 
     actual_hash = compute_content_hash(content)

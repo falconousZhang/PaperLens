@@ -50,6 +50,23 @@ class PageDetail(BaseModel):
     height: float | None
 
 
+class PageTextWord(BaseModel):
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    char_start: int = Field(ge=0)
+    char_end: int = Field(ge=1)
+
+
+class PageTextLayerResponse(BaseModel):
+    page_number: int = Field(ge=1)
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    words: list[PageTextWord]
+
+
 class SectionItem(BaseModel):
     id: str
     section_type: str
@@ -63,6 +80,16 @@ class SectionItem(BaseModel):
 
 class SectionListResponse(BaseModel):
     sections: list[SectionItem]
+
+
+class PaperOutlineItem(BaseModel):
+    title: str
+    level: int
+    page_number: int
+
+
+class PaperOutlineResponse(BaseModel):
+    items: list[PaperOutlineItem]
 
 
 class EvidenceItem(BaseModel):

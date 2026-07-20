@@ -41,8 +41,8 @@
           <input v-model="currentPassword" type="password" required autocomplete="current-password" />
         </label>
         <label>
-          新密码（至少 15 个字符）
-          <input v-model="newPassword" type="password" required autocomplete="new-password" />
+          新密码（至少 8 个字符）
+          <input v-model="newPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" />
         </label>
         <button type="submit" :disabled="pwLoading">修改密码</button>
       </form>
@@ -99,8 +99,8 @@ async function handleChangePassword() {
   pwError.value = ''
   pwSuccess.value = ''
   const newPasswordLength = passwordCodePointLength(newPassword.value)
-  if (newPasswordLength < 15 || newPasswordLength > 128) {
-    pwError.value = '新密码长度必须为 15～128 个字符'
+  if (newPasswordLength < 8 || newPasswordLength > 128) {
+    pwError.value = '新密码长度必须为 8～128 个字符'
     return
   }
   pwLoading.value = true

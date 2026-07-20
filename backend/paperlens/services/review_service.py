@@ -226,25 +226,42 @@ def run_review_task(
         options = {}
 
     db = SessionLocal()
+    claimed = False
     try:
-        task = db.get(AnalysisTask, task_id)
-        if not task:
+        task = (
+            db.query(AnalysisTask)
+            .filter(AnalysisTask.id == task_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if task is None:
             logger.error("Task %s not found", task_id)
             return
-
+        if task.status != TaskStatus.PENDING or task.task_type != TaskType.REVIEW:
+            db.rollback()
+            return
+        paper = db.get(Paper, task.paper_id)
+        if (
+            paper is None
+            or paper.status != "PARSED"
+            or paper.user_id != task.user_id
+        ):
+            task.status = TaskStatus.FAILED
+            task.progress = 100
+            task.error_message = _safe_review_error(ValueError())
+            task.completed_at = datetime.datetime.now(datetime.timezone.utc)
+            db.commit()
+            return
         task.status = TaskStatus.RUNNING
         task.progress = 10
         task.error_message = None
         task.started_at = datetime.datetime.now(datetime.timezone.utc)
         db.commit()
+        claimed = True
 
         try:
-            if task.task_type != TaskType.REVIEW.value:
-                raise ValueError(f"Unsupported task_type: {task.task_type}")
-
             paper_id = task.paper_id
-            paper = db.get(Paper, task.paper_id)
-            paper_title = paper.title if paper else "Unknown"
+            paper_title = paper.title
 
             dimensions_str = options.get("dimensions", ["OVERALL"])
             language = options.get("language", "zh")
@@ -297,9 +314,31 @@ def run_review_task(
             if db.in_transaction():
                 raise RuntimeError("database transaction opened during external inference")
 
-            task = db.get(AnalysisTask, task_id)
-            if not task:
-                raise ValueError("Task disappeared before persistence")
+            task = (
+                db.query(AnalysisTask)
+                .filter(AnalysisTask.id == task_id)
+                .with_for_update()
+                .one_or_none()
+            )
+            if task is None or task.status != TaskStatus.RUNNING:
+                db.rollback()
+                return
+            paper = db.get(Paper, paper_id)
+            if (
+                task.task_type != TaskType.REVIEW
+                or task.paper_id != paper_id
+                or paper is None
+                or paper.status != "PARSED"
+                or paper.user_id != task.user_id
+            ):
+                raise ValueError("Review task graph changed before persistence")
+            if (
+                db.query(ReviewResult.id)
+                .filter(ReviewResult.task_id == task_id)
+                .first()
+                is not None
+            ):
+                raise ValueError("Review task already has results")
 
             for dimension_index, parsed, bound in staged_results:
                 review = ReviewResult(
@@ -340,12 +379,20 @@ def run_review_task(
         except Exception as e:
             logger.exception("Review task %s failed", task_id)
             db.rollback()
-            task = db.get(AnalysisTask, task_id)
-            if task:
+            task = (
+                db.query(AnalysisTask)
+                .filter(AnalysisTask.id == task_id)
+                .with_for_update()
+                .one_or_none()
+            )
+            if claimed and task is not None and task.status == TaskStatus.RUNNING:
                 task.status = TaskStatus.FAILED
+                task.progress = 100
                 task.error_message = _safe_review_error(e)
                 task.completed_at = datetime.datetime.now(datetime.timezone.utc)
                 db.commit()
+            else:
+                db.rollback()
 
     finally:
         db.close()

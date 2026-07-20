@@ -558,6 +558,7 @@ PaperLens 的主产品定义改为“个人论文阅读学习助手”。P2～P6
 - [x] FR-13.2.4 所有 evidence_refs 必须完整绑定同一论文 Evidence；至少一个引用，否则整次失败。
 - [x] FR-13.2.5 独立 PENDING → RUNNING → SUCCEEDED / FAILED 状态机，活动/成功同请求幂等，FAILED 可重试。
 - [x] FR-13.2.6 结果历史严格分页；响应不泄露正文快照、prompt、hash、模型原始响应或内部异常。
+- [x] FR-13.2.7 选中文字解释详情激活时持续蓝色定位原文，历史悬停预览结束后恢复详情选区，退出详情或切页后清除。
 
 ### 固定后续轮次
 
@@ -646,4 +647,98 @@ python -m paperlens.cli admin-bootstrap --user-id UUID --reason text：只允许
 
 禁止管理员自降级或自禁用；任何提交后至少保留一个 ACTIVE ADMIN。FOR UPDATE 锁定 ACTIVE ADMIN 集合和目标。两管理员并发互相降级/禁用时最多一个成功，另一个 409。角色或状态变化后撤销目标全部活动 AuthSession；禁用时同时使未使用 PasswordResetToken 失效。017 迁移空表支持往返，非空审计降级拒绝。
 
-P8.1 进行中。P8.2～P8.4 未提前实现。
+P8.1～P8.4 均已完成并经码道独立收口。真实华为云资源与小额业务验收由用户在部署窗口执行。
+
+## FR-17 全链路恢复与一致性
+
+### FR-17.1 后台任务安全恢复
+
+新增独立 RecoveryService 与 FastAPI lifespan 集成。恢复具有配置开关（PAPERLENS_RECOVERY_ENABLED）、正整数 stale_seconds（默认 300）和 batch_size（默认 50，上限 1000）；非法配置由 Settings 在应用创建前拒绝。扫描按固定实体顺序和 created_at/id 有限批次执行，使用 PostgreSQL `pg_try_advisory_xact_lock` 非阻塞互斥。扫描事务只进行行锁、状态收口和派发登记，任何 PDF、LLM、Embedding、文件或报告处理均在提交后执行。指标、实验分析、学习解释和问答复用现有原子 claim 重放；审阅缺少原始 options、论文解析缺少可靠执行代次、导出缺少生成 bytes 时固定 FAILED，由用户从原入口重试，不猜测缺失输入。终态、新鲜记录和其他 worker 已认领记录保持不变。
+
+### FR-17.2 用户端与管理员端状态一致性
+
+统一各页面刷新后的恢复行为：Paper、Review、Metric、Experiment、Export、LearningExplanation、QA 在重新进入页面时先读取服务端状态，再决定恢复轮询、展示终态或允许重试。共享 usePolling 保证同一实例最多一个在途 GET、固定间隔、generation 隔离和卸载清理；401 转登录并保留 redirect，其他错误使用固定安全文案。TaskDetail 增加可空 experiment_file_id 以恢复实验文件上下文，不增加公开路由。
+
+### FR-17.3 前端轮询统一
+
+所有轮询页面实际使用共享 usePolling。ExperimentDataView 在页面加载时通过服务端 task 与 experiment_file_id 恢复活跃实验分析任务，不使用仅存在于内存的文件选择状态。
+
+## 附录 A：轻量测试规格
+
+PaperLens 采用适合个人学习项目的轻量测试门槛。新功能默认只要求一个正常路径和一个关键失败路径；只有并发、任务恢复或数据破坏风险明确存在时，再增加一个代表性风险样例。测试数据使用能表达行为的最小集合，通常为一个用户、一篇论文和一个任务，权限场景最多两个用户。
+
+默认集中验收仅执行变更模块定向测试、一条核心烟测，以及前端修改时的生产构建。不要求覆盖率统计、全枚举组合、完整故障注入矩阵或每轮运行全部历史回归。现有测试保留为可选资产；完整后端/前端套件只在最终发布或认证、迁移链、共享基础设施高风险变更时使用。
+
+## FR-18 性能、可靠性、限流与可观测性收口
+
+### FR-18.1 请求追踪
+
+入站 X-Request-ID 仅严格 UUID4 时复用，否则生成新 UUID4。所有 API 响应（含错误响应）均返回 X-Request-ID 响应头。请求日志只记录 request_id/method/route_template/status/duration_ms/rate_scope；禁止记录 query string、请求/响应 body、Authorization/cookie/header 全量、IP、email、论文内容、文件名/路径、hash、token、secret、DSN、SQL 参数或异常正文。
+
+### FR-18.2 应用内限流
+
+单进程固定窗口限流，按 scope 分组：exempt（/api/v1/health* 完全豁免）、auth（认证敏感 POST）、upload（论文/实验文件上传 POST）、read（其他 GET/HEAD）、write（其他写方法）。超限返回 429 JSON envelope（code=RATE_LIMITED、固定中文安全 message、details=null）+ 整数 Retry-After + X-Request-ID。默认可信代理列表为空；仅显式配置 `PAPERLENS_TRUSTED_PROXY_CIDRS` 且直接 peer 可信时，才按严格代理链取得来源地址。
+
+### FR-18.3 健康与就绪检查
+
+新增 GET /api/v1/health/live（进程存活）和 GET /api/v1/health/ready（短事务 SELECT 1 检查数据库）。三个 health 端点不要求认证且不计入限流。
+
+### FR-18.4 数据库连接池与恢复并发
+
+SQLAlchemy engine 增加 pool_pre_ping=True、pool_size=5、max_overflow=10、pool_timeout=10s、pool_recycle=1800s。恢复派发使用有界 ThreadPoolExecutor（默认 4 worker，范围 1～32），由 lifespan 创建并在 shutdown 关闭。
+
+### FR-18.5 N+1 与无界查询修复
+
+list_reviews 使用带 VERIFIED 条件的 selectinload 加载 findings + evidences；list_qa_conversations 使用批量聚合查询；list_tasks 返回最近 200 条。list_evidences 保持完整 Evidence 契约，不用固定上限静默截断论文证据。
+
+## FR-19 华为云部署、备份恢复与综合安全验收
+
+### FR-19.1 OBSStorage 实现
+
+使用 esdk-obs-python SDK 实现华为云 OBS 存储适配，延迟导入（仅 storage_backend=obs 时初始化）。ECS Agency 优先，ENV fallback（AK/SK/Token from SecretStr）。私有对象 + SSE-OBS/SSE-KMS；禁止 public-read、桶创建/删除、预签名 URL。严格 key 规范化：拒绝空 key、绝对路径、反斜杠、`.`/`..` 段、控制字符、重复分隔和超长值。错误和日志不得包含 endpoint、bucket、对象 key、文件名、SDK 原始异常或凭据。
+
+### FR-19.2 Context-managed materialize
+
+新增 materialize(storage_key) 上下文管理器。LocalStorage 直接 yield 已校验路径；OBSStorage 下载到唯一临时文件，验证 SDK 状态，finally 中关闭并删除。所有生产调用者（exports、experiment_analysis、export_service）已迁移。
+
+### FR-19.3 生产配置校验
+
+PAPERLENS_ENV=production 时拒绝 debug/local storage/HTTP OBS/占位 JWT/非 Secure cookie/缺失 OBS 必需配置/KMS 无 key id。docs_enabled 属性控制 OpenAPI 文档关闭。
+
+### FR-19.4 生产部署资产
+
+deploy/huawei/ 包含生产 Docker Compose（独立 migrate 服务、非 root、read-only、资源限制）、Nginx 配置（安全响应头、不盲目信任转发头）、Dockerfile.prod（非 root 用户）、entrypoint.prod.sh（secret 文件注入）、备份恢复手册和安全验收清单。
+
+### FR-19.5 备份恢复与安全
+
+RDS 自动备份 + PITR + 发布前手工备份 + 恢复到新实例并只读核对。OBS 版本控制 + SSE + 生命周期。回滚以镜像版本为主。安全清单覆盖 RDS/后端无公网、最小安全组、IAM agency 桶级最小权限、MaaS/OBS 仅 HTTPS、DEW 密钥轮换、Secure/HttpOnly/SameSite cookie、生产文档关闭、CORS 同源、WAF/ELB 总限流、日志白名单、审计不可变、备份加密和恢复演练。
+
+### FR-19.6 最终收口约束
+
+ECS Agency 使用 `security_provider_policy="ECS"`；OBS 超时统一为 `PAPERLENS_OBS_TIMEOUT_SECONDS` 并启用 CA 校验。生产 RDS 必须 `verify-full + sslrootcert`，MaaS/Embedding 必须使用华为端点与 Secret Key，可信代理不得为空或为全网。migrate/serve 共用 Secret 入口，后端和前端镜像必须非 root、只读且生产后端不含测试。P8.4 已完成本地轻量验收；真实云发布由用户在部署窗口执行。
+
+## FR-20 论文学习报告导出
+
+### FR-20.1 核心报告
+
+`PARSED` 论文无需审阅即可导出。固定内容为论文信息、学习概览、成功学习解释、高亮和笔记；内容按页码与稳定次序排列，选中文字解释保留原文。
+
+### FR-20.2 可选扩展
+
+成功审阅存在时自动加入批判性阅读；指标和实验分析继续受既有布尔开关控制。扩展来源不存在时不影响核心报告生成。
+
+### FR-20.3 多格式与安全
+
+Markdown/PDF/DOCX 共享单一确定性来源快照与内容，继续满足所有权隔离、转义、幂等、哈希校验、安全下载和大小限制。
+
+### FR-20.4 用户界面
+
+导出页明确展示固定学习内容与可选扩展，支持格式、语言、扩展开关、任务状态、历史、重试和下载；错误文案不得把所有冲突误报为未完成审阅。
+
+## FR-21 学习解释退出交互
+
+学习解释退出按钮位于生成按钮下方。点击后在当前阅读路由内关闭活动解释、清除原文定位并回到解释历史列表，保留论文、页码和历史数据。
+
+## FR-22 轻量单机 ECS 部署
+
+提供不依赖 RDS、OBS、ELB 和 SWR 的低成本单机部署档案。前端 Nginx 是唯一公网入口，后端与 PostgreSQL 仅加入固定 Docker 私有网络；数据库和论文文件分别持久化到命名卷。部署通过外部环境文件注入随机数据库密码、JWT Secret 和轮换后的华为 MaaS API Key，并针对 4 GiB ECS 设置资源上限。该档案用于 HTTP 演示，不替代正式生产架构。

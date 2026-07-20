@@ -1,0 +1,10 @@
+*
+!frontend/
+!frontend/**
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+!deploy/
+!deploy/huawei/
+!deploy/huawei/nginx.prod.conf
+!deploy/huawei/nginx.single.conf

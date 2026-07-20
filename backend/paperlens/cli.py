@@ -1,46 +1,27 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
+import uuid
 from urllib.parse import urlparse
 
 from paperlens.core.config import settings
 from paperlens.core.database import SessionLocal
-from paperlens.core.enums import UserRole
-from paperlens.models.models import User
+from paperlens.core.errors import AppError
 from paperlens.services import admin_service
 
+logger = logging.getLogger(__name__)
 
-def promote_admin(email: str, claim_legacy_data: bool = False) -> None:
-    db = SessionLocal()
+
+def _uuid4(value: str) -> str:
     try:
-        email_normalized = email.strip().lower()
-        user = db.query(User).filter(User.email_normalized == email_normalized).first()
-
-        if user is None:
-            print(f"User with email '{email}' not found.", file=sys.stderr)
-            sys.exit(1)
-
-        already_admin = user.role == UserRole.ADMIN
-        user.role = UserRole.ADMIN
-
-        if claim_legacy_data:
-            from paperlens.models.models import Paper, AnalysisTask, ExperimentFile, ExportReport
-            demo_id = settings.demo_user_id
-            for model_cls in (Paper, AnalysisTask, ExperimentFile, ExportReport):
-                db.query(model_cls).filter(model_cls.user_id == demo_id).update(
-                    {"user_id": user.id}
-                )
-
-        db.commit()
-        if already_admin and claim_legacy_data:
-            print(f"User '{email}' is already an admin; requested legacy claim completed.")
-        elif already_admin:
-            print(f"User '{email}' is already an admin.")
-        else:
-            print(f"User '{email}' has been promoted to admin.")
-    finally:
-        db.close()
+        parsed = uuid.UUID(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("user-id must be a valid UUID4") from exc
+    if parsed.version != 4:
+        raise argparse.ArgumentTypeError("user-id must be a valid UUID4")
+    return str(parsed)
 
 
 def admin_bootstrap(user_id: str, reason: str) -> None:
@@ -48,12 +29,15 @@ def admin_bootstrap(user_id: str, reason: str) -> None:
     try:
         audit_id = admin_service.admin_bootstrap(db, user_id=user_id, reason=reason)
         print(f"Admin bootstrapped successfully. Audit ID: {audit_id}")
+    except AppError as exc:
+        db.rollback()
+        print(f"Error: {exc.message}", file=sys.stderr)
+        sys.exit(1)
     except Exception as exc:
         db.rollback()
-        code = getattr(exc, "status_code", 1)
-        msg = getattr(exc, "message", str(exc))
-        print(f"Error: {msg}", file=sys.stderr)
-        sys.exit(code if isinstance(code, int) and code != 200 else 1)
+        logger.error("stage=admin_bootstrap_cli_failed error_type=%s", type(exc).__name__)
+        print("Error: admin bootstrap failed", file=sys.stderr)
+        sys.exit(1)
     finally:
         db.close()
 
@@ -159,16 +143,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="PaperLens CLI")
     subparsers = parser.add_subparsers(dest="command")
 
-    promote_parser = subparsers.add_parser("promote-admin", help="Promote a user to admin")
-    promote_parser.add_argument("--email", required=True, help="Email of the user to promote")
-    promote_parser.add_argument(
-        "--claim-legacy-data",
-        action="store_true",
-        help="Transfer demo-user data to this admin",
-    )
-
     bootstrap_parser = subparsers.add_parser("admin-bootstrap", help="Bootstrap the first admin user")
-    bootstrap_parser.add_argument("--user-id", required=True, help="UUID of the user to promote")
+    bootstrap_parser.add_argument("--user-id", required=True, type=_uuid4, help="UUID4 of the user to promote")
     bootstrap_parser.add_argument("--reason", required=True, help="Reason for bootstrapping (8-500 chars)")
 
     subparsers.add_parser("maas-config-check", help="Validate MaaS LLM configuration without network access")
@@ -182,9 +158,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "promote-admin":
-        promote_admin(args.email, args.claim_legacy_data)
-    elif args.command == "admin-bootstrap":
+    if args.command == "admin-bootstrap":
         admin_bootstrap(args.user_id, args.reason)
     elif args.command == "maas-config-check":
         maas_config_check()

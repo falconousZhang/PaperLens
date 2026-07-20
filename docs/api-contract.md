@@ -865,3 +865,42 @@ Set-Cookie: `paperlens_refresh=<opaque>; HttpOnly; SameSite=Lax; Path=/api/v1/au
 新增 17 条路由：论文库列表、library entry、阅读进度共 3 条；高亮/书签各 3 条；笔记/知识卡各 4 条。全部要求认证并严格 owner-only，普通 ADMIN 不绕过所有权；不存在与跨用户统一 404，非 PARSED/引用删除冲突返回固定 409，非法 UUID、枚举、空 PATCH、null、控制字符和长度返回 422。
 
 论文库及四类记录列表均使用 page/page_size 稳定分页。高亮和书签重复创建返回既有对象、200 与 duplicate=true；公开响应不包含 user_id、source 内部快照或底层异常。最终公开 `/api/v1` method+path 为 59。
+
+## P8.1 管理员 API（COMPLETED）
+
+| Method + Path | 说明 |
+|---|---|
+| GET `/api/v1/admin/dashboard` | 用户、论文、任务和报告固定维度聚合 |
+| GET `/api/v1/admin/users` | 用户白名单字段、资源计数、筛选与分页 |
+| GET `/api/v1/admin/users/{user_id}` | 单用户白名单详情 |
+| PATCH `/api/v1/admin/users/{user_id}` | role/status 变更、凭据撤销和原子审计 |
+| GET `/api/v1/admin/papers` | 跨用户论文安全元数据只读 |
+| GET `/api/v1/admin/tasks` | 跨用户任务安全元数据只读 |
+| GET `/api/v1/admin/exports` | 跨用户报告安全元数据只读 |
+| GET `/api/v1/admin/audit-logs` | append-only 审计分页与白名单筛选 |
+
+全部 8 条 API 以服务端 `require_admin` 为权威；UUID4、枚举、分页和带时区时间严格校验。普通业务 API 的 ADMIN 仍不能绕过 owner。PATCH 禁止自降级、自禁用和移除最后一个 ACTIVE ADMIN；实际变更按字段生成审计，相同值返回 changed=false。当前公开 `/api/v1` method+path 为 67。
+
+## P8.2 后台任务恢复（已完成）
+
+P8.2 不新增 API 端点。既有任务详情与任务列表项增加可空 `experiment_file_id`；仅实验分析任务有值，用于刷新恢复文件上下文，不公开路径、哈希或文件内容。恢复逻辑在服务端 lifespan 内自动执行。新增 3 个环境变量：
+
+| 变量 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| PAPERLENS_RECOVERY_ENABLED | bool | true | 是否启用恢复服务 |
+| PAPERLENS_RECOVERY_STALE_SECONDS | int | 300 | 任务超过此秒数视为过期 |
+| PAPERLENS_RECOVERY_BATCH_SIZE | int | 50 | 单次恢复扫描批次大小 |
+
+## P8.3 请求追踪、限流与健康接口（已完成）
+
+新增 `GET /api/v1/health/live` 和 `GET /api/v1/health/ready`，公开路由总数为 69。既有 `/health` 保持兼容；live 只表示进程存活，ready 只读执行数据库 `SELECT 1`，数据库不可用时固定返回 503 `not_ready`，不公开异常或连接信息。
+
+P8.4 不新增公开 API。生产环境关闭 `/api/docs`、`/api/redoc` 和 `/api/openapi.json`，均返回 404；Nginx 额外提供仅供 ELB 存活检查的 `/healthz`，不属于后端业务 API。
+
+所有 API 响应返回 `X-Request-ID`。只有规范小写 UUID4 入站值会复用，其他值由服务端替换。限流超限返回 429：
+
+```json
+{"error":{"code":"RATE_LIMITED","message":"请求过于频繁，请稍后重试","details":null}}
+```
+
+同时返回整数 `Retry-After`。应用内限流默认读 300/分钟、写 60/分钟、认证 10/分钟、上传 10/分钟；health 豁免。可信代理使用 `PAPERLENS_TRUSTED_PROXY_CIDRS`，默认空。

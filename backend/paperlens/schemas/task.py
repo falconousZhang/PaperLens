@@ -74,6 +74,7 @@ class TaskDetailResponse(BaseModel):
     task_type: TaskType
     status: TaskStatus
     progress: int
+    experiment_file_id: str | None
     error_message: str | None
     started_at: datetime.datetime | None
     completed_at: datetime.datetime | None

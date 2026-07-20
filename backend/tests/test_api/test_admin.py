@@ -4,6 +4,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 
 from paperlens.main import app
 from paperlens.core.database import configure_engine, get_engine, SessionLocal
@@ -657,8 +658,8 @@ class TestAdminConcurrentProtection:
 
             success_count = sum(1 for r in results if r.status_code == 200)
             conflict_count = sum(1 for r in results if r.status_code == 409)
-            assert success_count <= 1, f"Expected at most 1 success, got {success_count}"
-            assert conflict_count >= 1, f"Expected at least 1 conflict, got {conflict_count}"
+            assert success_count == 1, f"Expected exactly 1 success, got {success_count}"
+            assert conflict_count == 1, f"Expected exactly 1 conflict, got {conflict_count}"
 
             db.expire_all()
             active_admins = db.query(User).filter(
@@ -666,5 +667,80 @@ class TestAdminConcurrentProtection:
                 User.status == UserStatus.ACTIVE,
             ).count()
             assert active_admins >= 1
+        finally:
+            db.close()
+
+
+@requires_db
+@pytest.mark.asyncio
+class TestAdminValidationAndQueryShape:
+    async def test_patch_requires_change_and_trimmed_reason(self, admin_client):
+        db = SessionLocal()
+        try:
+            admin = _make_user(db, role=UserRole.ADMIN)
+            user = _make_user(db)
+            token = _make_admin_token(db, admin)
+            headers = {"Authorization": f"Bearer {token}"}
+            empty = await admin_client.patch(
+                f"/api/v1/admin/users/{user.id}",
+                json={"reason": "valid reason text"},
+                headers=headers,
+            )
+            whitespace = await admin_client.patch(
+                f"/api/v1/admin/users/{user.id}",
+                json={"role": "ADMIN", "reason": "          "},
+                headers=headers,
+            )
+            assert empty.status_code == 422
+            assert whitespace.status_code == 422
+        finally:
+            db.close()
+
+    async def test_admin_filters_reject_unknown_values_and_invalid_uuid(self, admin_client):
+        db = SessionLocal()
+        try:
+            admin = _make_user(db, role=UserRole.ADMIN)
+            token = _make_admin_token(db, admin)
+            headers = {"Authorization": f"Bearer {token}"}
+            responses = [
+                await admin_client.get("/api/v1/admin/papers", params={"status": "UNKNOWN"}, headers=headers),
+                await admin_client.get("/api/v1/admin/tasks", params={"task_type": "UNKNOWN"}, headers=headers),
+                await admin_client.get("/api/v1/admin/exports", params={"status": "UNKNOWN"}, headers=headers),
+                await admin_client.get("/api/v1/admin/users/not-a-uuid", headers=headers),
+                await admin_client.get(
+                    "/api/v1/admin/audit-logs",
+                    params={"created_from": "2026-01-01T00:00:00"},
+                    headers=headers,
+                ),
+            ]
+            assert [response.status_code for response in responses] == [422, 422, 422, 422, 422]
+        finally:
+            db.close()
+
+    async def test_user_list_query_count_does_not_grow_per_row(self, admin_client):
+        db = SessionLocal()
+        try:
+            admin = _make_user(db, role=UserRole.ADMIN)
+            for _ in range(5):
+                _make_user(db)
+            token = _make_admin_token(db, admin)
+            statements = []
+
+            def record_statement(*_args):
+                statements.append(1)
+
+            engine = get_engine()
+            event.listen(engine, "before_cursor_execute", record_statement)
+            try:
+                response = await admin_client.get(
+                    "/api/v1/admin/users",
+                    params={"page_size": 100},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            finally:
+                event.remove(engine, "before_cursor_execute", record_statement)
+            assert response.status_code == 200
+            assert len(response.json()["items"]) == 6
+            assert len(statements) <= 8
         finally:
             db.close()

@@ -8,17 +8,12 @@ from httpx import ASGITransport, AsyncClient
 
 from paperlens.main import app
 from paperlens.core.database import configure_engine, get_engine, SessionLocal
-from paperlens.core.enums import PaperStatus, UserRole, UserStatus
+from paperlens.core.enums import UserRole, UserStatus
 from paperlens.models.models import (
-    AnalysisTask,
     AuthSession,
-    ExperimentFile,
-    ExportReport,
-    Paper,
     PasswordResetToken,
     User,
 )
-from paperlens.cli import promote_admin
 from paperlens.services.password_service import hash_password, generate_token, hash_token
 from paperlens.services.token_service import create_access_token
 from paperlens.services import auth_service
@@ -120,7 +115,7 @@ async def test_register_duplicate_email(auth_client: AsyncClient):
 async def test_register_weak_password(auth_client: AsyncClient):
     resp = await auth_client.post("/api/v1/auth/register", json={
         "email": "weak@example.com",
-        "password": "password",
+        "password": "short7",
         "display_name": "Weak",
     })
     assert resp.status_code == 422
@@ -687,86 +682,3 @@ async def test_display_name_whitespace_is_rejected(auth_client: AsyncClient):
         headers={"Authorization": f"Bearer {valid.json()['access_token']}"},
     )
     assert update.status_code == 422
-
-
-@requires_db
-@pytest.mark.asyncio
-async def test_promote_admin_claims_legacy_data_only_with_explicit_flag(
-    auth_client: AsyncClient,
-):
-    db = SessionLocal()
-    try:
-        user = _make_user(db, email="claim-admin@example.com")
-        if db.get(User, "demo-user") is None:
-            db.add(User(
-                id="demo-user",
-                email="demo@paperlens.local",
-                email_normalized="demo@paperlens.local",
-                display_name="Demo User (Legacy)",
-                password_hash=None,
-                role=UserRole.USER,
-                status=UserStatus.DISABLED,
-                failed_login_count=0,
-            ))
-            db.flush()
-        paper = Paper(
-            title="Legacy",
-            filename="legacy.pdf",
-            storage_key="papers/legacy/source.pdf",
-            file_size=1,
-            file_hash="a" * 64,
-            status=PaperStatus.PARSED,
-            user_id="demo-user",
-        )
-        db.add(paper)
-        db.flush()
-        task = AnalysisTask(
-            paper_id=paper.id,
-            task_type="REVIEW",
-            status="PENDING",
-            progress=0,
-            user_id="demo-user",
-        )
-        experiment = ExperimentFile(
-            paper_id=paper.id,
-            filename="legacy.csv",
-            storage_key="experiments/legacy.csv",
-            file_size=1,
-            file_hash="b" * 64,
-            file_type="CSV",
-            row_count=1,
-            column_count=1,
-            columns_info={"version": 1, "columns": [{"name": "a", "dtype": "string", "nullable": False, "null_count": 0}]},
-            user_id="demo-user",
-        )
-        report = ExportReport(
-            paper_id=paper.id,
-            report_type="PDF",
-            status="PENDING",
-            user_id="demo-user",
-        )
-        db.add_all([task, experiment, report])
-        db.commit()
-        user_id = user.id
-    finally:
-        db.close()
-
-    promote_admin("claim-admin@example.com", claim_legacy_data=False)
-    db = SessionLocal()
-    try:
-        assert db.get(User, user_id).role == UserRole.ADMIN
-        assert db.query(Paper).filter(Paper.user_id == "demo-user").count() == 1
-        assert db.query(AnalysisTask).filter(AnalysisTask.user_id == "demo-user").count() == 1
-        assert db.query(ExperimentFile).filter(ExperimentFile.user_id == "demo-user").count() == 1
-        assert db.query(ExportReport).filter(ExportReport.user_id == "demo-user").count() == 1
-    finally:
-        db.close()
-
-    promote_admin("claim-admin@example.com", claim_legacy_data=True)
-    db = SessionLocal()
-    try:
-        for model in (Paper, AnalysisTask, ExperimentFile, ExportReport):
-            assert db.query(model).filter(model.user_id == user_id).count() == 1
-            assert db.query(model).filter(model.user_id == "demo-user").count() == 0
-    finally:
-        db.close()

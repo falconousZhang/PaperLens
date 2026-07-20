@@ -32,8 +32,12 @@ from paperlens.models.models import (
     ExperimentFile,
     ExperimentResult,
     ExportReport,
+    LearningExplanation,
     MetricRecord,
     Paper,
+    PaperHighlight,
+    PaperNote,
+    PaperSection,
     PaperTable,
     ReviewFinding,
     ReviewResult,
@@ -57,12 +61,35 @@ _REVIEW_DIMENSION_ORDER = [
 ]
 
 _ZH_LABELS = {
-    "title": "论文审阅报告",
+    "title": "论文学习报告",
     "paper_info": "论文信息",
     "paper_title": "论文标题",
     "filename": "文件名",
     "pages": "页数",
-    "review_section": "审阅详情",
+    "learning_overview": "学习概览",
+    "explanation_count": "学习解释",
+    "highlight_count": "高亮摘录",
+    "note_count": "学习笔记",
+    "review_status": "批判性阅读",
+    "review_available": "已加入",
+    "review_unavailable": "尚未生成（不影响本报告）",
+    "explanations_section": "学习解释",
+    "highlights_section": "高亮摘录",
+    "notes_section": "学习笔记",
+    "no_explanations": "暂无学习解释",
+    "no_highlights": "暂无高亮摘录",
+    "no_notes": "暂无学习笔记",
+    "page": "第 {page} 页",
+    "whole_paper": "全文",
+    "selected_text": "选中文字",
+    "explanation_answer": "解释内容",
+    "key_points": "要点",
+    "terms": "术语",
+    "mode_summary": "页面总结",
+    "mode_explain": "选中文字解释",
+    "mode_translate": "页面翻译",
+    "note_source": "关联原文",
+    "review_section": "审阅详情（批判性阅读）",
     "dimension": "维度",
     "rating": "评分",
     "verdict": "结论",
@@ -107,12 +134,35 @@ _ZH_LABELS = {
 }
 
 _EN_LABELS = {
-    "title": "Paper Review Report",
+    "title": "Paper Learning Report",
     "paper_info": "Paper Information",
     "paper_title": "Title",
     "filename": "Filename",
     "pages": "Pages",
-    "review_section": "Review Details",
+    "learning_overview": "Learning Overview",
+    "explanation_count": "Learning Explanations",
+    "highlight_count": "Highlights",
+    "note_count": "Notes",
+    "review_status": "Critical Reading",
+    "review_available": "Included",
+    "review_unavailable": "Not generated (this report remains available)",
+    "explanations_section": "Learning Explanations",
+    "highlights_section": "Highlights",
+    "notes_section": "Learning Notes",
+    "no_explanations": "No learning explanations yet",
+    "no_highlights": "No highlights yet",
+    "no_notes": "No notes yet",
+    "page": "Page {page}",
+    "whole_paper": "Whole paper",
+    "selected_text": "Selected text",
+    "explanation_answer": "Explanation",
+    "key_points": "Key points",
+    "terms": "Terms",
+    "mode_summary": "Page summary",
+    "mode_explain": "Selected-text explanation",
+    "mode_translate": "Page translation",
+    "note_source": "Source excerpt",
+    "review_section": "Review Details (Critical Reading)",
     "dimension": "Dimension",
     "rating": "Rating",
     "verdict": "Verdict",
@@ -463,12 +513,139 @@ def _load_experiment_results(paper_id: str, user_id: str, db: Session) -> list[E
     return results
 
 
+def _load_learning_materials(
+    paper_id: str,
+    user_id: str,
+    db: Session,
+) -> tuple[list[LearningExplanation], list[PaperHighlight], list[PaperNote]]:
+    explanations = (
+        db.query(LearningExplanation)
+        .filter(
+            LearningExplanation.paper_id == paper_id,
+            LearningExplanation.user_id == user_id,
+            LearningExplanation.status == "SUCCEEDED",
+        )
+        .order_by(LearningExplanation.created_at, LearningExplanation.id)
+        .all()
+    )
+    section_ids = {item.section_id for item in explanations if item.section_id is not None}
+    evidence_ids = {item.evidence_id for item in explanations if item.evidence_id is not None}
+    sections = {
+        item.id: item
+        for item in db.query(PaperSection).filter(PaperSection.id.in_(section_ids)).all()
+    } if section_ids else {}
+    evidences = {
+        item.id: item
+        for item in db.query(Evidence).filter(Evidence.id.in_(evidence_ids)).all()
+    } if evidence_ids else {}
+    for explanation in explanations:
+        page_number = explanation.page_number
+        if explanation.section_id is not None:
+            section = sections.get(explanation.section_id)
+            if section is None or section.paper_id != paper_id:
+                raise _source_invalid()
+            page_number = section.start_page
+        elif explanation.evidence_id is not None:
+            evidence = evidences.get(explanation.evidence_id)
+            if evidence is None or evidence.paper_id != paper_id:
+                raise _source_invalid()
+            page_number = evidence.page_number
+        if page_number is not None and page_number < 1:
+            raise _source_invalid()
+        explanation._export_page_number = page_number
+
+    highlights = (
+        db.query(PaperHighlight)
+        .filter(PaperHighlight.paper_id == paper_id, PaperHighlight.user_id == user_id)
+        .order_by(
+            PaperHighlight.page_number,
+            PaperHighlight.char_start,
+            PaperHighlight.created_at,
+            PaperHighlight.id,
+        )
+        .all()
+    )
+    highlight_map = {item.id: item for item in highlights}
+    notes = (
+        db.query(PaperNote)
+        .filter(PaperNote.paper_id == paper_id, PaperNote.user_id == user_id)
+        .order_by(PaperNote.created_at, PaperNote.id)
+        .all()
+    )
+    for note in notes:
+        page_number = note.page_number
+        highlight = None
+        if note.anchor_type == "HIGHLIGHT":
+            highlight = highlight_map.get(note.highlight_id)
+            if highlight is None:
+                raise _source_invalid()
+            page_number = highlight.page_number
+        elif note.anchor_type == "PAPER":
+            page_number = None
+        elif note.anchor_type != "PAGE":
+            raise _source_invalid()
+        if page_number is not None and page_number < 1:
+            raise _source_invalid()
+        note._export_page_number = page_number
+        note._export_highlight = highlight
+
+    explanations.sort(
+        key=lambda item: (
+            getattr(item, "_export_page_number", None) is None,
+            getattr(item, "_export_page_number", None) or 0,
+            item.created_at,
+            item.id,
+        )
+    )
+    notes.sort(
+        key=lambda item: (
+            getattr(item, "_export_page_number", None) is not None,
+            getattr(item, "_export_page_number", None) or 0,
+            item.created_at,
+            item.id,
+        )
+    )
+    return explanations, highlights, notes
+
+
+def _timestamp_token(value: object) -> str | None:
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
 def _build_source_snapshot(
-    review_task_id: str,
+    paper: Paper,
+    review_task_id: str | None,
     metric_task_id: str | None,
     experiment_results: list[ExperimentResult],
+    learning_explanations: list[LearningExplanation],
+    highlights: list[PaperHighlight],
+    notes: list[PaperNote],
 ) -> dict:
-    snapshot: dict = {"review_task_id": review_task_id}
+    snapshot: dict = {
+        "paper_id": str(paper.id),
+        "paper_updated_at": _timestamp_token(getattr(paper, "updated_at", None)),
+        "learning_explanations": [
+            {
+                "id": str(item.id),
+                "completed_at": _timestamp_token(item.completed_at),
+            }
+            for item in learning_explanations
+        ],
+        "highlights": [
+            {"id": str(item.id), "updated_at": _timestamp_token(item.updated_at)}
+            for item in highlights
+        ],
+        "notes": [
+            {"id": str(item.id), "updated_at": _timestamp_token(item.updated_at)}
+            for item in notes
+        ],
+    }
+    if review_task_id is not None:
+        snapshot["review_task_id"] = review_task_id
     if metric_task_id is not None:
         snapshot["metric_task_id"] = metric_task_id
     if experiment_results:
@@ -483,9 +660,52 @@ def _build_source_snapshot(
     return snapshot
 
 
+def _latest_source_time(
+    paper: Paper,
+    review_task: AnalysisTask | None,
+    metric_task: AnalysisTask | None,
+    experiment_results: list[ExperimentResult],
+    learning_explanations: list[LearningExplanation],
+    highlights: list[PaperHighlight],
+    notes: list[PaperNote],
+) -> datetime:
+    candidates: list[datetime] = []
+    for source, fields in [
+        (paper, ("updated_at", "created_at")),
+        (review_task, ("completed_at", "created_at")),
+        (metric_task, ("completed_at", "created_at")),
+    ]:
+        if source is None:
+            continue
+        for field in fields:
+            value = getattr(source, field, None)
+            if isinstance(value, datetime):
+                candidates.append(value)
+                break
+    for collection, fields in [
+        (experiment_results, ("created_at",)),
+        (learning_explanations, ("completed_at", "created_at")),
+        (highlights, ("updated_at", "created_at")),
+        (notes, ("updated_at", "created_at")),
+    ]:
+        for source in collection:
+            for field in fields:
+                value = getattr(source, field, None)
+                if isinstance(value, datetime):
+                    candidates.append(value)
+                    break
+    if not candidates:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
+    normalized = [
+        value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        for value in candidates
+    ]
+    return max(normalized)
+
+
 def generate_markdown(
     paper: Paper,
-    review_task: AnalysisTask,
+    review_task: AnalysisTask | None,
     review_results: list[ReviewResult],
     language: str,
     include_metrics: bool,
@@ -493,10 +713,17 @@ def generate_markdown(
     metric_task: AnalysisTask | None = None,
     metrics: list[MetricRecord] | None = None,
     experiment_results: list[ExperimentResult] | None = None,
+    learning_explanations: list[LearningExplanation] | None = None,
+    highlights: list[PaperHighlight] | None = None,
+    notes: list[PaperNote] | None = None,
+    source_time: datetime | None = None,
 ) -> bytes:
     labels = _ZH_LABELS if language == "zh" else _EN_LABELS
     dim_order = {d: i for i, d in enumerate(_REVIEW_DIMENSION_ORDER)}
     review_results = sorted(review_results, key=lambda r: (dim_order.get(r.dimension, 99), getattr(r, 'id', '')))
+    learning_explanations = learning_explanations or []
+    highlights = highlights or []
+    notes = notes or []
     lines: list[str] = []
 
     lines.append(f"# {_esc(labels['title'])}")
@@ -509,8 +736,98 @@ def generate_markdown(
         lines.append(f"- **{_esc(labels['pages'])}**: {paper.page_count}")
     lines.append("")
 
-    lines.append(f"## {_esc(labels['review_section'])}")
+    lines.append(f"## {_esc(labels['learning_overview'])}")
     lines.append("")
+    lines.append(f"- **{_esc(labels['explanation_count'])}**: {len(learning_explanations)}")
+    lines.append(f"- **{_esc(labels['highlight_count'])}**: {len(highlights)}")
+    lines.append(f"- **{_esc(labels['note_count'])}**: {len(notes)}")
+    review_status = labels["review_available"] if review_results else labels["review_unavailable"]
+    lines.append(f"- **{_esc(labels['review_status'])}**: {_esc(review_status)}")
+    lines.append("")
+
+    lines.append(f"## {_esc(labels['explanations_section'])}")
+    lines.append("")
+    if learning_explanations:
+        mode_labels = {
+            "SUMMARY": labels["mode_summary"],
+            "EXPLAIN": labels["mode_explain"],
+            "TRANSLATE": labels["mode_translate"],
+        }
+        for explanation in learning_explanations:
+            page_number = getattr(explanation, "_export_page_number", explanation.page_number)
+            page_label = (
+                labels["page"].format(page=page_number)
+                if page_number is not None
+                else labels["whole_paper"]
+            )
+            mode_label = mode_labels.get(explanation.mode, explanation.mode)
+            lines.append(f"### {_esc(page_label)} · {_esc(mode_label)}")
+            lines.append("")
+            if explanation.selection_text:
+                lines.append(f"**{_esc(labels['selected_text'])}**: {_esc(explanation.selection_text)}")
+                lines.append("")
+            lines.append(f"**{_esc(labels['explanation_answer'])}**")
+            lines.append("")
+            lines.append(_esc(explanation.answer))
+            lines.append("")
+            if explanation.key_points:
+                lines.append(f"**{_esc(labels['key_points'])}**")
+                lines.append("")
+                for point in explanation.key_points:
+                    lines.append(f"- {_esc(str(point))}")
+                lines.append("")
+            if explanation.terms:
+                lines.append(f"**{_esc(labels['terms'])}**")
+                lines.append("")
+                for term in explanation.terms:
+                    if isinstance(term, dict):
+                        name = str(term.get("term") or term.get("name") or "")
+                        meaning = str(term.get("definition") or term.get("meaning") or "")
+                        text = f"{name}: {meaning}" if meaning else name
+                    else:
+                        text = str(term)
+                    lines.append(f"- {_esc(text)}")
+                lines.append("")
+    else:
+        lines.append(_esc(labels["no_explanations"]))
+        lines.append("")
+
+    lines.append(f"## {_esc(labels['highlights_section'])}")
+    lines.append("")
+    if highlights:
+        for highlight in highlights:
+            page_label = labels["page"].format(page=highlight.page_number)
+            lines.append(f"- **{_esc(page_label)}**: {_esc(highlight.quoted_text)}")
+        lines.append("")
+    else:
+        lines.append(_esc(labels["no_highlights"]))
+        lines.append("")
+
+    lines.append(f"## {_esc(labels['notes_section'])}")
+    lines.append("")
+    if notes:
+        for note in notes:
+            page_number = getattr(note, "_export_page_number", note.page_number)
+            page_label = (
+                labels["page"].format(page=page_number)
+                if page_number is not None
+                else labels["whole_paper"]
+            )
+            lines.append(f"### {_esc(page_label)}")
+            lines.append("")
+            highlight = getattr(note, "_export_highlight", None)
+            if highlight is not None:
+                lines.append(f"**{_esc(labels['note_source'])}**: {_esc(highlight.quoted_text)}")
+                lines.append("")
+            lines.append(_esc(note.content))
+            lines.append("")
+    else:
+        lines.append(_esc(labels["no_notes"]))
+        lines.append("")
+
+    if review_results:
+        lines.append(f"## {_esc(labels['review_section'])}")
+        lines.append("")
 
     for rr in review_results:
         lines.append(f"### {_esc(rr.dimension)}")
@@ -656,7 +973,8 @@ def generate_markdown(
             lines.append(_esc(labels["no_experiment"]))
             lines.append("")
 
-    source_time = getattr(review_task, "completed_at", None)
+    if not isinstance(source_time, datetime):
+        source_time = getattr(review_task, "completed_at", None)
     if not isinstance(source_time, datetime):
         source_time = getattr(review_task, "created_at", None)
     if not isinstance(source_time, datetime):
@@ -769,12 +1087,15 @@ def create_export(
         raise AppError("VALIDATION_ERROR", "论文尚未解析完成", 409)
 
     review_task = _select_review_task(paper_id, user_id, db)
-    if review_task is None:
-        raise AppError("REVIEW_NOT_READY", "审阅结果尚未就绪", 409)
-
-    review_results = _load_review_results(review_task.id, paper_id, db)
+    review_results = _load_review_results(review_task.id, paper_id, db) if review_task else []
     if not review_results:
-        raise AppError("REVIEW_NOT_READY", "审阅结果尚未就绪", 409)
+        review_task = None
+
+    learning_explanations, highlights, notes = _load_learning_materials(
+        paper_id,
+        user_id,
+        db,
+    )
 
     metric_task = None
     metrics = None
@@ -788,9 +1109,22 @@ def create_export(
         experiment_results = _load_experiment_results(paper_id, user_id, db)
 
     source_snapshot = _build_source_snapshot(
-        review_task_id=review_task.id,
+        paper=paper,
+        review_task_id=review_task.id if review_task else None,
         metric_task_id=metric_task.id if metric_task else None,
         experiment_results=experiment_results or [],
+        learning_explanations=learning_explanations,
+        highlights=highlights,
+        notes=notes,
+    )
+    source_time = _latest_source_time(
+        paper,
+        review_task,
+        metric_task,
+        experiment_results or [],
+        learning_explanations,
+        highlights,
+        notes,
     )
     content = generate_markdown(
         paper=paper,
@@ -802,6 +1136,10 @@ def create_export(
         metric_task=metric_task,
         metrics=metrics,
         experiment_results=experiment_results,
+        learning_explanations=learning_explanations,
+        highlights=highlights,
+        notes=notes,
+        source_time=source_time,
     )
     if report_type == "PDF":
         from paperlens.services.report_converter import markdown_to_pdf
@@ -1029,9 +1367,9 @@ def run_export_task(report_id: str, content: bytes) -> None:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-        local_path = storage.read_path(storage_key)
-        with open(local_path, "rb") as stored_file:
-            stored_content = stored_file.read()
+        with storage.materialize(storage_key) as local_path:
+            with open(local_path, "rb") as stored_file:
+                stored_content = stored_file.read()
         if stored_content != content:
             raise ValueError
 

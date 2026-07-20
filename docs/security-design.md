@@ -253,7 +253,7 @@ MAGIC_NUMBERS = {
 
 ### 存储生命周期
 - 本地存储：删除论文时同步删除对应目录 `papers/{paper_uuid}/`
-- 云端部署时配置 OBS 桶生命周期规则（OBSStorage 未实现，后续版本）
+- 云端部署使用已实现的 OBSStorage，并在启用版本控制后配置经确认的生命周期规则
 - 导出报告目录：7 天后自动过期删除
 - 临时文件目录：1 天后自动过期删除
 
@@ -298,7 +298,7 @@ P3.5 已完成产品账号认证和 USER/ADMIN RBAC 基础；完整管理员业�
 ### RBAC 与管理员安全
 
 - 基础角色为 USER、ADMIN；前端菜单/路由守卫只用于体验，所有权限必须由后端逐接口校验。
-- 当前只提供数据库角色校验依赖和 `python -m paperlens.cli promote-admin --email <email> [--claim-legacy-data]`；无默认管理员、无命令行密码、无自动提升。
+- P8.1 已用 `python -m paperlens.cli admin-bootstrap --user-id <UUID4> --reason <text>` 替代早期 promote-admin；仅零 ACTIVE ADMIN 时可提升现有 ACTIVE USER，并同事务撤销 session、写入不可变审计。无默认管理员、无命令行密码、无 email 模糊匹配。
 - 管理员业务 API/页面、用户启停/角色管理、最后管理员保护和管理员操作审计尚未实现，统一留到 P7；ADMIN 当前也不会绕过普通资源所有权。
 - 华为云 IAM 负责云资源访问身份，不代替 PaperLens 产品用户与管理员账号。
 
@@ -380,3 +380,37 @@ P3.5 已完成产品账号认证和 USER/ADMIN RBAC 基础；完整管理员业�
 - Schema 拒绝 extra、空 PATCH、非法 null、控制字符和超限文本；公开错误固定，不记录笔记、卡片、引文、正文或 secret。
 - 论文库计数在单查询内完成；读取不创建 library entry。写事务失败统一 rollback，并发重复只形成一行一对象。
 - Vue 不使用 v-html/Web Storage；更新失败不做乐观覆盖，路由、列表、动作、页码和进度请求分别用代数令牌隔离。高亮只允许 PAGE 正文选区，并复核 Unicode/跨文本节点的完整切片。
+
+## 19. P8.1 管理员系统安全边界（COMPLETED）
+
+- 管理权限始终由数据库用户状态、当前 AuthSession 和 `require_admin` 服务端复核；前端路由守卫不构成授权依据。
+- 首次引导和用户权限写入共用 PostgreSQL 事务级 advisory lock，取得锁后重新读取操作者；并发互相降级最多一项成功，另一项固定 409，最终至少一个 ACTIVE ADMIN。
+- 旧 promote-admin 无审计入口已移除；角色/状态变化撤销目标旧 session，禁用同时失效未使用且未过期的 reset token。
+- 审计 before/after 仅允许 role/status，数据库 CHECK 保证 action 与精确状态形状一致，trigger 拒绝 UPDATE/DELETE；日志不记录 email、reason、令牌、正文、SQL 或异常详情。
+- 跨用户内容仅通过显式 `/admin` 元数据 API 只读访问；响应不含 storage_key、hash、source_snapshot、正文、模型输入输出或原始错误。
+
+## 20. P8.2 后台任务恢复安全边界（已完成）
+
+- PostgreSQL `pg_try_advisory_xact_lock` 确保同一时刻仅一个扫描事务执行恢复；锁繁忙立即跳过，提交后释放，任何外部处理不持锁。
+- 扫描只使用有限行锁和既有状态字段。完整持久化输入才允许重放；审阅参数、解析代次或导出 bytes 不足时固定 FAILED，不猜测输入、不删除用户学习数据。
+- 恢复写入的 error_message 使用各模块既有固定公开文案，不包含内部路径、SQL、Traceback 或服务端异常详情。
+- 认证失败（401）由现有中间件统一处理并引导登录，恢复逻辑不涉及认证流程。
+- 日志只记录 stage、实体 id/type、task type、action、计数和异常类型，不记录论文内容、用户数据、任务参数、路径、hash 或敏感字段。
+- TaskDetail 的 `experiment_file_id` 仅为 UUID 关联，不暴露 storage_key、文件哈希、模型内容或原始错误。
+
+## 21. P8.3 限流与可观测性安全边界（已完成）
+
+- 只接受规范小写 UUID4 request id；非法、非规范或超长值不会进入响应和日志。
+- 请求日志只记录 request_id、method、路由模板、status、duration_ms、rate_scope；未知路由固定为 `<unmatched>`，不记录 URL、查询、正文、IP、身份或 secret。
+- 限流 store 使用单调时钟、有限容量和过期/最旧淘汰，不持久化 IP。429 不返回 key、IP、计数或内部额度。
+- 默认不信任转发头。只有 TCP peer 命中 `PAPERLENS_TRUSTED_PROXY_CIDRS` 才严格解析代理链；任一非法地址使其回退到直接 peer。
+- live 不检查外部依赖；ready 只读检查数据库并把异常映射为固定 503，不返回 DSN、驱动或异常正文。
+- 应用内限流不是分布式安全边界；P8.4 已在部署基线中要求 ELB/WAF 补充入口总限流、TLS、安全组和访问控制。
+
+## 22. P8.4 华为云生产安全边界（已完成）
+
+- OBS 默认使用 ECS Agency 临时凭证，ENV AK/SK 仅作 Secret 文件兜底；对象固定私有并使用 SSE-OBS/KMS，所有 SDK 失败按白名单脱敏。
+- 生产启动拒绝本地存储、非华为/非 HTTPS 端点、弱 JWT、mock/缺 Key 模型、RDS 非 `verify-full + sslrootcert`、空或全网可信代理和公开 API 文档。
+- 数据库 DSN、JWT、MaaS/Embedding Key 及可选 OBS 凭据由 `*_FILE` 加载，migrate 与 serve 共用入口，不写入 Compose 明文环境。
+- ECS 只向 ELB 发布私网 8080；backend 8000 只在固定容器私网暴露。Nginx 与后端均非 root、read-only、cap_drop ALL、no-new-privileges 并设置资源上限。
+- RDS/OBS 恢复到新资源后只读核验再人工切换；RPO/RTO 只采用真实演练结果，不承诺未验证时长。

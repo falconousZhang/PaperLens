@@ -1,12 +1,12 @@
 # PaperLens 阶段汇报
 
-> 最后更新：2026-07-14
+> 最后更新：2026-07-16
 
 ---
 
 ## 一、项目概况
 
-PaperLens 是一个 AI 驱动的学术论文审阅助手，核心流程：
+PaperLens 是一个 AI 驱动的个人论文阅读学习助手，批判性审阅作为高级学习模式保留，核心流程：
 
 论文上传 → PDF 解析 → 章节和表格提取 → 文本分块 → 向量索引 → 原文证据检索 → 结构化论文审阅 → 实验指标提取 → checkpoint 统计口径判断 → CSV/Excel 实验数据分析 → 审稿报告导出
 
@@ -1448,3 +1448,175 @@ P8.1 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为�
 按最新文档规则，README、docs、ProjectDocs、SDD、Sprint、修复报告和提示词归档已统一使用码道独立开发、审查、修正与验收口径。17 个旧署名修复报告已同步重命名，正文引用保持一致；功能实现、测试数字、迁移、数据库和运行验收事实均未改变。
 
 长期规则已写入 `AGENTS.md`、需求决策、实施计划和 `ProjectDocs/sprint/文档署名统一.md`。后续新生成的提示词、进度、Sprint 与修复报告继续沿用该署名方式。
+
+---
+
+## P8.1 完整管理员系统与不可变审计及码道独立验收收口（2026-07-16）
+
+### 交付结果
+
+P8.1 已完成 017 管理员审计模型、首个管理员安全引导、8 条管理员 API 和 Vue 管理后台。管理员可查看平台聚合、用户详情和跨用户论文/任务/报告安全元数据，可在填写原因后变更其他用户角色/状态；所有实际变化按字段写入 append-only 审计，相同值不写审计。
+
+码道初版的 47 项定向测试可以通过，但仍存在不同目标 bootstrap 并发、认证后操作者权限竞态、旧 promote-admin 绕过审计、审计 JSONB 形状约束不足、列表 N+1/敏感实体加载、非法筛选未拒绝，以及管理页共享加载序号造成永久 loading 等缺口。码道按持续授权直接修正，没有增加码道返工轮次。
+
+### 码道独立修正
+
+- 首次引导与管理员变更共用 PostgreSQL 事务级 advisory lock；锁后按确定顺序读取 ACTIVE ADMIN、操作者与目标并重新校验权限。
+- 移除旧 promote-admin 无审计入口；admin-bootstrap 只接受 UUID4 和 reason，未知 CLI 异常使用固定公开错误。
+- 017/ORM 增加 action 与精确 role/status before/after 对应 CHECK；reason 去首尾空白并拒绝全部控制字符。
+- 用户计数改为相关子查询，论文与审计改为 JOIN，任务/报告只查询安全投影，消除逐行 N+1 和内部字段加载。
+- 8 条 API 统一 UUID4、枚举、分页、搜索和带时区时间白名单；FAILED 只映射固定安全文案。
+- 管理页改为单层请求代数，补用户详情、论文/任务/报告独立筛选和分页、审计筛选、reason 去空白校验与固定错误映射。
+- 新增不同目标引导并发、互相降级、严格审计状态、参数白名单、查询次数和管理页面回归测试。
+
+### 最终验证
+
+| 验证项 | 结果 |
+|---|---|
+| P8.1 后端定向 | ✅ 54 passed |
+| Docker 后端全量 | ✅ 1030 passed，0 failed，0 skipped |
+| 前端全量 | ✅ 17 files / 200 passed |
+| 本地与 Docker 构建 | ✅ 139 modules |
+| Alembic | ✅ 017 current/head；check 无新操作；空表往返、非空降级拒绝、trigger 防篡 |
+| 路由 / 表 | ✅ 67 条 API；28 张 ORM 应用表；29 张物理表 |
+| 测试库 | ✅ 全部应用表残留 0 |
+| 运行态 | ✅ backend/frontend/PostgreSQL 运行；PostgreSQL healthy；后端/前端 HTTP 200 |
+| 开发库 | ✅ 只读核对；admin_audit_logs 为 0，既有业务数据未被测试修改 |
+
+下一固定轮次为 P8.2：用户端/管理员端 E2E、任务恢复和全链路一致性。P8.3/P8.4 继续按性能可靠性、华为云部署与综合安全执行，不增加轮次。
+
+从 P8.2 起，码道实现轮次只编写少量核心测试，不运行 pytest、Vitest、构建、迁移往返、Docker 重建或 HTTP 烟测。每个新功能默认 1 个正常路径和 1 个关键失败路径，确有并发/恢复风险时至多再加 1 个样例；集中验收默认只运行变更模块定向测试、1 条核心烟测和必要构建，不再每轮运行完整全量。
+
+### P8.2 — 全链路恢复与一致性 ✅ 已完成并经码道独立收口
+
+| 交付物 | 状态 |
+|--------|------|
+| RecoveryService + FastAPI lifespan 集成 | ✅ |
+| 恢复配置（ENABLED/STALE_SECONDS/BATCH_SIZE） | ✅ |
+| PostgreSQL advisory lock 互斥 | ✅ |
+| Paper/AnalysisTask/LearningExplanation/QATurn/ExportReport 恢复逻辑 | ✅ |
+| 前端 usePolling 共享轮询 composable | ✅ |
+| 所有轮询页面 401 处理 + 安全错误消息 | ✅ |
+| ExperimentDataView 刷新恢复活跃任务 | ✅ |
+| 后端测试 3 个函数 | ✅ |
+| 前端测试 2 个函数 | ✅ |
+| 隔离浏览器手工烟测清单 1 条 | ✅ 已编写，待发布前执行 |
+| systemDesign/SDD/Sprint 文档更新 | ✅ |
+
+独立审查修正了三处 Vue 语法破坏、共享轮询未实际复用、阻塞恢复锁、扫描事务内执行外部工作、缺失输入猜测重放、不安全 E2E 脚本、TaskDetail 遗漏字段、实验刷新上下文和测试/文档口径。RecoveryService 现使用非阻塞事务锁、固定顺序有限扫描与提交后派发；仅指标、实验、学习解释、问答安全重放，论文解析、审阅和导出缺失持久输入时固定 FAILED。
+
+| 集中验收项 | 实际结果 |
+|---|---|
+| 后端恢复定向 | ✅ 3 passed，5 个第三方弃用警告 |
+| 前端共享轮询定向 | ✅ 2 passed |
+| backend/frontend 镜像构建 | ✅ 前端 140 modules transformed |
+| 隔离只读健康接口 | ✅ `GET /api/v1/health` → 200 |
+| 浏览器手工流程 | ⏸ 当前浏览器控制能力不可用，未执行且不记为通过 |
+| 开发库 | ✅ 未用于测试，未修改业务数据 |
+
+新 backend/frontend 镜像已构建。为避免默认开启的 startup recovery 扫描开发库，本轮没有替换正在运行的旧后端容器。详细问题、根因和修正记录见 `ProjectDocs/bugfix-report/P8.2-全链路恢复与轮询一致性收口.md`。
+
+P8.2 原始提示词继续保留在归档第 30 节。下一固定轮次为 P8.3 性能、可靠性、限流与可观测性收口；P8.4 仍为最后一轮华为云部署、备份恢复和综合安全验收，不增加轮次。
+
+P8.3 完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md` 并原文归档为第 31 节；正文逐字一致（5,325 字符）。NEXT 文件 SHA-256 为 `5457A54F3F83CE64D0697528104E69EAAC20CC5935360B0485131AD561DCB9AD`，ARCHIVE 文件 SHA-256 为 `E959742AAE407B2CBA856BA99D0C0D631AA967BEB6E3E52907D0158DB7591C95`。提示词要求码道最多只编写 3 个后端样例，不新增前端/E2E/压测，且不得运行任何测试、构建、迁移、Docker、HTTP 或浏览器命令。
+
+### P8.3 性能、可靠性、限流与可观测性收口 ✅ 已完成并经码道独立收口
+
+**实现者**: CodeArts（码道）
+**日期**: 2026-07-16
+
+P8.3 在 P8.2 已验收基础上完成以下实现：
+
+**新增模块**：
+- `core/request_tracing.py` — 请求追踪中间件（X-Request-ID 生成/复用、contextvars 传播、结构化请求日志）
+- `core/rate_limiter.py` — 固定窗口限流器（classify_scope、resolve_client_ip、parse_trusted_cidrs）
+- `core/rate_limit_middleware.py` — 限流中间件（429 JSON envelope + Retry-After + X-Request-ID）
+
+**修改模块**：
+- `api/health.py` — 新增 /health/live 和 /health/ready
+- `core/database.py` — pool_pre_ping + 有界池参数 + _build_engine_kwargs
+- `services/recovery_service.py` — ThreadPoolExecutor 替代 daemon Thread + shutdown_executor
+- `main.py` — 中间件注册 + executor shutdown
+- `core/errors.py` — X-Request-ID + 结构化日志
+- `api/tasks.py` — N+1 修复（selectinload）+ 无界查询 limit(200)
+- `services/qa_service.py` — N+1 修复（批量聚合查询）
+- `api/papers.py` — 审查后保持完整 Evidence 返回契约，不做静默固定截断
+
+**新增测试**：
+- `tests/test_api/test_p83_observability.py` — 3 个后端测试函数
+
+**新增配置项**：rate_limit_*（7 项）、db_pool_*（4 项）、recovery_max_workers（1 项）
+
+**新增 API**：GET /api/v1/health/live、GET /api/v1/health/ready（路由基线 67→69）
+
+**N+1/无界查询修复**：
+- list_reviews：3 查询替代 1+N+M（selectinload findings + evidences）
+- list_qa_conversations：2 批量查询替代 2N 逐会话查询
+- list_tasks：添加 .limit(200)
+- list_evidences：撤销会静默丢失论文证据的 .limit(500)
+
+独立审查发现并修正：request_tracing 导入即崩溃；非严格 UUID4 可穿透；未知原始路径进入日志；固定窗口约两倍才过期；实验上传未归 upload；health 豁免测试反而期待 429；可信代理链解析与环境变量口径不一致；异常 traceback 可能带出正文；async ready 阻塞事件循环；executor 注入未展开参数且 shutdown 不等待；Review selectinload 条件冲突；Evidence 固定 500 会静默丢失证据。
+
+| 集中验收项 | 实际结果 |
+|---|---|
+| P8.3 后端定向 | ✅ 3 passed，5 个第三方弃用警告 |
+| 审阅/问答查询回归 | ✅ 2 passed，5 个第三方弃用警告 |
+| 后端镜像构建 | ✅ 成功 |
+| 隔离 HTTP 烟测 | ✅ live=200、ready=200、missing=404 |
+| 全量/前端/性能压测 | 按轻量策略未执行 |
+| 开发库 | ✅ 未用于测试，未修改业务数据 |
+
+新后端镜像已构建。为避免默认 startup recovery 扫描开发库，未替换正在运行的旧后端容器。下一固定轮次仅剩 P8.4 华为云部署、备份恢复和综合安全验收，不增加轮次。
+
+P8.4 最终轮完整提示词已写入 `docs/CODEARTS_NEXT_PROMPT.md`，并原文归档为 `docs/CODEARTS_PROMPT_ARCHIVE.md` 第 32 节；两处正文逐字一致（6,806 字符）。NEXT 文件 SHA-256 为 `4C2E0D611D2405D88612746697A8FB03E4EFCB72802A54F7C17820772C5DADF4`，ARCHIVE 文件 SHA-256 为 `ABCBB5ADD9FAA87FB3F34E5C631527C50950F7752BA42220BC157D921303D905`。提示词要求码道实现 OBS 适配和生产部署/备份/安全资产，最多只编写 3 个轻量后端样例，且不得运行测试、构建、迁移、Docker、HTTP、浏览器、外网或真实云服务命令。P8.4 后不再新增开发轮次。
+
+### P8.4 码道初版交付（后续已完成独立收口）
+
+**实现者**: CodeArts（码道）
+**日期**: 2026-07-16
+
+P8.4 在 P2～P8.3 已实现并收口基础上完成以下实现：
+
+**OBSStorage 实现**：
+- `utils/storage.py` 重写：OBSStorage（esdk-obs-python SDK，延迟导入，ECS Agency/ENV fallback，SSE-OBS/SSE-KMS，严格 key 规范化）
+- 新增 `materialize(storage_key)` 上下文管理器：LocalStorage 直接 yield；OBSStorage 下载到唯一临时文件，finally 自动清理
+- 工厂单例 + close 生命周期，由 lifespan 关闭
+
+**生产配置校验**：
+- `PAPERLENS_ENV=local/test/production` + production model_validator
+- 拒绝 debug/local storage/HTTP OBS/占位 JWT/非 Secure cookie/缺失 OBS 必需配置/KMS 无 key id
+- `docs_enabled` 属性控制生产环境 OpenAPI 文档关闭
+
+**调用者迁移**：
+- `api/exports.py`、`services/export_service.py`、`services/experiment_analysis_service.py` 使用 materialize 替代 read_path
+
+**生产部署资产**（`deploy/huawei/`）：
+- `README.md` — 生产部署指南（配置顺序、部署步骤、回滚、安全验收清单）
+- `.env.production.example` — 生产环境变量模板
+- `docker-compose.prod.yml` — 生产 Compose（独立 migrate、非 root、read-only、资源限制、healthcheck）
+- `nginx.prod.conf` — 生产 Nginx（安全响应头、不盲目信任转发头）
+- `backup-restore.md` — 备份恢复手册（RDS/OBS/回滚/月度演练）
+- `backend/Dockerfile.prod` + `entrypoint.prod.sh` — 生产后端镜像（非 root、secret 文件注入）
+- `frontend/Dockerfile.prod` — 生产前端镜像
+
+**新增测试**：
+- `tests/test_api/test_p84_production.py` — 3 个后端测试函数
+
+以上为码道初版交付状态；其后的独立审查、直接修正与轻量验收见下节。
+
+## P8.4 华为云部署、OBS 与综合安全独立收口（2026-07-16）
+
+码道初版存在会阻断真实部署的 SDK、Secret、镜像和网络问题：ECS Agency/超时/header 不符合当前 OBS SDK，OBS 下载路径离开上下文即失效，delete 未检查状态；生产设置允许弱 JWT、非验证型 RDS TLS、mock 模型和宽泛端点；迁移绕过 Secret 入口，DSN 暴露在环境；前端构建上下文错误，非 root Nginx 无法在只读根文件系统创建 pid/temp。码道按用户持续授权直接修正，没有增加返工或开发轮次。
+
+最终实现使用 `esdk-obs-python 3.26.2`、ECS Agency `security_provider_policy=ECS`、私有 SSE header、统一 2xx/脱敏错误和安全 `materialize`；生产强制华为 HTTPS、强 JWT、真实 MaaS/Embedding、RDS `verify-full + sslrootcert` 和受限代理 CIDR。migrate/serve 共用 Secret 文件入口，数据库 DSN 不进入 Compose 环境。后端使用 Python 3.13 独立生产依赖，前端 Nginx 使用非特权 8080 与 `/tmp` pid/temp；Compose 只发布前端并使用固定私网、ready/healthz、只读/最小权限和资源限制。
+
+| 轻量验收项 | 最终结果 |
+|---|---|
+| P8.4 后端定向 | ✅ 3 passed，5 个第三方 SWIG 弃用警告 |
+| 后端生产镜像 | ✅ 构建成功；paperlens 非 root/read-only；live 200；docs 404；无 pytest/tests |
+| 前端生产镜像 | ✅ 140 modules；nginx 非 root/read-only/cap_drop ALL；healthz 与首页成功 |
+| Compose 静态校验 | ✅ 占位 IP 安全失败；显式假值 config --quiet 通过 |
+| 全量/迁移/真实云 | 按轻量策略未执行，留待实际部署窗口 |
+| 开发库/现有容器 | ✅ 未用于测试，未替换或修改 |
+
+测试仅使用假 Secret 和无效 RDS 域名，未读取 `.env`、未访问真实 RDS/OBS/MaaS、未产生云费用；一次性容器与假 Secret 已清理。P8.4 至此完成并经码道独立收口，既定开发轮次全部结束。下一步不是新的码道提示词，而是用户按 `deploy/huawei/README.md` 准备云资源和 Secret，执行真实部署与小额业务验收。

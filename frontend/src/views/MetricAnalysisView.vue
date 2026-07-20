@@ -8,14 +8,14 @@
         <span :class="'status-' + paper.status.toLowerCase()">{{ paper.status }}</span>
       </div>
       <div class="nav-links">
-        <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
-        <router-link to="/papers">返回论文列表</router-link>
+        <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link button-link--primary">返回阅读</router-link>
+        <router-link to="/papers" class="button-link">返回论文列表</router-link>
       </div>
     </div>
 
     <div v-if="paper.status !== 'PARSED'" class="not-ready-notice">
       <p>{{ notReadyMessage }}</p>
-      <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
+      <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link">返回阅读</router-link>
     </div>
 
     <template v-else>
@@ -99,8 +99,8 @@
                 <td>
                   <router-link
                     v-if="sourceKind(m) === 'evidence'"
-                    :to="{ name: 'paper-detail', params: { id: paper.id }, query: { evidence: m.evidence_id! } }"
-                    class="evidence-link"
+                    :to="{ name: 'paper-read', params: { id: paper.id }, query: { evidence: m.evidence_id! } }"
+                    class="button-link evidence-link"
                   >查看证据</router-link>
                   <span v-else-if="sourceKind(m) === 'table'" class="table-source">
                     表格 {{ m.table_id }} / 0-based 行 {{ m.row_index ?? '-' }}
@@ -164,9 +164,10 @@ import {
   type MetricRecord,
   type CheckpointType,
 } from '../api'
+import { SAFE_POLLING_ERROR, usePolling } from '../composables/usePolling'
 
 const route = useRoute()
-
+const { startPolling: startSharedPolling, stopPolling } = usePolling()
 const PERCENT_METRICS = new Set([
   'accuracy', 'precision', 'recall', 'f1', 'auc', 'map', 'bleu', 'rouge', 'iou', 'miou',
 ])
@@ -244,7 +245,6 @@ const filterMetricName = ref('')
 const filterDatasetName = ref('')
 const filterCheckpointType = ref<CheckpointType | ''>('')
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let requestGeneration = 0
 let metricRequestId = 0
 
@@ -286,13 +286,6 @@ const hasActiveFilters = computed(() =>
   filterMetricName.value !== '' || filterDatasetName.value !== '' || filterCheckpointType.value !== '',
 )
 
-function stopPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 function updateTask(task: TaskDetail) {
   const index = tasks.value.findIndex(t => t.id === task.id)
   if (index === -1) {
@@ -303,15 +296,11 @@ function updateTask(task: TaskDetail) {
 }
 
 function startPolling(taskId: string) {
-  stopPolling()
   const gen = requestGeneration
   activeTaskId.value = taskId
-  let requestInFlight = false
-  pollTimer = setInterval(async () => {
-    if (requestInFlight) return
-    requestInFlight = true
-    try {
-      const t = await getTask(taskId)
+  startSharedPolling(
+    () => getTask(taskId),
+    async t => {
       if (gen !== requestGeneration) return
       if (
         t.id !== taskId
@@ -327,7 +316,6 @@ function startPolling(taskId: string) {
       activeTask.value = t
       updateTask(t)
       if (t.status === 'PENDING' || t.status === 'RUNNING') return
-      stopPolling()
       activeTask.value = null
       activeTaskId.value = null
       if (t.status === 'SUCCEEDED') {
@@ -346,14 +334,13 @@ function startPolling(taskId: string) {
       } else if (t.status !== 'FAILED' && t.status !== 'CANCELLED') {
         loadError.value = '任务返回未知状态，请重新加载。'
       }
-    } catch (e: any) {
+    },
+    t => t.status !== 'PENDING' && t.status !== 'RUNNING',
+    () => {
       if (gen !== requestGeneration) return
-      stopPolling()
-      pollError.value = e?.response?.data?.error?.message || e?.message || '轮询失败'
-    } finally {
-      requestInFlight = false
-    }
-  }, 3000)
+      pollError.value = SAFE_POLLING_ERROR
+    },
+  )
 }
 
 function retryPoll() {

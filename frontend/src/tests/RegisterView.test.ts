@@ -80,7 +80,7 @@ describe('RegisterView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.find('.error').text()).toContain('15')
+    expect(wrapper.find('.error').text()).toContain('8')
   })
 
   it('calls register on valid input', async () => {

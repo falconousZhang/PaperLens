@@ -12,8 +12,8 @@
         <input v-model="displayName" type="text" required maxlength="100" />
       </label>
       <label>
-        密码（至少 15 个字符）
-        <input v-model="password" type="password" required autocomplete="new-password" />
+        密码（至少 8 个字符）
+        <input v-model="password" type="password" required minlength="8" maxlength="128" autocomplete="new-password" />
       </label>
       <label>
         确认密码
@@ -21,7 +21,7 @@
       </label>
       <button type="submit" :disabled="loading">{{ loading ? '注册中...' : '注册' }}</button>
       <div class="auth-links">
-        <router-link to="/login">已有账号？登录</router-link>
+        <router-link to="/login" class="button-link">已有账号？登录</router-link>
       </div>
     </form>
   </div>
@@ -59,8 +59,8 @@ async function handleRegister() {
     return
   }
   const passwordLength = passwordCodePointLength(password.value)
-  if (passwordLength < 15) {
-    error.value = '密码至少需要 15 个字符'
+  if (passwordLength < 8) {
+    error.value = '密码至少需要 8 个字符'
     return
   }
   if (passwordLength > 128) {

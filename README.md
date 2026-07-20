@@ -23,12 +23,14 @@ AI 驱动的个人论文阅读学习助手。系统帮助用户按章节和页�
 - 可追溯学习解释：严格术语卡、要点、Evidence Citation、历史分页、并发幂等与来源变更保护
 - 当前论文多轮问答：空会话、会话/轮次双分页、服务端 Evidence Top-K、历史预算、来源复核、证据不足降级和 Citation 原文定位
 - 个人论文库与学习沉淀：搜索/状态/收藏/集合/进度，高亮、书签、笔记、知识卡及安全原文定位
+- 完整管理员系统：总览、用户角色/状态治理、跨用户内容元数据只读、首次管理员安全引导和 append-only 审计
+- 后台任务安全恢复与统一轮询：启动时保守收口陈旧任务，刷新后恢复论文解析、审阅、指标、实验、导出、学习解释和问答状态
+- 运行可靠性基础：严格请求 ID、安全结构化日志、单进程限流、live/ready、数据库连接池和有界恢复 worker
+- 华为云生产部署基线：OBS ECS Agency/ENV、私有 SSE、生产 fail-closed 配置、非 root 双镜像、ECS/RDS/ELB/WAF Compose 与备份恢复手册
 - PostgreSQL 测试库隔离、Docker Compose 运行环境
 
-## 规划中（尚未实现）
+## 后续可选增强
 
-- P8.1 完整管理员系统（后端、管理页面、用户/角色/状态与不可变审计）
-- P8.2～P8.4 端到端、可靠性/性能、华为云部署与综合安全验收
 - FAISS/pgvector 持久化向量索引、大规模检索与缓存
 
 ## 技术栈
@@ -42,7 +44,7 @@ AI 驱动的个人论文阅读学习助手。系统帮助用户按章节和页�
 
 ### 前置条件
 
-- Python 3.11+
+- Python 3.12+
 - Node.js 20+
 - Docker & Docker Compose（可选，用于 PostgreSQL）
 
@@ -143,6 +145,10 @@ npm run build
 
 P5.3b 最终验收：P5.3b 前端定向 48，前端全量 12 files / 154 passed，生产构建 129 modules；Docker 后端全量 673 passed、0 skipped。Alembic 仍为 009 head、30 条 API method+path、17 张业务表。本轮没有真实 MaaS 调用。
 
+## 华为云生产部署
+
+P8.4 部署资产已完成本地轻量验收。准备好 ECS、RDS、OBS、ELB/WAF、SWR 和 DEW Secret 后，按 [华为云生产部署指南](deploy/huawei/README.md) 构建不可变镜像、执行迁移、启动服务并完成真实 MaaS/OBS 小额验收。仓库不包含真实云凭据，也不会自动创建或修改云资源。
+
 ## 项目结构
 
 ```
@@ -176,7 +182,7 @@ PaperLens/
 - 任务进度通知使用 HTTP 轮询，暂不实现 WebSocket
 - 后台任务使用 FastAPI BackgroundTasks（仅 MVP，非生产级），暂不引入 Celery + Redis
 - LLM 默认使用 MockLLMClient，无需云端密钥即可运行；HuaweiMaaSLLMClient 已完成最小真实连通性烟测，但模型质量、长文本效果和生产费用未在自动测试中验证
-- 存储使用 LocalStorage（OBSStorage 为后续云端部署方案，未实现）
+- 本地默认使用 LocalStorage；生产可切换已实现的 OBSStorage（ECS Agency 优先、ENV 兜底、私有 SSE）
 - 当前语义检索是任务内对同论文 Evidence 做即时 Embedding 和精确余弦 Top-K，不是 FAISS/pgvector 持久化索引；默认使用离线 MockEmbeddingClient，可配置华为云 MaaS Embedding 适配器
 - 当前 Evidence 高亮基于 normalized 页面文本字符区间，不是 PDF.js/bbox 覆盖层
 - 所有数值统计由确定性 Python 代码完成，大模型不直接计算

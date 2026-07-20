@@ -5,6 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from paperlens.core.request_tracing import get_request_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,10 +43,14 @@ def _error_response(
     details=None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    extra_headers = dict(headers) if headers else {}
+    rid = get_request_id()
+    if rid:
+        extra_headers["X-Request-ID"] = rid
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "details": details}},
-        headers=headers,
+        headers=extra_headers if extra_headers else None,
     )
 
 
@@ -72,5 +78,5 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 
 
 async def generic_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("未处理异常")
+    logger.error("stage=unhandled_error error_type=%s", type(exc).__name__)
     return _error_response("INTERNAL_ERROR", "服务器内部错误", 500, None)

@@ -5,8 +5,8 @@
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="success" class="success">{{ success }}</div>
       <label>
-        新密码（至少 15 个字符）
-        <input v-model="newPassword" type="password" required autocomplete="new-password" />
+        新密码（至少 8 个字符）
+        <input v-model="newPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" />
       </label>
       <label>
         确认新密码
@@ -14,7 +14,7 @@
       </label>
       <button type="submit" :disabled="loading">{{ loading ? '重置中...' : '重置密码' }}</button>
       <div class="auth-links">
-        <router-link to="/login">返回登录</router-link>
+        <router-link to="/login" class="button-link">返回登录</router-link>
       </div>
     </form>
   </div>
@@ -44,8 +44,8 @@ async function handleSubmit() {
     return
   }
   const passwordLength = passwordCodePointLength(newPassword.value)
-  if (passwordLength < 15) {
-    error.value = '密码至少需要 15 个字符'
+  if (passwordLength < 8) {
+    error.value = '密码至少需要 8 个字符'
     return
   }
   if (passwordLength > 128) {

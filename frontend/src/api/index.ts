@@ -148,6 +148,12 @@ export interface SectionItem {
   text_content: string | null
 }
 
+export interface PaperOutlineItem {
+  title: string
+  level: number
+  page_number: number
+}
+
 export interface EvidenceItem {
   id: string
   quoted_text: string
@@ -170,6 +176,23 @@ export interface PageDetail {
   normalized_text_content: string | null
   width: number | null
   height: number | null
+}
+
+export interface PageTextWord {
+  text: string
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+  char_start: number
+  char_end: number
+}
+
+export interface PageTextLayerResponse {
+  page_number: number
+  width: number
+  height: number
+  words: PageTextWord[]
 }
 
 export async function checkHealth(): Promise<HealthResponse> {
@@ -199,6 +222,30 @@ export async function getPaper(paperId: string): Promise<PaperDetail> {
   return data
 }
 
+export async function deletePaper(paperId: string): Promise<void> {
+  await api.delete(`/papers/${paperId}`)
+}
+
+export async function getPaperFile(paperId: string): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/papers/${paperId}/file`, { responseType: 'blob' })
+  return data
+}
+
+export async function getPaperPageImage(paperId: string, pageNumber: number): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/papers/${paperId}/pages/${pageNumber}/image`, { responseType: 'blob' })
+  return data
+}
+
+export async function getPaperPageTextLayer(
+  paperId: string,
+  pageNumber: number,
+): Promise<PageTextLayerResponse> {
+  const { data } = await api.get<PageTextLayerResponse>(
+    `/papers/${paperId}/pages/${pageNumber}/text-layer`,
+  )
+  return data
+}
+
 export async function getPage(paperId: string, pageNumber: number): Promise<PageDetail> {
   const { data } = await api.get<PageDetail>(`/papers/${paperId}/pages/${pageNumber}`)
   return data
@@ -207,6 +254,11 @@ export async function getPage(paperId: string, pageNumber: number): Promise<Page
 export async function listSections(paperId: string): Promise<SectionItem[]> {
   const { data } = await api.get<{ sections: SectionItem[] }>(`/papers/${paperId}/sections`)
   return data.sections
+}
+
+export async function getPaperOutline(paperId: string): Promise<PaperOutlineItem[]> {
+  const { data } = await api.get<{ items: PaperOutlineItem[] }>(`/papers/${paperId}/outline`)
+  return data.items
 }
 
 export async function listEvidences(paperId: string): Promise<EvidenceItem[]> {
@@ -249,6 +301,7 @@ export interface TaskDetail {
   task_type: TaskType
   status: TaskStatus
   progress: number
+  experiment_file_id?: string | null
   error_message: string | null
   started_at: string | null
   completed_at: string | null
@@ -772,6 +825,9 @@ export interface CreateLearningExplanationRequest {
   section_id?: string | null
   page_number?: number | null
   evidence_id?: string | null
+  selection_text?: string | null
+  selection_start?: number | null
+  selection_end?: number | null
 }
 
 export interface LearningCitationItem {
@@ -798,6 +854,9 @@ export interface LearningExplanationResponse {
   section_id: string | null
   page_number: number | null
   evidence_id: string | null
+  selection_text: string | null
+  selection_start: number | null
+  selection_end: number | null
   status: LearningStatus
   duplicate: boolean
   answer: string | null
@@ -818,6 +877,8 @@ export interface LearningExplanationListItem {
   section_id: string | null
   page_number: number | null
   evidence_id: string | null
+  selection_start: number | null
+  selection_end: number | null
   status: LearningStatus
   error_message: string | null
   created_at: string
@@ -856,12 +917,17 @@ export async function listLearningExplanations(
   paperId: string,
   page = 1,
   pageSize = 20,
+  pageNumber?: number,
 ): Promise<LearningExplanationListResponse> {
   const { data } = await api.get<LearningExplanationListResponse>(
     `/papers/${paperId}/learning-explanations`,
-    { params: { page, page_size: pageSize } },
+    { params: { page, page_size: pageSize, page_number: pageNumber } },
   )
   return data
+}
+
+export async function deleteLearningExplanation(explanationId: string): Promise<void> {
+  await api.delete(`/learning-explanations/${explanationId}`)
 }
 
 export type QATurnStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
@@ -926,6 +992,7 @@ export interface CreateQATurnRequest {
   question: string
   output_language: 'zh' | 'en'
   client_request_id: string
+  current_page?: number | null
 }
 
 export async function createQAConversation(
@@ -961,6 +1028,10 @@ export async function getQAConversation(
     { params: { page, page_size: pageSize } },
   )
   return data
+}
+
+export async function deleteQAConversation(conversationId: string): Promise<void> {
+  await api.delete(`/qa-conversations/${conversationId}`)
 }
 
 export async function createQATurn(
@@ -1357,8 +1428,11 @@ export interface AdminTaskItem {
   user_id: string
   task_type: string
   status: string
+  progress: number
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
   created_at: string
-  updated_at: string | null
 }
 
 export interface AdminTaskListResponse {
@@ -1374,6 +1448,8 @@ export interface AdminExportItem {
   user_id: string
   report_type: string
   status: string
+  file_size: number | null
+  error_message: string | null
   created_at: string
   completed_at: string | null
 }

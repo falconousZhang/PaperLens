@@ -8,14 +8,14 @@
         <span :class="'status-' + paper.status.toLowerCase()">{{ paper.status }}</span>
       </div>
       <div class="nav-links">
-        <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
-        <router-link to="/papers">返回论文列表</router-link>
+        <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link button-link--primary">返回阅读</router-link>
+        <router-link to="/papers" class="button-link">返回论文列表</router-link>
       </div>
     </div>
 
     <div v-if="paper.status !== 'PARSED'" class="not-ready-notice">
       <p>{{ notReadyMessage }}</p>
-      <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
+      <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link">返回阅读</router-link>
     </div>
 
     <template v-else>
@@ -103,12 +103,6 @@
             <p class="finding-content">{{ finding.content }}</p>
             <div class="finding-footer">
               <span v-if="finding.confidence != null" class="finding-confidence">置信度: {{ formatConfidence(finding.confidence) }}</span>
-              <span v-for="eid in finding.evidence_ids" :key="eid" class="evidence-link-wrapper">
-                <router-link
-                  :to="{ name: 'paper-detail', params: { id: paper.id }, query: { evidence: eid } }"
-                  class="evidence-link"
-                >查看证据</router-link>
-              </span>
             </div>
           </div>
         </div>
@@ -176,10 +170,10 @@ import {
   type FindingType,
   type OverallVerdict,
 } from '../api'
+import { SAFE_POLLING_ERROR, usePolling } from '../composables/usePolling'
 
 const route = useRoute()
-
-
+const { startPolling: startSharedPolling, stopPolling } = usePolling()
 const paper = ref<PaperDetail | null>(null)
 const tasks = ref<TaskDetail[]>([])
 const reviews = ref<ReviewResult[]>([])
@@ -196,7 +190,6 @@ const findingFilter = ref<'all' | FindingType>('all')
 const activeTaskId = ref<string | null>(null)
 const activeTask = ref<TaskDetail | null>(null)
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let requestGeneration = 0
 
 const allDimensions: ReviewDimension[] = [
@@ -341,13 +334,6 @@ function filteredFindings(findings: ReviewResult['findings']) {
   return findings.filter(f => f.finding_type === findingFilter.value)
 }
 
-function stopPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 function updateTask(task: TaskDetail) {
   const index = tasks.value.findIndex(t => t.id === task.id)
   if (index === -1) {
@@ -358,20 +344,15 @@ function updateTask(task: TaskDetail) {
 }
 
 function startPolling(taskId: string) {
-  stopPolling()
   const gen = requestGeneration
   activeTaskId.value = taskId
-  let requestInFlight = false
-  pollTimer = setInterval(async () => {
-    if (requestInFlight) return
-    requestInFlight = true
-    try {
-      const t = await getTask(taskId)
+  startSharedPolling(
+    () => getTask(taskId),
+    async t => {
       if (gen !== requestGeneration) return
       activeTask.value = t
       updateTask(t)
       if (t.status === 'PENDING' || t.status === 'RUNNING') return
-      stopPolling()
       activeTask.value = null
       activeTaskId.value = null
       if (t.status === 'SUCCEEDED') {
@@ -384,14 +365,13 @@ function startPolling(taskId: string) {
           )
         }
       }
-    } catch (e: any) {
+    },
+    t => t.status !== 'PENDING' && t.status !== 'RUNNING',
+    () => {
       if (gen !== requestGeneration) return
-      stopPolling()
-      pollError.value = e?.response?.data?.error?.message || e?.message || '轮询失败'
-    } finally {
-      requestInFlight = false
-    }
-  }, 3000)
+      pollError.value = SAFE_POLLING_ERROR
+    },
+  )
 }
 
 function retryPoll() {
@@ -532,6 +512,7 @@ h2 { color: #1a1a2e; margin: 0 0 0.5rem; }
 .status-uploading { color: #888; font-weight: 600; }
 .nav-links { display: flex; gap: 1rem; margin-top: 0.5rem; }
 .nav-links a { color: #1a1a2e; font-size: 0.9rem; }
+.nav-links .button-link--primary { color: #fff; }
 .not-ready-notice, .inconsistency-notice { padding: 1rem; background: #fff3e0; border-radius: 8px; color: #e65100; }
 .not-ready-notice a { display: inline-block; margin-top: 0.5rem; color: #1a1a2e; }
 .error-msg { color: #c62828; padding: 1rem; }
@@ -575,8 +556,6 @@ h2 { color: #1a1a2e; margin: 0 0 0.5rem; }
 .finding-content { font-size: 0.9rem; color: #333; margin: 0.25rem 0; white-space: pre-wrap; word-break: break-word; }
 .finding-footer { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.25rem; }
 .finding-confidence { font-size: 0.8rem; color: #888; }
-.evidence-link-wrapper { display: inline; }
-.evidence-link { font-size: 0.8rem; color: #1565c0; text-decoration: underline; cursor: pointer; }
 .empty-state { padding: 2rem; text-align: center; color: #888; }
 .primary-btn { padding: 0.6rem 1.5rem; background: #1a1a2e; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
 .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }

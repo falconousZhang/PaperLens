@@ -66,29 +66,37 @@ class HuaweiMaaSLLMClient(LLMClient):
         self._api_key = self._coerce_api_key(api_key) if api_key is not None else self._resolve_api_key()
         self._timeout = settings.llm_timeout_seconds if timeout_seconds is None else timeout_seconds
         self._max_completion_tokens = settings.llm_max_completion_tokens if max_completion_tokens is None else max_completion_tokens
+        self._validate_timeout_seconds(self._timeout)
+        self._validate_max_completion_tokens(self._max_completion_tokens)
+        if transport is not None and not isinstance(transport, httpx.BaseTransport):
+            raise LLMError("transport must implement httpx.BaseTransport")
+        self._transport = transport
+
+    @staticmethod
+    def _validate_timeout_seconds(value: float) -> None:
         if (
-            isinstance(self._timeout, bool)
-            or not isinstance(self._timeout, (int, float))
-            or not math.isfinite(self._timeout)
-            or self._timeout < 1
-            or self._timeout > _MAX_TIMEOUT_SECONDS
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 1
+            or value > _MAX_TIMEOUT_SECONDS
         ):
             raise LLMError(
                 f"timeout_seconds must be a positive finite number no greater than {_MAX_TIMEOUT_SECONDS}"
             )
+
+    @staticmethod
+    def _validate_max_completion_tokens(value: int) -> None:
         if (
-            isinstance(self._max_completion_tokens, bool)
-            or not isinstance(self._max_completion_tokens, int)
-            or self._max_completion_tokens < 1
-            or self._max_completion_tokens > _MAX_COMPLETION_TOKENS
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 1
+            or value > _MAX_COMPLETION_TOKENS
         ):
             raise LLMError(
                 "max_completion_tokens must be a positive integer "
                 f"no greater than {_MAX_COMPLETION_TOKENS}"
             )
-        if transport is not None and not isinstance(transport, httpx.BaseTransport):
-            raise LLMError("transport must implement httpx.BaseTransport")
-        self._transport = transport
 
     @staticmethod
     def _resolve_api_key() -> str:
@@ -114,6 +122,9 @@ class HuaweiMaaSLLMClient(LLMClient):
 
     def chat(self, messages: list[dict], **kwargs) -> dict:
         self._validate_messages(messages)
+
+        request_timeout = kwargs.get("timeout_seconds", self._timeout)
+        self._validate_timeout_seconds(request_timeout)
 
         thinking_type = kwargs.get("thinking_type")
         if thinking_type is not None and (
@@ -148,6 +159,7 @@ class HuaweiMaaSLLMClient(LLMClient):
                 response = client.post(
                     "/chat/completions",
                     json=request_body,
+                    timeout=request_timeout,
                     headers={
                         "Authorization": f"Bearer {self._api_key}",
                         "Content-Type": "application/json",

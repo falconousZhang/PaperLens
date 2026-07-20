@@ -1,85 +1,75 @@
-# 码道下一阶段提示词：P8.1 完整管理员系统与不可变审计
+# 码道下一阶段提示词：P8.4 华为云部署、备份恢复与综合安全验收
 
 ## 任务目标
 
-本轮固定为 P8.1，且必须在一个码道轮次内完成：在 P3.5 已验收的注册、登录、AuthSession、USER/ADMIN RBAC，以及 P2～P7.3 全部用户能力基础上，实现可实际使用的管理员后端、Vue 管理页面、用户角色/状态管理、跨用户内容只读治理和不可变审计。不得把后端、前端、迁移、权限、并发或审计拆成额外码道返工轮次。
+本轮固定为 P8.4，也是既定开发计划的最后一个码道轮次。必须在一个轮次内完成：在 P2～P8.3 已实现并收口的论文阅读学习、审阅/指标/实验/导出、登录注册、管理员系统、任务恢复、限流和可观测性基础上，实现可切换的华为云 OBS 存储适配，补齐面向华为云 ECS + RDS for PostgreSQL + OBS + ModelArts MaaS + ELB/WAF 的生产部署资产、备份恢复手册和综合安全清单，使项目达到“代码与部署资料完整、等待用户在真实云环境最终验收”的状态。
 
-P8.2 仍只用于用户端/管理员端 E2E、任务恢复和全链路一致性，P8.3 用于性能可靠性，P8.4 用于华为云部署和综合安全；不得提前实现或增加轮次。
+本轮不得新增码道轮次，不实际购买、创建、修改或删除任何华为云资源，不调用真实 OBS/MaaS/RDS，不把“部署资产已完成”写成“真实云上已经部署”。不返工现有产品页面和 P2～P8.3 已验收业务能力。
 
-## 一、开始前边界与固定基线
+## 一、最高优先级：码道禁止运行任何测试或环境命令
 
-1. 完整阅读根目录 `AGENTS.md` 和真实代码，严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行：先更新设计与页面/测试方案，再编码，最后同步 Sprint；修复缺陷时按 `bug-fix-reporter` 留痕。
-2. 开始前记录 git status/HEAD、Docker、Alembic current/heads/check、API/表数、测试库残留、开发库关键表只读计数，以及两个 码道提示词文件 SHA-256。现有未提交改动都属于用户/码道，不得覆盖、还原或批量格式化。
-3. 当前真实基线：HEAD `525828b42707f7d1ef5c8efe1f308ce4bdac5454`；Alembic `016_personal_learning_library`；59 条 `/api/v1` method+path；27 张 ORM 应用表、28 张物理表；Docker 后端 977 passed/0 failed/0 skipped；前端 16 files/197 passed；生产与 Docker 构建 136 modules；测试库 27 张应用表残留 0；三容器运行且 PostgreSQL healthy，后端/前端 HTTP 200。最终只报告实际结果。
-4. 开发库只读计数为 `3/9/5/28/0/0/0/0/2/3/0/0/0/0/0/0/0/0`，依次为 users/papers/tasks/reviews/metrics/files/experiment results/exports/learning explanations/learning citations/qa conversations/qa turns/qa citations/library entries/highlights/bookmarks/notes/cards。不得修改、删除或伪造这些业务数据；自动测试只进入 `paperlens_test`。
-5. 禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个 码道提示词文件；禁止删除 volume、用户文件或开发库业务数据。
-6. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie、密码、refresh/reset token 或完整环境；禁止可能展开 secret 的命令。禁止真实 MaaS/Embedding/外网，管理员路径若构造 LLM/Embedding/Storage client，测试必须立即失败。
-7. 本轮不做管理员冒充、查看/重置密码、默认管理员、批量操作、论文/报告删除、任务取消、任意 SQL/排序字段、用户内容预览、邮件/MFA、Celery/Redis、OBS 或 P8.2～P8.4。ADMIN 在普通业务 API 中仍不能绕过 owner；跨用户访问只能走显式 `/admin` API。
+1. 码道只编写代码、最多 3 个轻量后端测试资产、部署配置和文档，不得运行 pytest、Vitest、E2E、覆盖率、Python 编译、类型检查、npm test/build、Alembic、Docker、HTTP、浏览器或性能命令。
+2. 禁止执行 `docker compose config`、`docker inspect`、`env`、`set`、云 CLI/SDK 调用、OBS/RDS/MaaS 连通性检查、依赖安装或任何外网请求；禁止以单文件或“只做语法检查”为例外。
+3. 最终报告必须明确写明“按项目规则未运行测试、构建、迁移、Docker、HTTP、浏览器或真实华为云验收，等待集中验收”，只列待验收项，不得引用历史通过数冒充 P8.4 结果。
 
-## 二、设计、SDD 与 Sprint 先行
+## 二、开始前边界与真实基线
 
-1. 编码前同步 `ProjectDocs/systemDesign/01～08`，明确管理员用例、017 模型、8 条 API、页面状态/危险操作确认、权限边界、并发事务和测试矩阵。
-2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md` 与相关 design；新增管理员系统详细设计和 `ProjectDocs/sprint/完整管理员系统与不可变审计.md`，开始时置进行中，真实验收后再完成。
-3. 文档不得把 P3.5 登录注册或 P7.3 学习闭环写成未实现；不得把 P8.2 的 E2E/恢复、P8.3 性能或 P8.4 部署提前声明完成。
+1. 完整阅读根目录 `AGENTS.md`、systemDesign 01～08、SDD、P8.3 Sprint/修复报告、部署相关文档和真实代码；严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 先更新设计，再编码，最后同步 Sprint。P8.4 不新增页面，页面设计只记录生产入口和错误展示无变化。
+2. 当前数据库仍为 Alembic 017，P8.4 不需要新业务表或迁移。P8.3 独立集中验收结果仅为历史基线：P8.3 专项 3 passed、两个受影响查询 2 passed、新后端镜像构建成功、隔离 live/ready/404 HTTP 通过；不得写成 P8.4 结果。
+3. 现有未提交改动都属于用户/码道。禁止 git add/commit/reset/checkout/restore/clean/rebase，禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md`、`docs/CODEARTS_NEXT_PROMPT.md` 和 `docs/CODEARTS_PROMPT_ARCHIVE.md`，禁止批量格式化或清理无关文件。
+4. 禁止读取、搜索、打印、复制或推断 `.env`、API Key、AK/SK、security token、JWT secret、Authorization、cookie、密码、DSN、证书私钥或完整环境。禁止修改开发库数据、用户文件、审计日志和 Docker volume。
+5. 所有示例只能使用显眼占位符，不得把任何曾在对话、环境或文件中出现的真实凭据写入代码、Compose、日志、文档或测试。测试资产只允许注入 fake client 和临时目录，不能依赖真实 SDK 网络行为。
 
-## 三、017 迁移与 append-only 审计
+## 三、设计、SDD 与 Sprint 先行
 
-1. 新增 `017_admin_audit_logs.py`，只新增 `admin_audit_logs`，不改写 001～016 revision，不回填既有业务行。预期为 28 张 ORM 应用表、29 张物理表，以实际为准。
-2. 最小字段：UUID id；actor_user_id String(128) FK users.id RESTRICT；固定 action；resource_type；resource_id；8～500 字且无控制字符的 reason；非空严格小对象 before_state/after_state JSONB；created_at。建立 actor、resource、action、created_at DESC/id DESC 查询索引和严格 CHECK，ORM/迁移名称完全一致。
-3. action 只允许 `ADMIN_BOOTSTRAPPED`、`USER_ROLE_CHANGED`、`USER_STATUS_CHANGED`；resource_type 只允许 USER。before/after 只允许 role/status，不保存 email、display_name、密码/hash/token/cookie、正文、storage key、source snapshot、请求 header/IP/user-agent、异常或环境值。
-4. 表必须 append-only：应用层无 UPDATE/DELETE 路由；PostgreSQL trigger 拒绝 UPDATE/DELETE。用户变更、session/reset 失效和 audit 插入必须同一事务，任一步失败全部回滚。
-5. upgrade 兼容现有 016 数据。downgrade 先统计审计表，非空时在任何 DDL 前无损拒绝；空表允许 `016→017→016→017` 往返，不得为通过测试删除真实审计记录。
+1. 编码前同步 `ProjectDocs/systemDesign/01～08`，增加 P8.4 的生产拓扑、配置矩阵、OBS 对象生命周期、凭据边界、部署/回滚、RDS/OBS 备份恢复、ELB/WAF/安全组和最终验收矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`、`design/design.md`；新增 `ProjectDocs/specs_SDD/PaperLens/design/19-华为云部署备份恢复与安全.md` 和 `ProjectDocs/sprint/华为云部署备份恢复与综合安全.md`。开始时置进行中，结束时只能置“实现完成、待真实云环境最终验收”。
+3. 本轮不新增产品路由、页面、数据库表、Alembic 018、Redis/Celery、Kubernetes、Terraform 自动建云资源、Prometheus/Grafana、FAISS/pgvector、邮件/MFA、计费调用或数据迁移任务。
+4. 所有设计以当前单 ECS 或小规模多实例为目标。应用内限流继续是单进程保护；跨实例总限流、TLS、DDoS/WAF 规则由华为云入口层承担，不在应用中伪造分布式能力。
 
-## 四、管理员授权、首次引导与用户变更
+## 四、实现真实但可离线测试的 OBSStorage
 
-1. 复用真实 AuthContext/require_admin。无认证 401，已认证 USER 403；DISABLED、session 撤销、refresh replay 等继续由 P3.5 服务端状态拒绝，不能只信 JWT role claim。前端路由守卫只改善体验，后端始终权威。
-2. 提供显式运维 CLI `python -m paperlens.cli admin-bootstrap --user-id <UUID> --reason <text>`：只允许把已存在、ACTIVE 的 USER 提升为首个 ADMIN，且仅当数据库没有 ACTIVE ADMIN 时成功；锁定用户集合，以目标用户 id 作为 actor_user_id，创建一条 ADMIN_BOOTSTRAPPED 审计并撤销旧 session，同事务完成。已有 ACTIVE ADMIN、目标非法/不存在/禁用、并发第二次执行都安全失败。不得创建默认账号、读取密码或接受 email 模糊匹配。自动验收不得在开发库执行该 CLI。
-3. `PATCH /api/v1/admin/users/{user_id}` 只接受可选 role USER|ADMIN、可选 status ACTIVE|DISABLED 和必填 reason；extra=forbid，role/status 至少一个。相同值返回 200/changed=false 且不写审计。
-4. 以确定顺序 `FOR UPDATE` 锁定 ACTIVE ADMIN 集合和目标。禁止管理员自降级或自禁用；任何提交后至少保留一个 ACTIVE ADMIN。两个管理员并发互相降级/禁用时最多一个成功，另一个固定 409，绝不能出现零 ACTIVE ADMIN。
-5. 每个实际变化字段各写一条 audit；before/after 来自锁定后的数据库。角色或状态变化后撤销目标全部活动 AuthSession；禁用时同时使未使用 PasswordResetToken 失效，重新启用不恢复旧凭据。失败/no-op 不审计。
-6. flush/commit 前异常 rollback；commit 后抛错用新 Session 和预生成 audit id 回查最终状态，不能重复审计或误报。日志不记录 email、reason、token、内容、SQL，只允许 stage/actor id/target id/action/异常类型。
+1. 使用华为云官方 Python OBS SDK `esdk-obs-python`，按项目固定依赖方式加入 `backend/requirements.txt`；SDK 必须延迟导入，仅选择 `storage_backend=obs` 时初始化，保证 local/test 模式不因 SDK 客户端或云环境缺失而启动失败。
+2. 在 Settings 增加严格配置并更新 `.env.example`：`PAPERLENS_STORAGE_BACKEND=local|obs`、HTTPS endpoint、bucket、可选安全 prefix、凭据模式 `ECS|ENV`、可选临时 security token、SSE 模式 `OBS|KMS` 及 KMS key id、下载临时目录和连接/读取超时。Secret 字段使用 `SecretStr`；布尔值不能冒充整数；选择 OBS 时缺项、HTTP endpoint、非法 bucket/prefix、KMS 无 key id 必须在启动前用固定安全错误失败。
+3. 生产默认推荐 ECS agency 的临时凭据链；ENV 模式只用于由 DEW/部署系统注入的 AK/SK/token，不允许硬编码或日志输出。使用 SDK 官方 `security_provider_policy`/临时凭据能力，不自行请求元数据地址，不实现自制签名。
+4. 统一严格对象 key 规范化：拒绝空 key、绝对路径、反斜杠、`.`/`..` 段、控制字符、重复分隔和超长值；只能在配置 prefix 下访问由现有 `build_key` 生成的对象。错误和日志不得包含 endpoint、bucket、对象 key、文件名、本地路径、SDK 原始异常或凭据。
+5. `save` 只能上传已有普通文件，使用私有对象和配置的 SSE；检查 SDK HTTP 状态，仅 2xx 视为成功。失败时不得留下被误认为成功的数据库状态；补偿删除只能删除本次确定创建且尚未转移所有权的对象。禁止 public-read、桶创建/删除、列桶/全桶扫描和预签名 URL。
+6. 将只适用于本地路径的读取契约演进为安全的上下文管理式本地物化接口：LocalStorage 直接 yield 已校验路径；OBSStorage 下载到唯一临时文件，验证 SDK 状态，在 `finally` 中关闭并删除。修改实验分析、报告生成完整性检查和报告下载等所有调用者使用该接口，异常、客户端取消和解析失败也不能遗留临时文件。可保留 LocalStorage `read_path` 兼容层，但生产调用不得依赖 OBS 永久缓存路径。
+7. OBS 客户端/Storage 实例应为应用级、并发安全且有显式 `close()` 生命周期，由 FastAPI lifespan 关闭；local 模式为安全 no-op。工厂不得每个请求无限创建连接，也不得在模块导入时访问网络。
+8. 保持数据库 `storage_key` 语义和现有对象命名，不自动把本地已有文件迁移到 OBS，不改写开发环境默认 local Compose。缺失对象、403/404、非 2xx、下载中断和 close 竞态统一映射为现有安全业务错误，不向客户端透传 SDK 文本。
 
-## 五、恰好 8 条管理员 API
+## 五、生产配置与华为云部署资产
 
-新增以下 8 条 method+path，预计总数 59→67，以最终收集为准。所有响应 Schema extra=forbid；列表统一 page>=1、1<=page_size<=100、固定 total/page/page_size/items，按 created_at DESC/id DESC 稳定排序；只接受白名单筛选，不接受任意 sort/order/include；聚合/批量查询避免逐行 N+1。
+1. 增加 `PAPERLENS_ENV=local|test|production` 和集中生产校验。production 必须拒绝 debug、非 Secure 认证 cookie、local storage、HTTP OBS/MaaS endpoint、弱/占位 JWT、缺失数据库/OBS/MaaS 必需配置；生产环境关闭 `/api/docs`、`/api/redoc` 和 OpenAPI JSON，local/test 保持兼容。
+2. 新增 `deploy/huawei/`，至少包含 `README.md`、`.env.production.example`、`docker-compose.prod.yml`、生产 Nginx 配置、部署/回滚说明、备份恢复手册和安全验收清单。示例只能引用外部镜像名和 secret 文件路径，不包含真实域名、IP、账号、项目 ID、桶名或凭据。
+3. 生产 Compose 不包含 PostgreSQL 服务，不暴露后端 8000，只让前端/Nginx 接受来自 ELB 安全组的端口；RDS 通过私网 SSL DSN 连接。增加一次性 migration 服务，再启动 backend，避免多副本同时迁移。不得自动 downgrade 或在失败后继续启动。
+4. 为生产增加独立 Dockerfile/entrypoint 或等价配置：应用进程使用非 root 用户；镜像内不包含 `.env`、测试、用户数据和构建缓存；合理使用 read-only filesystem、`tmpfs /tmp`、`no-new-privileges`、cap drop、资源/进程上限、restart policy 和 live/ready healthcheck。不要破坏现有本地开发 Compose。
+5. 生产 Nginx 只代理同源 `/api/`，保留 request id，正确覆盖而不是盲目信任客户端转发头，限制请求体并配置必要的 CSP、frame、content-type、referrer 等安全响应头；不得启用目录浏览、`v-html` 或客户端 token 存储。TLS 在 ELB/WAF 终止时必须记录可信代理 CIDR 由实际私网网段显式配置，默认仍不信任任意 X-Forwarded-For。
+6. Secret 通过 DEW/CSMS 或部署系统落到宿主机受限文件并以 Compose secrets/只读文件注入；entrypoint 只读取明确的 `*_FILE`，不得 `set -x` 或打印内容。至少覆盖 RDS DSN、JWT secret、MaaS/Embedding key；OBS 优先 ECS agency，ENV fallback 才使用 secret。
+7. 文档给出用户手工配置顺序：VPC/私有子网与安全组 → RDS PostgreSQL/SSL → 私有 OBS 桶 → ECS agency/IAM 最小权限 → DEW secrets → 镜像仓库/ECS → ELB HTTPS/WAF/入口限流 → DNS → health/readiness → 小额 MaaS/OBS 验证。这里只写步骤和占位符，不实现会创建或收费的 IaC。
 
-1. `GET /api/v1/admin/dashboard`：用户按 role/status、论文按 status、任务按 task_type/status、报告按 report_type/status的非负聚合计数，不返回用户内容或最近正文。
-2. `GET /api/v1/admin/users?page&page_size&role&status&q`：q 长度 1～100，只匹配规范化 email/display_name；返回 id/email/display_name/role/status/failed_login_count/locked_until/created_at/updated_at，以及 active_session、paper、task、export 计数，禁止任何 hash/token。
-3. `GET /api/v1/admin/users/{user_id}`：同一严格用户字段和资源计数；不存在 404。
-4. `PATCH /api/v1/admin/users/{user_id}`：执行第四节角色/状态变更、凭据失效与原子审计，返回 changed 和本次 audit_ids。
-5. `GET /api/v1/admin/papers?page&page_size&status&user_id&q`：只读跨用户元数据；仅 id/user_id/owner_email/title/filename/file_size/page_count/status/created_at/updated_at；不得返回 storage_key/file_hash/正文/Table/Evidence，FAILED 只映射固定安全错误。
-6. `GET /api/v1/admin/tasks?page&page_size&task_type&status&user_id&paper_id`：只读固定元数据；不返回模型输入输出、论文内容、原始错误或 token usage。
-7. `GET /api/v1/admin/exports?page&page_size&report_type&status&user_id&paper_id`：只读安全字段；不返回 storage_key/source_snapshot/source_hash/content_hash，FAILED 只显示固定文案。
-8. `GET /api/v1/admin/audit-logs?page&page_size&actor_user_id&action&resource_id&created_from&created_to`：返回 actor 当前 id/email、固定 action/resource、reason、严格 before/after 和 created_at；时间必须带时区且 from<=to。
+## 六、备份、恢复、回滚与综合安全
 
-普通论文、任务、导出、学习、问答等 API 的 USER/ADMIN owner 行为必须保持不变。管理员只读查询使用有限列投影，不加载 deferred raw_text、structured_data、source_snapshot 或文件对象。
+1. `deploy/huawei/backup-restore.md` 明确 RDS 自动备份、保留期、PITR、发布前手工备份、RPO/RTO 假设和月度恢复演练。恢复默认先恢复到新 RDS 实例并只读核对 schema/关键计数，再由人工切换；禁止脚本自动覆盖生产实例或自动执行破坏性 downgrade。
+2. OBS 使用私有桶、SSE-OBS 或 SSE-KMS、版本控制和生命周期规则；文档说明恢复指定对象版本、非当前版本保留、未完成分段上传清理。应用删除不等同于备份删除，不提供全桶清理脚本。
+3. 发布回滚以镜像版本回滚为主；数据库 migration 失败立即停止。若 schema 已前进，只允许兼容旧镜像时回滚应用，否则从发布前备份恢复到新实例并人工切换。任何恢复步骤都必须先确认目标 Region、VPC、实例和备份时间点。
+4. 安全清单至少覆盖：RDS/后端无公网入口、最小安全组、IAM agency 桶级最小权限、MaaS/OBS 仅 HTTPS、DEW 密钥轮换、Secure/HttpOnly/SameSite cookie、生产文档关闭、CORS 同源、WAF/ELB 总限流、日志白名单、审计不可变、备份加密和恢复演练。
+5. 明确真实云最终验收尚需用户提供/配置的外部条件，但不要索取或记录具体 secret。给出只读/低风险的手工验收清单和预期结果，不提供会删除 volume、对象、数据库或用户数据的命令。
 
-## 六、Vue 管理后台
+## 七、只编写、不运行的最小测试资产
 
-1. 新增受保护 `/admin` 路由和 `AdminDashboardView`；导航仅对当前 ADMIN 显示“管理后台”。刷新页面时等待认证恢复后再判定，USER 进入显示无权限并返回安全页面；401 清理本地认证状态，403 不泄露数据。不得把角色写入 Web Storage 或只靠前端授权。
-2. 页面包含四个一级区域：总览、用户、内容、审计。内容区含论文/任务/报告三个子页签。每个列表必须有加载、空、错误、重试、筛选、真实分页和防快速切换乱序覆盖；离开页面/切页/筛选时旧响应不得覆盖当前状态。
-3. 总览展示固定计数卡，不展示正文、问题、笔记或最近用户内容。用户列表/详情展示第五节白名单字段和资源计数。
-4. 角色/状态操作必须打开确认对话框，明确目标与后果，要求输入 8～500 字 reason；提交中禁用重复操作。成功后只按服务端响应刷新；失败/no-op 显示明确安全文案。前端也禁止自降级/自禁用按钮，但以后端 409 为准。
-5. 论文/任务/报告只读，不能链接到绕过 owner 的普通详情页，也不提供删除、下载、取消或冒充入口。审计列表只读展示 before→after，不提供编辑/删除。
-6. 全部服务端文本使用 Vue 转义插值；禁止 v-html、Web Storage、token query、直接 innerHTML、服务端错误透传。复用现有视觉样式并保证桌面/窄屏可用。
+1. 本轮新增后端测试函数最多 3 个，集中在一个文件，不新增前端/E2E/云端测试：
+   - OBS fake client 合并验证 save → context materialize → delete、非 2xx 安全失败、key/prefix 拒绝和临时文件必清理；
+   - production Settings 合并验证安全配置可通过、debug/local/HTTP/缺失 KMS key/占位 secret 会失败且错误文本不含 secret；
+   - storage 工厂与 lifespan 合并验证 local/obs 选择、单例/close，并验证 production OpenAPI 文档关闭。
+2. fake client 只模拟最少 SDK 返回对象，不安装 SDK、不联网、不读取环境；每个测试最多一个对象和一个小文件，不做 bucket/Region/状态参数排列组合。
+3. 不新增覆盖率、前端测试、浏览器 E2E、Docker E2E、RDS/OBS/MaaS 集成测试或大规模部署矩阵。集中验收阶段默认只运行这 3 个测试、一个生产配置静态渲染、一个镜像构建和一条隔离 HTTP 冒烟；码道本轮不得运行。
 
-## 七、测试要求
+## 八、文档状态与最终交付
 
-1. 新增 017 迁移、admin schema/service/router/CLI 的 PostgreSQL 测试；更新 `_BUSINESS_TABLES`、默认 revision 和零残留检查。覆盖空表往返、任一 audit 非空降级拒绝、ORM/DB 约束索引同名、直接 SQL UPDATE/DELETE 被 trigger 拒绝。
-2. 8 条 API 全覆盖 401、USER 403、ADMIN 200、UUID/分页/筛选/时间/extra 422，以及响应禁止字段递归扫描。Dashboard 用精确计数；各列表验证筛选、空页、稳定排序、真实分页和无 N+1，不能用 vacuous 断言。
-3. 覆盖 CLI 首次提升、已有管理员、目标异常和真实 PostgreSQL 并发仅一次成功；不得在开发库运行。覆盖 role/status 单变更、双变更、no-op、404、自降级/自禁用、最后管理员、旧 access/refresh/reset 立即失效及不恢复。
-4. 两线程验证互相降级/禁用不能产生零 ACTIVE ADMIN；同目标并发结果串行一致。注入 audit/user/session/reset flush、commit 前失败与 commit 后抛错，验证用户、凭据和 audit 不出现部分提交或重复。
-5. 前端覆盖路由/导航权限、四区域、三内容页签、精确请求参数、分页/筛选、确认 reason、成功/no-op/401/403/409/422/未知错误、重复点击、乱序响应和卸载清理；递归确认无危险字段、v-html/Web Storage/token URL。
-6. 运行 P8.1 后端定向、全部迁移测试、P3.5 认证与 P2～P7.3 关键回归、Docker 后端完整全量；必须不少于 977、0 failed、0 skipped。运行前端定向和完整全量，不少于 16 files/197 passed，并执行本地及 Docker 生产构建，不少于 136 modules。
-7. 自动测试只使用测试库和 Mock。管理员路径若访问真实网络、MaaS、Embedding、Storage 或开发库业务行必须失败。
+1. 完成后同步 systemDesign 01～08、SDD spec/tasks/design、P8.4 Sprint、README、`.env.example`、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、architecture/api-contract/data-model/security-design。把 P8.1～P8.3 保持已验收，P8.4 标记“实现完成、待真实华为云最终验收”。
+2. 文档必须区分三种状态：代码/部署资产已实现、离线集中验收尚未执行、真实华为云资源尚未创建/验证。不得声称已经上线、已配置 WAF/备份或已完成灾备演练。
+3. 最终报告逐项列出：OBSStorage 契约与安全边界、生产配置校验、生产镜像/Compose/Nginx、secret 注入、RDS/OBS 备份恢复、回滚、安全清单、最多 3 个测试资产、修改文件和等待集中验收项。
+4. 不得生成新的后续开发提示词或 P8.5；P8.4 之后只剩码道交付后的独立验收、必要修正和用户真实云环境部署，不增加开发轮次。
 
-## 八、文档、运行验收与交付
-
-1. 完成后同步 `ProjectDocs/systemDesign/01～08`、SDD spec/tasks/design、Sprint、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、api-contract/architecture/data-model/security-design 和 README。明确 P8.1 实际完成项以及 P8.2～P8.4 未完成项。
-2. 实际验证 017 current/head/check、空表往返、非空审计降级拒绝、trigger 不可变性、路由/表数、Python 编译、前端 TypeScript/Vite、Markdown 本地链接、git diff --check 和敏感信息/危险渲染扫描。
-3. 只读核对开发库关键表计数；允许正常 schema upgrade，但不得引导管理员、变更角色/状态或写审计。测试结束 `paperlens_test` 的全部应用表残留必须为 0。
-4. 重建并保持 backend/frontend/postgres 运行，PostgreSQL healthy，后端 health 和前端 HTTP 200。不得以宿主机通过代替 Docker 结果。
-5. HEAD 必须不变、不得创建提交；禁改目录无差异；两个 码道提示词在执行期间 SHA-256 必须保持开始值。
-6. 最终逐项报告 017/不可变审计、CLI、授权与最后管理员并发、8 API、管理页面、全部测试、迁移、路由/表、HTTP、测试库残留、开发库只读计数、Git/禁改目录和未实现项。未执行必须如实说明，不能用历史结果冒充。
-
-不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要拆分 P8.1，也不要提前实现 P8.2～P8.4。
+本轮完成定义是“P8.4 代码、部署资产、最多 3 个轻量测试资产和文档实现完毕，等待独立集中验收与用户真实华为云验收”。不要运行任何测试、构建、迁移、Docker、HTTP、浏览器、外网或云服务命令。

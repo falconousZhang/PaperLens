@@ -69,7 +69,9 @@ def test_017_nonempty_audit_refuses_downgrade():
             connection.execute(
                 text(
                     "INSERT INTO admin_audit_logs (id, actor_user_id, action, resource_type, resource_id, reason, before_state, after_state) "
-                    "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'test reason for downgrade', '{}', '{}')"
+                    "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'test reason for downgrade', "
+                    "'{\"role\": \"USER\", \"status\": \"ACTIVE\"}', "
+                    "'{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}')"
                 ),
                 {"id": str(uuid.uuid4()), "actor": user_id, "res": user_id},
             )
@@ -118,7 +120,9 @@ def test_017_trigger_rejects_update_and_delete():
             connection.execute(
                 text(
                     "INSERT INTO admin_audit_logs (id, actor_user_id, action, resource_type, resource_id, reason, before_state, after_state) "
-                    "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'test reason for trigger', '{}', '{}')"
+                    "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'test reason for trigger', "
+                    "'{\"role\": \"USER\", \"status\": \"ACTIVE\"}', "
+                    "'{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}')"
                 ),
                 {"id": audit_id, "actor": user_id, "res": user_id},
             )
@@ -164,7 +168,9 @@ def test_017_check_constraints_enforce_action_and_resource_type():
                 connection.execute(
                     text(
                         "INSERT INTO admin_audit_logs (id, actor_user_id, action, resource_type, resource_id, reason, before_state, after_state) "
-                        "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'PAPER', :res, 'testreason1234567890', '{}', '{}')"
+                        "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'PAPER', :res, 'testreason1234567890', "
+                        "'{\"role\": \"USER\", \"status\": \"ACTIVE\"}', "
+                        "'{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}')"
                     ),
                     {"id": str(uuid.uuid4()), "actor": user_id, "res": user_id},
                 )
@@ -189,9 +195,54 @@ def test_017_check_constraints_enforce_reason_length():
                 connection.execute(
                     text(
                         "INSERT INTO admin_audit_logs (id, actor_user_id, action, resource_type, resource_id, reason, before_state, after_state) "
-                        "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'short', '{}', '{}')"
+                        "VALUES (:id, :actor, 'ADMIN_BOOTSTRAPPED', 'USER', :res, 'short', "
+                        "'{\"role\": \"USER\", \"status\": \"ACTIVE\"}', "
+                        "'{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}')"
                     ),
                     {"id": str(uuid.uuid4()), "actor": user_id, "res": user_id},
+                )
+    finally:
+        engine.dispose()
+        truncate_test_tables(test_url)
+        verify_no_test_residuals(test_url)
+
+
+@pytest.mark.parametrize(
+    ("action", "before_state", "after_state"),
+    [
+        ("ADMIN_BOOTSTRAPPED", '{"role":"USER"}', '{"role":"ADMIN"}'),
+        ("USER_ROLE_CHANGED", '{"role":"USER","status":"ACTIVE"}', '{"role":"ADMIN"}'),
+        ("USER_ROLE_CHANGED", '{"role":"USER"}', '{"role":"USER"}'),
+        ("USER_STATUS_CHANGED", '{"status":"ACTIVE"}', '{"status":"ACTIVE","email":"x"}'),
+    ],
+)
+def test_017_check_constraints_enforce_exact_state_shape(action, before_state, after_state):
+    test_url = get_test_db_url()
+    assert test_url is not None and test_url.endswith("paperlens_test")
+    ensure_test_database()
+    run_alembic_migrations(test_url)
+    truncate_test_tables(test_url)
+    engine = create_engine(test_url)
+    try:
+        with engine.begin() as connection:
+            user_id = _insert_user(connection)
+        with pytest.raises(IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO admin_audit_logs "
+                        "(id, actor_user_id, action, resource_type, resource_id, reason, before_state, after_state) "
+                        "VALUES (:id, :actor, :action, 'USER', :res, 'strict audit state test', "
+                        "CAST(:before AS jsonb), CAST(:after AS jsonb))"
+                    ),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "actor": user_id,
+                        "action": action,
+                        "res": user_id,
+                        "before": before_state,
+                        "after": after_state,
+                    },
                 )
     finally:
         engine.dispose()

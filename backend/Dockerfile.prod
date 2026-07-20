@@ -1,0 +1,27 @@
+FROM python:3.13-slim
+
+RUN groupadd --system paperlens \
+    && useradd --system --gid paperlens --home-dir /app --shell /usr/sbin/nologin paperlens
+
+WORKDIR /app
+ENV PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY requirements.prod.txt ./requirements.prod.txt
+RUN pip install --no-cache-dir --requirement requirements.prod.txt
+
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
+COPY paperlens ./paperlens
+COPY entrypoint.prod.sh ./entrypoint.prod.sh
+RUN mkdir -p /app/data \
+    && chmod 0750 /app/data \
+    && chmod 0555 ./entrypoint.prod.sh \
+    && chown -R paperlens:paperlens /app
+
+USER paperlens
+EXPOSE 8000
+
+ENTRYPOINT ["./entrypoint.prod.sh"]
+CMD ["serve"]

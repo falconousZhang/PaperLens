@@ -1,0 +1,104 @@
+name: paperlens
+
+x-backend-common: &backend-common
+  image: ${PAPERLENS_BACKEND_IMAGE:?PAPERLENS_BACKEND_IMAGE is required}
+  env_file:
+    - ${PAPERLENS_ENV_FILE:-.env.production}
+  environment:
+    PAPERLENS_DATABASE_URL_FILE: /run/secrets/database_url
+    PAPERLENS_JWT_SECRET_FILE: /run/secrets/jwt_secret
+    PAPERLENS_LLM_API_KEY_FILE: /run/secrets/llm_api_key
+    PAPERLENS_EMBEDDING_API_KEY_FILE: /run/secrets/embedding_api_key
+  secrets:
+    - database_url
+    - rds_ca
+    - jwt_secret
+    - llm_api_key
+    - embedding_api_key
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=512m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - private
+
+services:
+  migrate:
+    <<: *backend-common
+    command: ["migrate"]
+    restart: "no"
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+
+  backend:
+    <<: *backend-common
+    command: ["serve"]
+    restart: unless-stopped
+    expose:
+      - "8000"
+    pids_limit: 256
+    mem_limit: 1024m
+    cpus: 2.0
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    image: ${PAPERLENS_FRONTEND_IMAGE:?PAPERLENS_FRONTEND_IMAGE is required}
+    restart: unless-stopped
+    ports:
+      - "${PAPERLENS_FRONTEND_BIND_ADDRESS:-127.0.0.1}:${PAPERLENS_FRONTEND_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  private:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+secrets:
+  database_url:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/database_url
+  rds_ca:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/rds_ca.pem
+  jwt_secret:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/jwt_secret
+  llm_api_key:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/llm_api_key
+  embedding_api_key:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/embedding_api_key

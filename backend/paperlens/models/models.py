@@ -649,6 +649,9 @@ class LearningExplanation(Base):
     section_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("paper_sections.id", ondelete="CASCADE"), nullable=True)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     evidence_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("evidences.id", ondelete="CASCADE"), nullable=True)
+    selection_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selection_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    selection_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -690,6 +693,15 @@ class LearningExplanation(Base):
             name="ck_learning_request_hash_hex64",
         ),
         CheckConstraint(
+            "selection_text IS NULL OR (selection_text = btrim(selection_text) AND length(selection_text) BETWEEN 1 AND 5000)",
+            name="ck_learning_selection_text_valid",
+        ),
+        CheckConstraint(
+            "(selection_start IS NULL AND selection_end IS NULL) OR "
+            "(selection_text IS NOT NULL AND selection_start >= 0 AND selection_end > selection_start)",
+            name="ck_learning_selection_offsets_valid",
+        ),
+        CheckConstraint(
             "status = 'PENDING' AND answer IS NULL AND key_points IS NULL AND terms IS NULL AND error_message IS NULL AND started_at IS NULL AND completed_at IS NULL OR "
             "status != 'PENDING'",
             name="ck_learning_pending_no_result",
@@ -699,7 +711,7 @@ class LearningExplanation(Base):
             name="ck_learning_running_state",
         ),
         CheckConstraint(
-            "(status = 'SUCCEEDED') = (started_at IS NOT NULL AND completed_at IS NOT NULL AND length(btrim(answer)) > 0 AND jsonb_typeof(key_points) = 'array' AND jsonb_array_length(key_points) > 0 AND jsonb_typeof(terms) = 'array' AND jsonb_array_length(terms) > 0 AND error_message IS NULL)",
+            "(status = 'SUCCEEDED') = (started_at IS NOT NULL AND completed_at IS NOT NULL AND length(btrim(answer)) > 0 AND jsonb_typeof(key_points) = 'array' AND jsonb_typeof(terms) = 'array' AND error_message IS NULL)",
             name="ck_learning_succeeded_state",
         ),
         CheckConstraint(
@@ -745,6 +757,8 @@ class PaperQAConversation(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(String(128), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     paper_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("papers.id", ondelete="CASCADE"), nullable=False)
+    paper_memory: Mapped[str | None] = mapped_column(Text, nullable=True)
+    paper_memory_source_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -756,6 +770,12 @@ class PaperQAConversation(Base):
     turns: Mapped[list["PaperQATurn"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
 
     __table_args__ = (
+        CheckConstraint(
+            "(paper_memory IS NULL AND paper_memory_source_hash IS NULL) OR "
+            "(paper_memory IS NOT NULL AND btrim(paper_memory) <> '' AND "
+            "paper_memory_source_hash ~ '^[0-9a-f]{64}$')",
+            name="ck_qa_conv_paper_memory_state",
+        ),
         Index("idx_qa_conv_user_paper", "user_id", "paper_id"),
         Index("idx_qa_conv_paper_updated", "paper_id", updated_at.desc(), id.desc()),
     )
@@ -778,6 +798,7 @@ class PaperQATurn(Base):
     client_request_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     output_language: Mapped[str] = mapped_column(String(2), nullable=False)
+    current_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     grounded: Mapped[bool | None] = mapped_column(default=None, nullable=True)
@@ -805,6 +826,10 @@ class PaperQATurn(Base):
         CheckConstraint(
             "output_language IN ('zh', 'en')",
             name="ck_qa_turn_output_language_values",
+        ),
+        CheckConstraint(
+            "current_page IS NULL OR current_page >= 1",
+            name="ck_qa_turn_current_page_positive",
         ),
         CheckConstraint(
             "context_hash IS NULL OR context_hash ~ '^[0-9a-f]{64}$'",
@@ -1064,11 +1089,11 @@ class AdminAuditLog(Base):
             name="ck_audit_resource_type_user",
         ),
         CheckConstraint(
-            "char_length(reason) BETWEEN 8 AND 500",
+            "reason = btrim(reason) AND char_length(reason) BETWEEN 8 AND 500",
             name="ck_audit_reason_length",
         ),
         CheckConstraint(
-            "reason ~ '^[^\\x00-\\x1f]+$'",
+            "reason !~ '[[:cntrl:]]'",
             name="ck_audit_reason_no_control_chars",
         ),
         CheckConstraint(
@@ -1078,6 +1103,24 @@ class AdminAuditLog(Base):
         CheckConstraint(
             "jsonb_typeof(after_state) = 'object'",
             name="ck_audit_after_state_is_object",
+        ),
+        CheckConstraint(
+            "CASE "
+            "WHEN action = 'ADMIN_BOOTSTRAPPED' THEN "
+            "before_state = '{\"role\": \"USER\", \"status\": \"ACTIVE\"}'::jsonb AND "
+            "after_state = '{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}'::jsonb "
+            "WHEN action = 'USER_ROLE_CHANGED' THEN "
+            "before_state ? 'role' AND before_state - 'role' = '{}'::jsonb AND "
+            "after_state ? 'role' AND after_state - 'role' = '{}'::jsonb AND "
+            "before_state->>'role' IN ('USER', 'ADMIN') AND "
+            "after_state->>'role' IN ('USER', 'ADMIN') AND before_state <> after_state "
+            "WHEN action = 'USER_STATUS_CHANGED' THEN "
+            "before_state ? 'status' AND before_state - 'status' = '{}'::jsonb AND "
+            "after_state ? 'status' AND after_state - 'status' = '{}'::jsonb AND "
+            "before_state->>'status' IN ('ACTIVE', 'DISABLED') AND "
+            "after_state->>'status' IN ('ACTIVE', 'DISABLED') AND before_state <> after_state "
+            "ELSE FALSE END",
+            name="ck_audit_state_matches_action",
         ),
         Index("idx_audit_actor", "actor_user_id"),
         Index("idx_audit_resource", "resource_type", "resource_id"),

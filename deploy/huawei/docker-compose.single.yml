@@ -1,0 +1,134 @@
+name: paperlens
+
+x-backend-environment: &backend-environment
+  PAPERLENS_ENV: local
+  PAPERLENS_DEBUG: "false"
+  PAPERLENS_DATABASE_URL: postgresql+psycopg2://paperlens:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/paperlens
+  PAPERLENS_STORAGE_BACKEND: local
+  PAPERLENS_STORAGE_ROOT: /app/data
+  PAPERLENS_LLM_BACKEND: huawei_maas
+  PAPERLENS_LLM_BASE_URL: https://api.modelarts-maas.com/v2
+  PAPERLENS_LLM_MODEL: glm-5.2
+  PAPERLENS_LLM_API_KEY: ${PAPERLENS_LLM_API_KEY:?PAPERLENS_LLM_API_KEY is required}
+  PAPERLENS_LLM_CONNECT_TIMEOUT: "60"
+  PAPERLENS_LLM_READ_TIMEOUT: "180"
+  PAPERLENS_EMBEDDING_PROVIDER: mock
+  PAPERLENS_JWT_SECRET: ${PAPERLENS_JWT_SECRET:?PAPERLENS_JWT_SECRET is required}
+  PAPERLENS_AUTH_COOKIE_SECURE: "false"
+  PAPERLENS_TRUSTED_PROXY_CIDRS: 172.30.0.0/24
+  PAPERLENS_DB_POOL_SIZE: "3"
+  PAPERLENS_DB_MAX_OVERFLOW: "2"
+  PAPERLENS_RECOVERY_WORKERS: "2"
+
+x-backend-common: &backend-common
+  build:
+    context: ../../backend
+    dockerfile: Dockerfile.prod
+  image: paperlens-backend:single
+  environment: *backend-environment
+  networks:
+    - private
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: paperlens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: paperlens
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperlens -d paperlens"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    mem_limit: 640m
+    cpus: 0.60
+
+  migrate:
+    <<: *backend-common
+    command: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 0.75
+
+  storage-init:
+    <<: *backend-common
+    user: root
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R paperlens:paperlens /app/data && chmod 0750 /app/data"]
+    volumes:
+      - backend_data:/app/data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.25
+
+  backend:
+    <<: *backend-common
+    command: serve
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+    volumes:
+      - backend_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1536m
+    cpus: 1.50
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile.single
+    image: paperlens-frontend:single
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:80:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    mem_limit: 256m
+    cpus: 0.25
+
+networks:
+  private:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  postgres_data:
+  backend_data:

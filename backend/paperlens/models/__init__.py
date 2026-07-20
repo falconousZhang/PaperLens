@@ -1,4 +1,5 @@
 from paperlens.models.models import (  # noqa: F401
+    AdminAuditLog,
     AnalysisTask,
     AuthSession,
     Evidence,

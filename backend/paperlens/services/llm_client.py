@@ -47,15 +47,16 @@ class MockLLMClient(LLMClient):
                 answer = "The answer cannot be confirmed only from the current paper."
             else:
                 answer = "仅根据当前论文无法确认该问题，论文证据不足。"
+            payload = {
+                "answer": answer,
+                "grounded": grounded,
+                "evidence_refs": evidence_aliases[:2] if evidence_aliases else [],
+            }
+            if kwargs.get("initialize_memory"):
+                payload["paper_memory"] = "Mock reusable full-paper memory"
             return {
                 "role": "assistant",
-                "content": json.dumps(
-                    {
-                        "answer": answer,
-                        "grounded": grounded,
-                        "evidence_refs": evidence_aliases[:2] if evidence_aliases else [],
-                    }
-                ),
+                "content": json.dumps(payload),
             }
 
         dimension = kwargs.get("dimension", "OVERALL")

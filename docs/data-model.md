@@ -397,3 +397,17 @@ JSONB 结构示例（metric_comparisons）：
 016 新增 `paper_library_entries`、`paper_highlights`、`paper_bookmarks`、`paper_notes` 和 `paper_knowledge_cards`。阅读状态为 TO_READ/READING/COMPLETED/ARCHIVED；高亮颜色为 YELLOW/GREEN/BLUE/PINK；笔记锚点为 PAPER/PAGE/HIGHLIGHT；知识卡掌握状态为 NEW/LEARNING/MASTERED。
 
 五表均以 user_id/paper_id 归属收口，页码、非空文本、长度、source hash、锚点互斥和卡片来源互斥由数据库 CHECK/FK/UQ 约束。高亮/书签重复创建幂等返回既有对象；被 Note/Card 引用的来源使用 RESTRICT 和应用层 409。五表为空可往返 015/016，任一非空时 downgrade 在任何 DDL 前拒绝。当前为 27 张 ORM 应用表、28 张含 alembic_version 的物理表。
+
+## P8.1 管理员审计模型（COMPLETED）
+
+017 新增 `admin_audit_logs`：actor_user_id 以 RESTRICT 指向 users，action 仅允许 ADMIN_BOOTSTRAPPED、USER_ROLE_CHANGED、USER_STATUS_CHANGED，resource_type 固定 USER。reason 去首尾空白后为 8～500 字且不得含控制字符；before_state/after_state 由 CHECK 强制为与 action 对应的精确 role/status 小对象和值变化。
+
+表上 trigger 拒绝 UPDATE 和 DELETE；任一审计存在时 downgrade 在 DDL 前无损拒绝。当前为 28 张 ORM 应用表、29 张含 alembic_version 的物理表。
+
+## P8.2 后台任务恢复（已完成）
+
+P8.2 不新增数据库迁移。恢复逻辑复用 Paper.updated_at、AnalysisTask、LearningExplanation、PaperQATurn 和 ExportReport 的既有状态/时间戳字段。可重放任务复位为 PENDING 后由原子 claim 执行器认领；缺少完整输入或可靠执行代次的论文解析、审阅和导出固定 FAILED。TaskDetail 公开的可空 `experiment_file_id` 来自 AnalysisTask 既有列，不改变物理模型。
+
+## P8.3 运行态数据（已完成）
+
+P8.3 不新增迁移或持久化模型，Alembic head 保持 017。request id、限流桶、客户端地址和 executor 队列均只存在于进程内存，不写入业务表或审计表。连接池参数不改变事务和表结构。

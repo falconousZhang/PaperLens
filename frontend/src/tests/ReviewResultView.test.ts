@@ -122,6 +122,7 @@ function createTestRouter() {
     routes: [
       { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView },
       { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView },
+      { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
       { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],
   })
@@ -530,7 +531,7 @@ describe('ReviewResultView', () => {
     expect(wrapper.text()).toContain('<img onerror="alert(1)" src=x>')
   })
 
-  it('clicking evidence link navigates to paper detail with evidence query', async () => {
+  it('clicking evidence link navigates to the reading workspace with evidence query', async () => {
     vi.mocked(api.listTasks).mockResolvedValue({ items: [mockTaskSucceeded] } as any)
     vi.mocked(api.listReviews).mockResolvedValue({ reviews: [mockReview1] } as any)
     const wrapper = mountView()

@@ -61,6 +61,7 @@ function createTestRouter() {
     routes: [
       { path: '/papers/:id/export', name: 'paper-export', component: ReportExportView },
       { path: '/papers/:id', name: 'paper-detail', component: { template: '<div/>' } },
+      { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div/>' } },
       { path: '/papers', name: 'papers', component: { template: '<div/>' } },
     ],
   })
@@ -99,7 +100,11 @@ describe('ReportExportView', () => {
     await flushPromises()
     expect(api.getPaper).toHaveBeenCalledWith('paper-1')
     expect(wrapper.find('.export-form').exists()).toBe(true)
-    expect(wrapper.text()).toContain('创建导出报告')
+    expect(wrapper.text()).toContain('导出论文学习报告')
+    expect(wrapper.text()).toContain('不要求先完成审阅')
+    expect(wrapper.text()).toContain('学习解释')
+    expect(wrapper.text()).toContain('高亮摘录')
+    expect(wrapper.text()).toContain('学习笔记')
   })
 
   it('shows not-ready notice for non-PARSED paper', async () => {
@@ -107,7 +112,7 @@ describe('ReportExportView', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.find('.not-ready-notice').exists()).toBe(true)
-    expect(wrapper.text()).toContain('论文尚未解析完成')
+    expect(wrapper.text()).toContain('论文仍在解析')
   })
 
   it('shows three format options', async () => {
@@ -123,6 +128,7 @@ describe('ReportExportView', () => {
   it('submits MARKDOWN export and reloads history', async () => {
     const wrapper = mountView()
     await flushPromises()
+    await wrapper.find('select#report-type').setValue('MARKDOWN')
     await wrapper.find('.btn-primary').trigger('click')
     await flushPromises()
     expect(api.createExport).toHaveBeenCalledWith('paper-1', expect.objectContaining({
@@ -154,7 +160,22 @@ describe('ReportExportView', () => {
     }))
   })
 
-  it('shows 409 error message for review not ready', async () => {
+  it('submits optional metrics and experiment sections', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const toggles = wrapper.findAll('input.toggle-input')
+    expect(toggles).toHaveLength(2)
+    await toggles[0]!.setValue(true)
+    await toggles[1]!.setValue(true)
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+    expect(api.createExport).toHaveBeenCalledWith('paper-1', expect.objectContaining({
+      include_metrics: true,
+      include_experiment_analysis: true,
+    }))
+  })
+
+  it('shows a generic conflict instead of requiring review', async () => {
     vi.mocked(api.createExport).mockRejectedValue({
       response: { status: 409 },
     })
@@ -162,7 +183,8 @@ describe('ReportExportView', () => {
     await flushPromises()
     await wrapper.find('.btn-primary').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.error-text').text()).toBe('审阅结果尚未就绪，请先完成论文审阅')
+    expect(wrapper.find('.error-text').text()).toBe('当前论文状态暂时无法导出，请稍后重试')
+    expect(wrapper.text()).not.toContain('请先完成论文审阅')
   })
 
   it('shows 413 error message for report too large', async () => {
@@ -173,7 +195,7 @@ describe('ReportExportView', () => {
     await flushPromises()
     await wrapper.find('.btn-primary').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.error-text').text()).toBe('报告超过大小上限')
+    expect(wrapper.find('.error-text').text()).toBe('报告内容过多，请减少可选扩展后重试')
   })
 
   it('shows export history with items', async () => {
@@ -201,7 +223,7 @@ describe('ReportExportView', () => {
     })
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('暂无导出记录')
+    expect(wrapper.text()).toContain('还没有学习报告')
   })
 
   it('downloads READY report via blob', async () => {
@@ -337,10 +359,10 @@ describe('ReportExportView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout')
+    const clearIntervalSpy = vi.spyOn(global, 'clearInterval')
     const callsBefore = vi.mocked(api.listExports).mock.calls.length
     wrapper.unmount()
-    expect(clearTimeoutSpy).toHaveBeenCalled()
+    expect(clearIntervalSpy).toHaveBeenCalled()
 
     vi.advanceTimersByTime(10000)
     expect(vi.mocked(api.listExports).mock.calls.length).toBe(callsBefore)

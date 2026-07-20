@@ -1,3 +1,6 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -14,6 +17,7 @@ from paperlens.api.qa import router as qa_router
 from paperlens.api.library import router as library_router
 from paperlens.api.personal_learning import router as personal_learning_router
 from paperlens.api.tasks import router as tasks_router
+from paperlens.core.config import settings
 from paperlens.core.errors import (
     AppError,
     app_error_handler,
@@ -22,14 +26,42 @@ from paperlens.core.errors import (
     generic_exception_handler,
 )
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.recovery_enabled:
+        try:
+            from paperlens.services.recovery_service import get_executor, run_recovery
+
+            executor = get_executor()
+            run_recovery(lambda func, args: executor.submit(func, *args))
+        except Exception as exc:
+            logger.error("stage=startup_recovery_failed error_type=%s", type(exc).__name__)
+    yield
+    from paperlens.services.recovery_service import shutdown_executor
+    from paperlens.utils.storage import close_storage
+
+    shutdown_executor()
+    close_storage()
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="PaperLens",
         version="0.1.0",
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url="/api/docs" if settings.docs_enabled else None,
+        redoc_url="/api/redoc" if settings.docs_enabled else None,
+        openapi_url="/api/openapi.json" if settings.docs_enabled else None,
+        lifespan=lifespan,
     )
+
+    from paperlens.core.request_tracing import RequestTracingMiddleware
+    from paperlens.core.rate_limit_middleware import RateLimitMiddleware
+
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestTracingMiddleware)
 
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

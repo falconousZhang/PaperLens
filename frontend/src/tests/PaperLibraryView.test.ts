@@ -11,6 +11,7 @@ vi.mock('../api', () => ({
   checkHealth: vi.fn(),
   listLibraryPapers: vi.fn(),
   patchLibraryEntry: vi.fn(),
+  deletePaper: vi.fn(),
 }))
 
 const item = {
@@ -44,6 +45,8 @@ function router() {
       { path: '/papers/:id', name: 'paper-detail', component: { template: '<div />' } },
       { path: '/papers/:id/read', name: 'paper-read', component: { template: '<div />' } },
       { path: '/upload', name: 'upload', component: { template: '<div />' } },
+      { path: '/login', name: 'login', component: { template: '<div />' } },
+      { path: '/register', name: 'register', component: { template: '<div />' } },
     ],
   })
 }
@@ -66,14 +69,18 @@ describe('paper learning product wording and library', () => {
     })
   })
 
-  it('shows the personal paper reading learning product wording', async () => {
+  it('shows the product wording and account entry points', async () => {
     const wrapper = mount(HomeView, { global: { plugins: [createPinia(), router()] } })
     await flushPromises()
     expect(wrapper.text()).toContain('AI 驱动的个人论文阅读学习助手')
-    expect(wrapper.text()).toContain('论文库')
+    expect(wrapper.text()).toContain('登录')
+    expect(wrapper.text()).toContain('注册')
+    expect(wrapper.text()).not.toContain('后端服务')
+    expect(wrapper.text()).not.toContain('上传论文')
+    expect(wrapper.text()).not.toContain('论文库')
   })
 
-  it('renders safe library data, all four counts, and the compatible read route', async () => {
+  it('renders safe library data, useful record counts, and the compatible read route', async () => {
     const testRouter = router()
     await testRouter.push('/papers')
     await testRouter.isReady()
@@ -82,9 +89,9 @@ describe('paper learning product wording and library', () => {
     expect(wrapper.text()).toContain('<script>plain title</script>')
     expect(wrapper.find('script').exists()).toBe(false)
     expect(wrapper.text()).toContain('高亮 1')
-    expect(wrapper.text()).toContain('书签 2')
+    expect(wrapper.text()).not.toContain('书签')
     expect(wrapper.text()).toContain('笔记 3')
-    expect(wrapper.text()).toContain('知识卡 4')
+    expect(wrapper.text()).not.toContain('知识卡')
     expect(wrapper.find('.read-link').attributes('href')).toBe(`/papers/${item.paper_id}/read`)
   })
 

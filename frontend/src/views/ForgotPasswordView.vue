@@ -10,7 +10,7 @@
       </label>
       <button type="submit" :disabled="loading">{{ loading ? '发送中...' : '发送重置链接' }}</button>
       <div class="auth-links">
-        <router-link to="/login">返回登录</router-link>
+        <router-link to="/login" class="button-link">返回登录</router-link>
       </div>
     </form>
   </div>

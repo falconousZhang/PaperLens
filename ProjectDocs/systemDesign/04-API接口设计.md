@@ -862,3 +862,63 @@ POST 请求仅接受 `mode`、`scope_type`、对应的 section_id/page_number/ev
 | GET `/api/v1/admin/audit-logs?page&page_size&action&actor_user_id&resource_id` | 审计日志分页列表，按 created_at DESC/id DESC 排序 |
 
 全部路由 401 表示未认证，403 表示非 ADMIN，422 表示非法字段/枚举/UUID。PATCH 用户时 reason 必填且不含控制字符；before_state/after_state 仅含 role/status 键。跨用户只读查询不返回 storage_key、file_hash、source_snapshot、content_hash 等内部字段。
+
+## 16. P8.2 恢复与一致性接口影响
+
+P8.2 不新增公开 HTTP API。恢复由 RecoveryService 在 FastAPI lifespan 内部执行，不暴露管理端点。
+
+恢复行为通过环境变量配置：
+- `PAPERLENS_RECOVERY_ENABLED`：是否启用启动时恢复（默认 true）
+- `PAPERLENS_RECOVERY_STALE_SECONDS`：陈旧判定阈值秒数（默认 300）
+- `PAPERLENS_RECOVERY_BATCH_SIZE`：单类扫描行数上限（默认 50）
+
+P8.2 不新增路由。既有 TaskDetail / TaskListItem 响应增加可空 `experiment_file_id`，仅在 EXPERIMENT_ANALYSIS 任务中有值，用于页面刷新后恢复文件上下文；不公开 storage_key、文件哈希或内容。前端共享 `usePolling` 不引入额外 API 类型。
+
+P8.2 状态：已完成并经码道独立收口；无新增公开端点。
+
+## 17. P8.3 性能、可靠性、限流与可观测性接口影响
+
+新增 2 条公开路由，路由基线 67→69，均不要求认证且不计入限流：
+
+| Method + Path | 契约 |
+|---|---|
+| GET `/api/v1/health/live` | 存活检查：进程存活返回 200 `{"status": "alive", "version": "..."}` |
+| GET `/api/v1/health/ready` | 就绪检查：短事务 `SELECT 1` 成功返回 200 `{"status": "ready", "checks": {"database": "ok"}}`，失败返回 503 `{"status": "not_ready", "checks": {"database": "error"}}` |
+
+既有 GET `/api/v1/health` 保持不变。三个 health 端点完全豁免限流。
+
+限流超限统一返回 429 JSON envelope：`{"error": {"code": "RATE_LIMITED", "message": "请求过于频繁，请稍后重试", "details": null}}`，并设置整数 `Retry-After` 和 `X-Request-ID` 响应头。
+
+所有 API 响应（含错误响应）均返回 `X-Request-ID` 响应头。
+
+所有请求只接受规范小写 UUID4 `X-Request-ID`，其他输入替换为服务端新 UUID4。可信代理环境变量为 `PAPERLENS_TRUSTED_PROXY_CIDRS`，默认空；无条件信任转发头被禁止。
+
+P8.3 状态：已完成并经码道独立收口；路由基线为 69。
+
+## 18. P8.4 华为云部署接口影响
+
+P8.4 不新增公开 HTTP API。OBSStorage 为内部存储层变更，不影响 API 契约。
+
+生产环境变更：
+- `PAPERLENS_ENV=production` 时关闭 `/api/docs`、`/api/openapi.json` 和 `/redoc`
+- 三个 health 端点行为不变，但生产环境通过 Nginx/ELB 代理
+
+P8.4 初版状态：代码、部署资产和文档实现完毕；随后已按 18.1 完成独立集中验收与直接收口，真实华为云发布仍由用户执行。
+
+### 18.1 P8.4 收口校准
+
+生产实际关闭 `/api/docs`、`/api/redoc` 和 `/api/openapi.json`，三者均返回 404。`/api/v1/health/live` 用于进程存活，`/api/v1/health/ready` 用于后端/RDS 就绪；Nginx 另提供不依赖后端的 `/healthz` 给 ELB。OBS 适配不新增公开 API 或改变响应 schema。P8.4 已完成本地轻量验收，真实域名与云服务验收留待部署。
+
+## 19. 论文学习报告导出契约调整
+
+`POST /api/v1/papers/{paper_id}/exports` 请求与响应 schema 保持兼容。行为调整如下：
+
+- 论文状态为 `PARSED` 即可创建导出，不再因缺少成功审阅返回 `REVIEW_NOT_READY`。
+- 报告固定包含论文信息、学习解释、高亮和笔记；成功审阅存在时自动加入“批判性阅读”章节。
+- `include_metrics` 与 `include_experiment_analysis` 继续控制指标和实验分析扩展章节；来源缺失不阻断导出。
+- `409` 仅保留论文未解析或来源完整性异常等真实冲突；前端不得把所有 `409` 映射为“请先审阅”。
+- 列表、状态和下载 API 契约不变，三种格式的 MIME 与安全下载规则不变。
+
+## 20. 学习解释退出接口影响
+
+无 API 变更。退出操作不发送删除或导航请求，解释历史继续使用既有列表数据。

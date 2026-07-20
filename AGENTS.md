@@ -34,7 +34,7 @@ dev-process-framework → page-mockup → fullstack-testing → function-detail 
 2. **During coding**: Follow the design docs in `specs_SDD/PaperLens/design/`
 3. **After coding**: Update sprint progress in `ProjectDocs/sprint/`
 4. **Bug fixes**: Always generate a bugfix report via `bug-fix-reporter`
-5. **Test changes**: Update `08-测试设计.md` and run full test suite
+5. **Test changes**: Update `08-测试设计.md` and write/update the required tests; execute them only in the acceptance phase
 
 ### Document Locations
 
@@ -65,10 +65,15 @@ ProjectDocs/
 - Backend: Python, FastAPI, SQLAlchemy, Alembic
 - Frontend: Vue 3, TypeScript, Vite, Vitest
 - No comments unless explicitly requested
-- All tests must pass before completing a task
+- Relevant lightweight tests must pass before completing a task; do not require exhaustive coverage for this personal project
 
 ## Testing
 
+- CodeArts implementation prompts must require writing or updating tests but must explicitly prohibit running test, build, migration round-trip, Docker rebuild, or HTTP smoke commands.
+- Test execution is centralized in the acceptance phase after CodeArts finishes the implementation turn.
+- Default acceptance uses only changed-module targeted tests, one critical smoke flow, and the production build when frontend code changes.
+- For each new feature, prefer 1 normal case, 1 important failure case, and at most 1 concurrency or recovery case when that risk actually exists. Avoid exhaustive parameter combinations, repeated fault-injection matrices, coverage targets, and large generated samples.
+- Keep the existing regression suite as optional reusable assets. Run the full backend/frontend suite only for final release, or after high-risk authentication, migration-chain, or shared-infrastructure changes.
 - Docker backend: `docker compose exec -T backend python -m pytest -q -rs`
 - Frontend: `cd frontend && npm test -- --run`
 - Build: `cd frontend && npm run build`

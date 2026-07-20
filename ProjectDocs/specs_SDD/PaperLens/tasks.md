@@ -26,6 +26,8 @@
 | 状态 | 接口 |
 |------|------|
 | ✅ CURRENT | GET /api/v1/health |
+| ✅ CURRENT | GET /api/v1/health/live |
+| ✅ CURRENT | GET /api/v1/health/ready |
 | ✅ CURRENT | POST /api/v1/papers/upload（仅 file 字段，title=文件名stem，status=PROCESSING） |
 | ✅ CURRENT | GET /api/v1/papers |
 | ✅ CURRENT | GET /api/v1/papers/{paper_id} |
@@ -1080,6 +1082,7 @@
 
 - [x] 新增受保护路由、三栏阅读布局、章节/页面导航和 Evidence 高亮。
 - [x] 接入解释创建、轮询、重试、历史分页和 Citation 跳转。
+- [x] 选中文字解释详情激活时持续蓝色定位原文，悬停其他解释后恢复当前详情选区。
 - [x] 全部模型文本按纯文本渲染；处理窄屏、空态、竞态和卸载清理。
 
 ### T-13.1.5：测试与验收
@@ -1157,29 +1160,186 @@
 
 ### T-17.1 017 迁移与 append-only 审计
 
-- [ ] 建立 admin_audit_logs 表、全图 CHECK、索引和 PostgreSQL trigger 拒绝 UPDATE/DELETE。
-- [ ] 支持空表 016/017 往返，非空审计降级在 DDL 前拒绝。
+- [x] 建立 admin_audit_logs 表、全图 CHECK、索引和 PostgreSQL trigger 拒绝 UPDATE/DELETE。
+- [x] 支持空表 016/017 往返，非空审计降级在 DDL 前拒绝。
 - 引用：FR-16.4～16.6；`design/16-完整管理员系统与不可变审计.md`。
 
 ### T-17.2 管理员授权与 CLI 引导
 
-- [ ] admin-bootstrap CLI：零 ACTIVE ADMIN 时提升目标用户，同事务写审计+撤 session。
-- [ ] 复用 require_admin；FOR UPDATE 锁定 ACTIVE ADMIN 集合；禁止自降级/自禁用；至少保留一个 ACTIVE ADMIN。
+- [x] admin-bootstrap CLI：零 ACTIVE ADMIN 时提升目标用户，同事务写审计+撤 session。
+- [x] 复用 require_admin；advisory lock + FOR UPDATE 锁定 ACTIVE ADMIN 集合并锁后复核操作者；禁止自降级/自禁用；至少保留一个 ACTIVE ADMIN。
 - 引用：FR-16.5～16.6；`design/16-完整管理员系统与不可变审计.md`。
 
 ### T-17.3 8 条管理员 API
 
-- [ ] admin router/schema/service：dashboard 聚合、users 列表/详情/PATCH、papers/tasks/exports 只读、audit-logs 列表。
-- [ ] PATCH 用户变更：role/status+reason、同值 no-op、审计写入、session+reset 撤销、并发 409。
+- [x] admin router/schema/service：dashboard 聚合、users 列表/详情/PATCH、papers/tasks/exports 只读、audit-logs 列表。
+- [x] PATCH 用户变更：role/status+reason、同值 no-op、审计写入、session+reset 撤销、并发 409。
 - 引用：FR-16.1～16.4；8 条 /admin API。
 
 ### T-17.4 Vue 管理后台
 
-- [ ] AdminDashboardView 四区域（总览/用户/内容/审计）、内容三子标签、确认对话框含 reason 输入。
-- [ ] 路由守卫、401/403 安全处理、分页/筛选/乱序覆盖保护、安全渲染。
+- [x] AdminDashboardView 四区域（总览/用户/内容/审计）、内容三子标签、确认对话框含 reason 输入。
+- [x] 路由守卫、401/403 安全处理、独立分页/筛选/乱序覆盖保护、安全渲染。
 - 引用：FR-16.1～16.6；P10；`design/10-前端详细设计.md`。
 
 ### T-17.5 测试与验收
 
-- [ ] 迁移往返+trigger、CLI bootstrap+并发、8 API 全覆盖、并发管理员保护、session 撤销、审计完整性、前端路由/权限/确认/安全扫描。
-- [ ] Docker 后端 >=977、前端 >=16 files/197 passed、构建 >=136 modules；017 check、67 路由、28 张 ORM 应用表。
+- [x] 迁移往返+trigger、CLI bootstrap+并发、8 API 全覆盖、并发管理员保护、session 撤销、审计完整性、前端路由/权限/确认/安全扫描。
+- [x] Docker 后端 1030 passed、前端 17 files/200 passed、构建 139 modules；017 check、67 路由、28 张 ORM 应用表。
+
+## T-QA 测试策略轻量化
+
+- [x] 将默认测试规模调整为每个新功能 1 个正常路径和 1 个关键失败路径。
+- [x] 并发、恢复或数据破坏风险明确存在时，至多增加 1 个代表性风险样例。
+- [x] 默认集中验收只运行变更模块定向测试、1 条核心烟测和必要生产构建。
+- [x] 取消覆盖率、全枚举组合、完整故障注入矩阵和每轮全量回归要求；现有测试保留为可选资产。
+- 引用：`ProjectDocs/systemDesign/08-测试设计.md#轻量测试策略2026-07-16-起生效`；SDD `spec.md#附录-a轻量测试规格`。
+
+## T-18 全链路恢复与一致性（P8.2）
+
+### T-18.1 恢复服务与配置
+
+- [x] 新增 `recovery_service.py`：RecoveryService 类 + run_recovery() 入口
+- [x] FastAPI lifespan 集成：启动时自动运行恢复扫描
+- [x] 恢复配置：PAPERLENS_RECOVERY_ENABLED / STALE_SECONDS / BATCH_SIZE
+- [x] PostgreSQL 非阻塞事务锁互斥（pg_try_advisory_xact_lock）
+- 引用：FR-17.1；`design/17-全链路恢复与一致性.md#3`
+
+### T-18.2 各类任务恢复逻辑
+
+- [x] Paper PROCESSING：缺少可靠执行代次时固定 FAILED，不删除既有数据
+- [x] AnalysisTask：指标/实验复位派发，已有结果转成功，审阅缺少 options 时固定 FAILED
+- [x] LearningExplanation / PaperQATurn：复位 PENDING 后复用原子 claim
+- [x] ExportReport PENDING/GENERATING：生成 bytes 未持久化时固定 FAILED
+- [x] 有限行锁 + 原子 claim + 日志白名单
+- 引用：FR-17.1；`design/17-全链路恢复与一致性.md#3`
+
+### T-18.3 前端一致性
+
+- [x] 新增 `usePolling.ts` 共享轮询 composable
+- [x] 所有轮询页面 401 → 登录跳转 + 固定安全错误消息
+- [x] ExperimentDataView 刷新恢复活跃实验分析任务
+- [x] TaskDetail 增加可空 experiment_file_id 白名单字段
+- 引用：FR-17.2～17.3；`design/17-全链路恢复与一致性.md#4`
+
+### T-18.4 测试与验收
+
+- [x] 后端测试 3 个函数（test_recovery.py）
+- [x] 前端测试 2 个函数（usePolling.test.ts）
+- [x] 隔离核心烟测资产 1 条流程（e2e/RECOVERY_SMOKE.md）
+- [x] 轻量集中验收：后端 3 passed、前端 2 passed、生产构建 140 modules、隔离健康接口 200
+- [ ] 浏览器手工流程：当前浏览器控制能力不可用，保留清单待发布前执行，不伪记为通过
+- 状态：已完成并经码道独立收口
+
+## T-19 性能、可靠性、限流与可观测性收口
+
+### T-19.1 请求追踪与限流基础设施
+
+- [x] 新增 request_tracing.py：X-Request-ID 生成/复用、contextvars 传播、结构化请求日志
+- [x] 新增 rate_limiter.py：固定窗口限流器、classify_scope、resolve_client_ip、parse_trusted_cidrs
+- [x] 新增 rate_limit_middleware.py：限流中间件 + 429 JSON envelope
+- [x] 更新 config.py：rate_limit_*、db_pool_*、recovery_max_workers 配置项
+- [x] 更新 main.py：中间件注册 + executor shutdown
+- [x] 更新 errors.py：所有错误响应返回 X-Request-ID + 结构化日志
+- 引用：FR-18.1～18.2；`design/18-性能可靠性与可观测性.md#2`
+
+### T-19.2 健康检查与可靠性
+
+- [x] 新增 /health/live 和 /health/ready 端点
+- [x] 更新 database.py：pool_pre_ping + 有界池参数 + _build_engine_kwargs
+- [x] 更新 recovery_service.py：ThreadPoolExecutor 替代 daemon Thread + shutdown_executor
+- 引用：FR-18.3～18.4；`design/18-性能可靠性与可观测性.md#2`
+
+### T-19.3 N+1 与无界查询修复
+
+- [x] list_reviews：selectinload 急加载 findings + evidences（3 查询替代 1+N+M）
+- [x] list_qa_conversations：批量聚合查询替代逐会话查询
+- [x] list_tasks：添加 .limit(200)
+- [x] list_evidences：审查后保持完整 Evidence 契约，撤销静默 .limit(500)
+- 引用：FR-18.5；`design/18-性能可靠性与可观测性.md#2`
+
+### T-19.4 测试与验收
+
+- [x] 后端测试 3 个函数（test_p83_observability.py）
+- [x] 集中验收：P8.3 3 passed、查询回归 2 passed、后端镜像构建与隔离 HTTP 烟测通过
+- 状态：已完成并经码道独立收口
+- 引用：FR-18.1～18.5；`design/18-性能可靠性与可观测性.md`
+
+## T-20 华为云部署、备份恢复与综合安全验收
+
+### T-20.1 OBSStorage 实现
+
+- [x] 实现 OBSStorage（esdk-obs-python SDK，延迟导入）
+- [x] ECS Agency 优先 + ENV fallback
+- [x] 私有对象 + SSE-OBS/SSE-KMS
+- [x] 严格 key 规范化
+- [x] Context-managed materialize（临时文件自动清理）
+- [x] 工厂单例 + close 生命周期
+- 引用：FR-19.1～19.2；`design/19-华为云部署备份恢复与安全.md#2`
+
+### T-20.2 生产配置与调用者迁移
+
+- [x] PAPERLENS_ENV + production model_validator
+- [x] docs_enabled 属性控制 OpenAPI 文档关闭
+- [x] OBS 配置验证
+- [x] api/exports.py 使用 materialize
+- [x] services/export_service.py 使用 materialize
+- [x] services/experiment_analysis_service.py 使用 materialize
+- 引用：FR-19.3；`design/19-华为云部署备份恢复与安全.md#2`
+
+### T-20.3 生产部署资产
+
+- [x] deploy/huawei/ 完整部署指南
+- [x] docker-compose.prod.yml（独立 migrate、非 root、资源限制）
+- [x] nginx.prod.conf（安全响应头）
+- [x] Dockerfile.prod + entrypoint.prod.sh（secret 注入）
+- [x] backup-restore.md（备份恢复手册）
+- [x] 安全验收清单
+- 引用：FR-19.4～19.5；`design/19-华为云部署备份恢复与安全.md#2`
+
+### T-20.4 测试与验收
+
+- [x] 后端测试 3 个函数（test_p84_production.py）
+- [x] 集中轻量验收：3 passed；后端/前端生产镜像构建与非 root/read-only 启动通过；Compose 静态校验通过
+- [ ] 用户真实华为云验收：RDS/OBS/MaaS/ELB/WAF 资源、Secret 与小额业务流程留待部署窗口
+- 状态：已完成并经码道独立收口；不再新增开发轮次
+
+## T-21 论文学习报告导出改版
+
+### T-21.1 来源聚合与模板
+
+- [x] 允许没有审阅任务的 `PARSED` 论文创建导出
+- [x] 聚合并校验本用户成功学习解释、高亮、笔记
+- [x] 扩展 source snapshot 与确定性生成时间
+- [x] 将 Markdown 结构改为论文学习报告，审阅改为可选章节
+
+### T-21.2 多格式版式
+
+- [x] 更新 PDF/DOCX 标题、元数据和商务简报式排版
+- [x] 保持确定性输出、中文字体、页码与安全包校验
+
+### T-21.3 前端页面
+
+- [x] 重做 ReportExportView 的配置区、内容说明和历史区
+- [x] 暴露指标/实验开关并修正无审阅错误文案
+
+### T-21.4 轻量验收
+
+- [x] 增加无审阅学习报告与既有所有权隔离测试
+- [x] 更新 ReportExportView 组件测试
+- [x] 执行定向测试、前端构建、PDF 逐页检查和 DOCX 包结构检查
+
+## T-22 学习解释退出交互
+
+- [x] 将退出按钮移动到生成学习解释按钮下方
+- [x] 将 `/papers` 路由跳转改为清理详情并定位解释历史
+- [x] 更新并执行 PaperReadingView 单文件测试
+- 引用：FR-21；`design/13-论文阅读学习.md#10-学习解释退出交互`
+
+## T-23 轻量单机 ECS 部署
+
+- [x] 增加单机 Compose、HTTP Nginx、前端生产镜像和环境模板
+- [x] 隔离公网入口并为数据库、后端、前端设置资源边界
+- [x] 增加轻量静态配置测试和单机部署说明
+- [ ] 在真实 ECS 构建镜像并执行小额业务验收
+- 引用：FR-22；`design/19-华为云部署备份恢复与安全.md#8-轻量单机-ecs-档案`

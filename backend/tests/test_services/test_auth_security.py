@@ -43,19 +43,19 @@ def test_jwt_secret_is_required_and_has_no_repository_default(monkeypatch):
 
 
 def test_password_policy_boundaries_and_no_composition_rule():
-    fifteen_unicode = "文" * 14 + " "
-    assert len(fifteen_unicode) == 15
-    assert validate_password_strength(fifteen_unicode) == []
+    eight_unicode = "文" * 7 + " "
+    assert len(eight_unicode) == 8
+    assert validate_password_strength(eight_unicode) == []
     assert validate_password_strength("x" * 128) == []
-    assert validate_password_strength("x" * 14)
+    assert validate_password_strength("x" * 7)
     assert validate_password_strength("x" * 129)
-    assert validate_password_strength("passwordpassword")
-    assert validate_password_strength("SafePaperLensPhrase2026")
+    assert validate_password_strength("password") == []
+    assert validate_password_strength("PaperLens") == []
     assert validate_password_strength(
         "long.user@example.com",
         email="long.user@example.com",
-    )
-    assert validate_password_strength("valid length\nnot printable")
+    ) == []
+    assert validate_password_strength("eight-ok") == []
 
 
 def test_access_token_contains_and_requires_security_claims():

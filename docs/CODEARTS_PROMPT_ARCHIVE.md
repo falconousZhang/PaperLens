@@ -7,7 +7,7 @@
 
 1. 按生成时间顺序保存不同版本；相同内容在聊天展示并写入文件时只归档一次。
 2. 后续每个开发任务都在本文件末尾追加对应提示词，并同步更新 `docs/CODEARTS_NEXT_PROMPT.md` 供用户提交给码道。
-3. 码道负责按提示词独立实施、审查和复测；若发现问题，依据用户授权直接修正并验证，不增加重复返修轮次。当前阶段确认通过后，再生成下一步提示词。
+3. 码道负责按提示词独立实施并编写少量核心测试；从 P8.2 起不在实现轮次运行任何测试、构建、迁移、Docker 或 HTTP 验收，交付后只执行变更模块的轻量定向测试、1 条核心烟测和必要构建。全量仅用于最终发布或高风险基础变更。若发现问题，依据用户授权直接修正并验证，不增加重复返修轮次。
 4. 不以 `docs/PROGRESS.md` 的汇报代替代码、数据库、Docker 和测试结果核验。
 5. 本文 01～08 均从项目历史开发记录的原始消息或补丁参数逐字恢复；仅统一换行为 LF，没有根据阶段汇报改写正文。
 6. P2.5 之前实际执行的版本为 01～07；P2.5 已生成提示词且同样由码道实施。从 P2.6 起延续码道独立实施、审查与验收的开发方式。
@@ -45,7 +45,8 @@
 | 26 | P7.1 论文阅读学习工作台 | ✅ 已提交、完成并验收 |
 | 27 | P7.2 当前论文多轮问答 | ✅ 已提交、完成并验收 |
 | 28 | P7.3 个人学习沉淀与论文库 | ✅ 已提交、完成并验收 |
-| 29 | P8.1 完整管理员系统与不可变审计 | ⬜ 本轮生成，待提交 |
+| 29 | P8.1 完整管理员系统与不可变审计 | ✅ 已提交、完成并验收 |
+| 30 | P8.2 全链路 E2E、重启恢复与一致性收口 | ⬜ 本轮生成，待提交 |
 
 ---
 
@@ -5703,4 +5704,246 @@ P8.2 仍只用于用户端/管理员端 E2E、任务恢复和全链路一致性�
 6. 最终逐项报告 017/不可变审计、CLI、授权与最后管理员并发、8 API、管理页面、全部测试、迁移、路由/表、HTTP、测试库残留、开发库只读计数、Git/禁改目录和未实现项。未执行必须如实说明，不能用历史结果冒充。
 
 不要 git commit，不要修改 码道提示词，不要读取或使用 API Key，不要真实调用华为云，不要修改开发库业务数据，不要删除 volume，不要拆分 P8.1，也不要提前实现 P8.2～P8.4。
+~~~~
+
+---
+
+## 30 — P8.2 全链路 E2E、重启恢复与一致性收口
+
+> 状态：本轮生成，待提交码道
+
+~~~~text
+# 码道下一阶段提示词：P8.2 全链路 E2E、重启恢复与一致性收口
+
+## 任务目标
+
+本轮固定为 P8.2，且必须在一个码道轮次内完成：在 P2～P8.1 已实现的论文上传解析、结构化审阅、指标、实验分析、报告导出、认证隔离、论文阅读学习、问答、个人学习沉淀和完整管理员系统基础上，实现后台任务在进程重启后的安全恢复、用户端与管理员端全链路状态一致、以及可重复的隔离 E2E 测试资产。
+
+本轮不做 P8.3 性能/限流/可观测性调优，也不做 P8.4 华为云部署、RDS/OBS、备份恢复和综合安全；不得增加码道轮次。
+
+## 一、最高优先级：码道本轮禁止运行任何测试或验收命令
+
+1. 码道必须按设计编写或更新后端测试、前端测试和 E2E 测试资产，但本轮内不得执行它们。
+2. 禁止执行任何 pytest、Vitest、Playwright/Cypress、npm test、测试脚本、覆盖率命令、Alembic upgrade/downgrade/check 往返、生产构建、Docker build/up/recreate、HTTP 烟测、浏览器 E2E 或真实外部调用。
+3. 禁止为了“顺手验证”运行定向测试、单文件测试、类型检查或编译命令；测试、构建、迁移和运行验收全部在码道交付后的集中验收阶段统一执行。
+4. 码道最终报告必须明确列出新增/修改的测试文件，并写明“按项目规则未运行测试、构建、迁移或 Docker/HTTP 验收，等待集中验收”，不得引用历史结果冒充本轮结果。
+
+## 二、开始前边界与固定基线
+
+1. 完整阅读根目录 `AGENTS.md`、`ProjectDocs/systemDesign/01～08`、`ProjectDocs/specs_SDD/PaperLens/`、P8.1 Sprint/修复报告和真实代码；严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行，先更新设计，再编码，最后同步 Sprint。
+2. 当前已验收基线：Alembic 017；67 条 `/api/v1` method+path；28 张 ORM 应用表、29 张物理表；后端 1030 passed；前端 17 files/200 passed；构建 139 modules；测试库残留 0；三容器运行且后端/前端 HTTP 200。以上只作为进入本轮的历史基线，不得写成 P8.2 的运行结果。
+3. 现有未提交改动都属于用户/码道；不得覆盖、还原、批量格式化或清理。禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个码道提示词文件。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie、密码、refresh/reset token 或完整环境。禁止真实 MaaS、Embedding、外网或任何可能计费调用。
+5. 禁止修改或删除开发库业务数据、审计日志、用户文件和 Docker volume。不得运行 `admin-bootstrap`、不得变更真实用户角色/状态。自动化测试代码只能指向独立 `paperlens_test`/E2E 隔离库和 Mock 服务。
+
+## 三、设计与任务清单先行
+
+1. 编码前同步 `ProjectDocs/systemDesign/01～08`，增加 P8.2 的任务状态机清单、崩溃窗口、恢复策略、页面恢复行为和最小 E2E 场景；不要设计大规模故障注入矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md` 和相关 design；新增 `ProjectDocs/specs_SDD/PaperLens/design/17-全链路恢复与一致性.md` 及 `ProjectDocs/sprint/全链路恢复与一致性.md`，开始置为进行中。由于码道不执行测试，本轮结束时只标记“实现完成、待集中验收”，不得提前写“验收完成”。
+3. 先从真实模型和服务列出所有异步/可中断状态：Paper PROCESSING、AnalysisTask PENDING/RUNNING、LearningExplanation PENDING/RUNNING、PaperQATurn PENDING/RUNNING、ExportReport PENDING/GENERATING，以及所有前端轮询页面。不得遗漏，也不得把已完成终态重新执行。
+4. 对每类状态明确：持久化输入是否足够重放、认领条件、陈旧阈值、恢复动作、不可恢复时的固定 FAILED 语义、用户重试入口、并发/多进程互斥、commit-unknown 回查和日志白名单。
+
+## 四、后台任务安全恢复
+
+1. 新增独立 recovery service 与 FastAPI lifespan/startup 集成，不能把恢复逻辑散落到路由。恢复必须有配置开关、正整数 stale_seconds、batch_size 上限和安全默认值；配置非法时启动前固定失败，不静默使用危险值。
+2. 使用 PostgreSQL advisory lock 保证多实例同一时刻最多一个恢复扫描者；按固定类型顺序、created_at/id 顺序和有限批次扫描，禁止全表加载。扫描事务只认领/重置状态，任何 PDF 解析、LLM、Embedding、文件读写或报告转换期间不得持有数据库事务或 advisory lock。
+3. 恢复只能处理超过 stale_seconds 的非终态记录；PENDING 但尚未被 BackgroundTasks 执行的记录可重新派发，陈旧 RUNNING/PROCESSING/GENERATING 必须先用条件 UPDATE 原子收回。新鲜任务、SUCCEEDED/READY/FAILED/CANCELLED 和已经被其他 worker 认领的记录必须保持不变。
+4. 复用每个模块现有的单任务执行入口，不能复制业务生成逻辑。恢复前后都重新验证 owner、Paper 状态、来源图、source/context/request hash、存储对象和任务类型。持久化输入完整时安全重放；输入不足时原子进入固定公开 FAILED，并允许用户从现有入口以新请求重试，不能猜测或构造缺失输入。
+5. AnalysisTask 的 REVIEW、METRIC_EXTRACTION、EXPERIMENT_ANALYSIS 必须分别正确派发；不能把所有类型交给同一处理器。LearningExplanation、PaperQATurn 和 ExportReport 只能在完整持久化上下文可复算时恢复。Paper PROCESSING 只允许从既有安全 storage_key 重新解析，不接受任意路径。
+6. 同一记录重复扫描、两个实例并发启动、恢复期间再次崩溃、处理器完成后回调迟到都必须幂等。恢复不得产生重复 ReviewResult/MetricRecord/ExperimentResult/Citation/ExportReport，不得覆盖较新的成功终态。
+7. 事务失败 rollback；commit 后抛错使用新 Session 只读确认最终状态。日志只记录 stage、entity type、entity id、task type/status、异常类型和计数，不记录 email、论文/问题/笔记/模型内容、reason、路径、hash、token 或 SQL。
+8. 如真实模型证明必须新增恢复元数据，最多允许新增一个 `018_task_recovery` 迁移，且只能增加必要的小字段/索引；ORM/迁移名称一致，兼容 017 现有数据，空表可往返，非空破坏性 downgrade 必须在 DDL 前拒绝。若现有字段足够则不得为了凑迁移新增表或字段。
+
+## 五、用户端与管理员端状态一致性
+
+1. 统一各页面刷新后的恢复行为：Review、Metric、Experiment、Export、LearningExplanation、QA 在重新进入页面时必须先读取已有活动/成功状态，再决定恢复轮询、展示终态或允许重试；不得仅依赖内存 timer。
+2. 抽取最小共享轮询工具或严格统一现有实现：同一资源最多一个在途 GET，固定间隔，页面/路由/资源/动作 generation 隔离，卸载必清理，旧响应不得覆盖新资源；401 清认证并转登录，403/404/409/422/未知错误使用固定安全文案。
+3. 后端状态与前端按钮必须一致：活动任务禁止重复创建，FAILED 可从已有产品入口重试，成功结果只按当前 task/result/source 展示；刷新或重启后不得出现“后台已成功但页面永远处理中”或“后台仍处理中但页面允许重复提交”。
+4. 管理后台总览、任务和报告只读列表必须能反映恢复后的最新状态，但不得新增取消、强制重跑、删除、冒充、跨用户详情或内容预览。普通 ADMIN 在普通业务 API 中仍不能绕过 owner。
+5. 保持所有模型文本 Vue 转义插值；禁止 v-html、Web Storage、token URL、直接 innerHTML 和服务端错误透传。不得因为 E2E 添加测试后门、固定管理员、弱密码、跳过鉴权或仅测试环境可访问的业务路由。
+
+## 六、只编写、不运行的轻量测试与 E2E 资产
+
+1. 本项目不追求企业级覆盖率。本轮新增后端测试函数最多 3 个：一个陈旧任务恢复成功样例、一个新鲜/终态/重复扫描不变的合并样例、一个并发互斥或缺失输入安全失败样例。使用最小数据，不为每种实体、状态和异常分别复制样例。
+2. 前端新增 Vitest 最多 2 个：一个刷新后恢复轮询并到达终态，一个卸载或 401 时安全停止。不要为每个页面和每个错误码重复创建等价样例。
+3. E2E 只保留 1 条代表性流程：注册/登录→上传一篇最小 PDF→创建一个代表性后台任务→模拟 backend 重启→页面恢复并到达安全终态→管理员只读看到状态。其余学习、问答、实验和三格式导出不再逐一做 E2E，可由已有定向资产覆盖。
+4. 全部测试只使用一个普通用户；需要验证管理员边界时最多再增加一个管理员。每类资源默认只创建一行，不生成大数据、批量论文或参数排列组合。
+5. 使用 Mock LLM/Embedding 和临时存储；不得依赖真实华为云、外网、开发库或真实用户文件。若新增 `docker-compose.e2e.yml`，数据库名、volume、端口和存储目录必须与开发环境隔离，并只使用明显测试占位配置。
+6. 不设置覆盖率目标，不新增完整故障注入矩阵，不要求每类任务分别做 E2E，也不要求每轮运行现有 1030 项后端全量。集中验收阶段默认只运行这 3 个后端样例、2 个前端样例、1 条 E2E 和前端生产构建。
+7. 本节所有测试和 E2E 文件只编写、静态核对，不得在码道本轮执行任何命令。
+
+## 七、文档与交付
+
+1. 完成实现后同步 systemDesign 01～08、SDD spec/tasks/design、P8.2 Sprint、README、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、architecture/api-contract/data-model/security-design。P8.1 保持已完成，P8.2 标记“实现完成、待集中验收”，P8.3/P8.4 保持未实现。
+2. 文档记录新的恢复配置、安全默认、状态矩阵、恢复时序、E2E 隔离方式和集中验收时应执行的命令清单，但不得声称命令已经执行或通过。
+3. 最终报告逐项列出：恢复覆盖的实体、认领/互斥策略、不可恢复策略、前端一致性修改、E2E 资产、迁移（如有）、修改文件、待集中验收命令。明确报告未运行测试/构建/迁移/Docker/HTTP。
+4. 禁止修改码道提示词与归档；禁止创建 Git 提交；禁止读取 secret、真实调用华为云、修改开发库业务数据或删除 volume。
+
+本轮的完成定义是“代码、测试资产和文档实现完毕，等待集中验收”，不是码道自行跑测试。不要运行任何测试、构建、迁移、Docker、HTTP 或浏览器验收命令。
+~~~~
+
+---
+
+## 31 — P8.3 性能、可靠性、限流与可观测性收口
+
+> 状态：本轮生成，待提交码道
+
+~~~~text
+# 码道下一阶段提示词：P8.3 性能、可靠性、限流与可观测性收口
+
+## 任务目标
+
+本轮固定为 P8.3，并且必须在一个码道轮次内完成：在 P2～P8.2 已实现的论文阅读学习、结构化审阅、指标/实验/导出、认证隔离、管理员系统和任务恢复基础上，补齐适合当前单机/小规模部署的应用级限流、请求追踪、安全结构化日志、健康/就绪检查、数据库连接池参数和恢复派发并发上限。
+
+本轮不新增产品页面，不实现 Redis/Celery/持久化队列、Prometheus/Grafana、FAISS/pgvector、大规模压测，也不做 P8.4 华为云 ECS/RDS/OBS/APIG/WAF 部署、备份恢复和综合安全验收。不得增加码道轮次。
+
+## 一、最高优先级：码道禁止运行测试和验收命令
+
+1. 码道必须编写本轮最小测试资产，但不得执行 pytest、Vitest、Playwright/Cypress、覆盖率、类型检查、Python 编译、npm build、Alembic upgrade/downgrade/check、Docker build/up/recreate、HTTP 烟测、浏览器操作或真实外部调用。
+2. 禁止以“只跑一个文件”“静态编译一下”或历史结果替代本条。测试、构建、容器和 HTTP 验收统一留到交付后的集中验收阶段。
+3. 最终报告必须写明“按项目规则未运行测试、构建、迁移或 Docker/HTTP 验收，等待集中验收”，并只列出待执行命令，不得声称通过。
+
+## 二、开始前边界与真实基线
+
+1. 完整阅读根目录 `AGENTS.md`、`ProjectDocs/systemDesign/01～08`、`ProjectDocs/specs_SDD/PaperLens/`、P8.2 Sprint/修复报告和真实代码；严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 执行，先设计、再编码、最后同步 Sprint。
+2. 当前数据库基线仍为 Alembic 017；67 条 `/api/v1` method+path；28 张 ORM 应用表、29 张物理表。P8.2 独立验收为后端恢复 3 passed、前端轮询 2 passed、生产构建 140 modules、隔离健康接口 200；浏览器手工清单未执行。这些是历史基线，不得写成 P8.3 结果。
+3. 现有未提交改动都属于用户/码道；不得覆盖、还原、批量格式化或清理。禁止 git add/commit/reset/checkout/restore/clean/rebase；禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md` 和两个码道提示词文件。
+4. 禁止读取、搜索、打印或复制 `.env`、API Key、JWT secret、Authorization、cookie、密码、refresh/reset token、DSN 或完整环境。禁止真实 MaaS、Embedding、外网或任何可能计费调用。
+5. 禁止修改开发库业务数据、真实用户/管理员状态、审计日志、用户文件或 Docker volume。自动测试代码只能使用 `paperlens_test`、Mock 和最小临时数据。
+
+## 三、设计与文档先行
+
+1. 编码前同步 `ProjectDocs/systemDesign/01～08`，明确限流分组/默认值、可信代理边界、请求 ID、日志白名单、liveness/readiness、数据库池和后台恢复派发上限；P8.3 不新增页面，页面设计只记录“无新页面及路由”。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`；新增 `ProjectDocs/specs_SDD/PaperLens/design/18-性能可靠性限流与可观测性.md` 和 `ProjectDocs/sprint/性能可靠性限流与可观测性.md`，开始时置进行中。
+3. 设计必须明确：应用内限流是单进程防护，不伪装为分布式全局限流；P8.4 再由华为云 APIG/WAF/负载均衡或等价入口提供多实例总限流。不得为了“分布式”新增 Redis、数据库计数表或外部依赖。
+4. 本轮不得新增数据库表、字段、索引或 Alembic 018；若静态审查没有明确 N+1/无界查询证据，不得做投机性 SQL/模型重写。
+
+## 四、请求追踪与安全可观测性
+
+1. 新增独立请求上下文/中间件。每个请求使用规范 UUID4 request id：入站 `X-Request-ID` 只有在严格 UUID4 时才可复用，否则生成新值；所有成功和错误响应都返回 `X-Request-ID`。
+2. 使用 `contextvars` 或等价请求级上下文，让同一请求日志可取得 request id；请求结束记录一条结构化 key=value 日志，字段只允许 `request_id/method/route/status/duration_ms/rate_scope`。route 必须使用路由模板，不能记录含论文/用户 UUID 的原始路径。
+3. 禁止日志记录 query string、请求/响应 body、Authorization/cookie/header 全量、IP、email、display_name、论文/问题/笔记/模型内容、文件名/路径、hash、token、secret、DSN、SQL 参数或异常正文。5xx 可记录固定 stage 和异常类型；不要与现有全局异常处理重复泄漏堆栈。
+4. `X-Request-ID` 只用于追踪，不能参与授权、幂等、资源归属或数据库主键；恶意超长/非法输入不得进入响应或日志。
+
+## 五、轻量应用级限流
+
+1. 新增线程安全、固定窗口或令牌桶式的内存限流器；必须使用单调时钟、有限容量和过期清理，默认最大 key 数 10000。容量满时先清过期项，再按最旧项有限淘汰，禁止字典无限增长。
+2. 限流身份默认只使用直接 TCP peer。只有直接 peer 命中显式 `PAPERLENS_TRUSTED_PROXY_CIDRS` 时才允许按严格解析的代理来源头取客户端地址；默认可信代理列表为空，禁止无条件信任 `X-Forwarded-For`/`X-Real-IP`，禁止把原始 IP 写日志。
+3. 增加有上下界校验的配置：总开关、窗口秒数、最大 key 数、默认读取额度、普通写额度、认证敏感额度、上传额度和可信代理 CIDR。建议安全默认：窗口 60 秒、读取 300、普通写 60、登录/注册/找回/重置 10、PDF/实验文件上传 10；布尔值不能当整数，非法 CIDR 启动前失败。
+4. 分组顺序必须稳定：`/api/v1/health*` 完全豁免；认证敏感 POST 为 auth；论文/实验文件上传为 upload；其他 GET/HEAD 为 read；其他写方法为 write。路径分类集中维护，不散落到各路由，也不读取请求 body。
+5. 超限统一返回 429 JSON 错误 envelope：`code=RATE_LIMITED`、固定中文安全 message、`details=null`，并设置整数 `Retry-After` 和 `X-Request-ID`。不得返回 key、IP、当前计数、内部配置或实现细节。
+6. 限流中间件与错误/追踪中间件顺序必须保证 429、404、422、500 都有 request id 和安全响应。现有前端轮询频率在默认 read 配额内；不得修改七类 `usePolling` 或用降低轮询正确性换取通过限流。
+
+## 六、健康、数据库与后台可靠性
+
+1. 保持现有 `GET /api/v1/health` 响应兼容；新增 `GET /api/v1/health/live`，只表示进程存活；新增 `GET /api/v1/health/ready`，以短事务执行 `SELECT 1` 检查数据库。ready 成功 200，失败 503，只返回固定 `status/version/checks.database`，不公开异常、地址、驱动或凭据。
+2. 三个 health 端点不要求认证且不计入限流。liveness 不能依赖数据库、MaaS、Embedding、OBS 或文件写入；readiness 不调用外网，不创建/修改业务数据。
+3. 为 SQLAlchemy engine 增加有界配置并在 `_ensure_engine()` 与 `configure_engine()` 共用同一构造函数：`pool_pre_ping=true`、pool_size 默认 5、max_overflow 默认 10、pool_timeout 默认 10 秒、pool_recycle 默认 1800 秒；全部严格校验，日志不打印 URL。测试重配必须先 dispose 旧 engine。
+4. 将 P8.2 recovery 的“每个 dispatch 新建一个 daemon Thread”改为一个有界 `ThreadPoolExecutor`，worker 默认 4、范围 1～32；同一次恢复最多仍登记 batch_size 个任务，只限制并行 worker，不改变状态机、claim、事务边界和可恢复范围。
+5. executor 由应用 lifespan 创建并在 shutdown 关闭，恢复扫描通过注入的 submitter 派发；提交拒绝/关闭竞态只记录白名单错误并保留可再次恢复的状态，不能把未执行任务误记成功。不得把所有业务改造成新队列，也不得复制任务处理器。
+6. 静态检查高频列表和管理员聚合是否已分页、有 page_size 上限且无逐行 N+1。只有发现真实问题时做最小修正并在文档写明证据；不新增缓存层、物化视图、全文索引或性能数字。
+
+## 七、只编写、不运行的最小测试
+
+1. 本轮后端新增测试函数最多 3 个，集中放入一个测试文件：
+   - request id：合法复用、非法替换、成功/错误均回传，并验证结构化日志不含敏感样例；
+   - rate limit：最小额度内允许，下一次固定 429/Retry-After，health 豁免且 store 有界；
+   - health/可靠性：live 不依赖 DB，ready 的 DB 成功/失败为 200/503 且不泄漏异常；可在同一函数静态验证 executor worker 配置。
+2. 不新增前端测试、浏览器 E2E、压测、覆盖率、全端点限流参数化、所有 CIDR 组合或数据库连接池穷举。使用可注入单调时钟，禁止 sleep。
+3. 不修改现有 1030+ 后端和 200+ 前端历史测试来迁就错误实现；仅在公开契约确实增加 `X-Request-ID` 或 health 路由时做最小兼容更新。
+4. 测试文件只编写和静态核对，码道不得运行。集中验收建议仅执行本轮最多 3 个后端测试、1 条隔离 health HTTP 烟测和必要镜像构建，不运行完整全量。
+
+## 八、交付与状态
+
+1. 完成后同步 systemDesign 01～08、SDD spec/tasks/design、P8.3 Sprint、README、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、architecture/api-contract/data-model/security-design。P8.1～P8.2 保持已完成，P8.3 标记“实现完成、待集中验收”，P8.4 保持未实现。
+2. 文档列出所有新配置及安全默认、429 契约、request id/log 白名单、health 语义、连接池和 executor 生命周期，并明确应用内限流的单进程边界。
+3. 最终报告逐项列出修改文件、配置、3 条 health 契约、限流分组、日志字段、executor、真实发现的查询问题（若无则明确无）、测试资产和待集中验收命令。
+4. 禁止修改码道提示词与归档，禁止创建 Git 提交，禁止读取 secret、真实调用华为云、修改开发库业务数据、启动/重建 Docker 或删除 volume。
+
+本轮完成定义是“P8.3 代码、最多 3 个后端测试资产和文档实现完毕，等待集中验收”。不要运行任何测试、构建、迁移、Docker、HTTP、浏览器或外部服务命令。
+~~~~
+
+---
+
+## 32 — P8.4 华为云部署、备份恢复与综合安全验收
+
+> 状态：本轮生成，待提交码道
+
+~~~~text
+# 码道下一阶段提示词：P8.4 华为云部署、备份恢复与综合安全验收
+
+## 任务目标
+
+本轮固定为 P8.4，也是既定开发计划的最后一个码道轮次。必须在一个轮次内完成：在 P2～P8.3 已实现并收口的论文阅读学习、审阅/指标/实验/导出、登录注册、管理员系统、任务恢复、限流和可观测性基础上，实现可切换的华为云 OBS 存储适配，补齐面向华为云 ECS + RDS for PostgreSQL + OBS + ModelArts MaaS + ELB/WAF 的生产部署资产、备份恢复手册和综合安全清单，使项目达到“代码与部署资料完整、等待用户在真实云环境最终验收”的状态。
+
+本轮不得新增码道轮次，不实际购买、创建、修改或删除任何华为云资源，不调用真实 OBS/MaaS/RDS，不把“部署资产已完成”写成“真实云上已经部署”。不返工现有产品页面和 P2～P8.3 已验收业务能力。
+
+## 一、最高优先级：码道禁止运行任何测试或环境命令
+
+1. 码道只编写代码、最多 3 个轻量后端测试资产、部署配置和文档，不得运行 pytest、Vitest、E2E、覆盖率、Python 编译、类型检查、npm test/build、Alembic、Docker、HTTP、浏览器或性能命令。
+2. 禁止执行 `docker compose config`、`docker inspect`、`env`、`set`、云 CLI/SDK 调用、OBS/RDS/MaaS 连通性检查、依赖安装或任何外网请求；禁止以单文件或“只做语法检查”为例外。
+3. 最终报告必须明确写明“按项目规则未运行测试、构建、迁移、Docker、HTTP、浏览器或真实华为云验收，等待集中验收”，只列待验收项，不得引用历史通过数冒充 P8.4 结果。
+
+## 二、开始前边界与真实基线
+
+1. 完整阅读根目录 `AGENTS.md`、systemDesign 01～08、SDD、P8.3 Sprint/修复报告、部署相关文档和真实代码；严格按 `dev-process-framework → page-mockup → fullstack-testing → function-detail → sdd-workflow` 先更新设计，再编码，最后同步 Sprint。P8.4 不新增页面，页面设计只记录生产入口和错误展示无变化。
+2. 当前数据库仍为 Alembic 017，P8.4 不需要新业务表或迁移。P8.3 独立集中验收结果仅为历史基线：P8.3 专项 3 passed、两个受影响查询 2 passed、新后端镜像构建成功、隔离 live/ready/404 HTTP 通过；不得写成 P8.4 结果。
+3. 现有未提交改动都属于用户/码道。禁止 git add/commit/reset/checkout/restore/clean/rebase，禁止修改 `.git/`、`.arts/`、`.codeartsdoer/`、`.skills/`、`AGENTS.md`、`docs/CODEARTS_NEXT_PROMPT.md` 和 `docs/CODEARTS_PROMPT_ARCHIVE.md`，禁止批量格式化或清理无关文件。
+4. 禁止读取、搜索、打印、复制或推断 `.env`、API Key、AK/SK、security token、JWT secret、Authorization、cookie、密码、DSN、证书私钥或完整环境。禁止修改开发库数据、用户文件、审计日志和 Docker volume。
+5. 所有示例只能使用显眼占位符，不得把任何曾在对话、环境或文件中出现的真实凭据写入代码、Compose、日志、文档或测试。测试资产只允许注入 fake client 和临时目录，不能依赖真实 SDK 网络行为。
+
+## 三、设计、SDD 与 Sprint 先行
+
+1. 编码前同步 `ProjectDocs/systemDesign/01～08`，增加 P8.4 的生产拓扑、配置矩阵、OBS 对象生命周期、凭据边界、部署/回滚、RDS/OBS 备份恢复、ELB/WAF/安全组和最终验收矩阵。
+2. 更新 `ProjectDocs/specs_SDD/PaperLens/spec.md`、`tasks.md`、`design/design.md`；新增 `ProjectDocs/specs_SDD/PaperLens/design/19-华为云部署备份恢复与安全.md` 和 `ProjectDocs/sprint/华为云部署备份恢复与综合安全.md`。开始时置进行中，结束时只能置“实现完成、待真实云环境最终验收”。
+3. 本轮不新增产品路由、页面、数据库表、Alembic 018、Redis/Celery、Kubernetes、Terraform 自动建云资源、Prometheus/Grafana、FAISS/pgvector、邮件/MFA、计费调用或数据迁移任务。
+4. 所有设计以当前单 ECS 或小规模多实例为目标。应用内限流继续是单进程保护；跨实例总限流、TLS、DDoS/WAF 规则由华为云入口层承担，不在应用中伪造分布式能力。
+
+## 四、实现真实但可离线测试的 OBSStorage
+
+1. 使用华为云官方 Python OBS SDK `esdk-obs-python`，按项目固定依赖方式加入 `backend/requirements.txt`；SDK 必须延迟导入，仅选择 `storage_backend=obs` 时初始化，保证 local/test 模式不因 SDK 客户端或云环境缺失而启动失败。
+2. 在 Settings 增加严格配置并更新 `.env.example`：`PAPERLENS_STORAGE_BACKEND=local|obs`、HTTPS endpoint、bucket、可选安全 prefix、凭据模式 `ECS|ENV`、可选临时 security token、SSE 模式 `OBS|KMS` 及 KMS key id、下载临时目录和连接/读取超时。Secret 字段使用 `SecretStr`；布尔值不能冒充整数；选择 OBS 时缺项、HTTP endpoint、非法 bucket/prefix、KMS 无 key id 必须在启动前用固定安全错误失败。
+3. 生产默认推荐 ECS agency 的临时凭据链；ENV 模式只用于由 DEW/部署系统注入的 AK/SK/token，不允许硬编码或日志输出。使用 SDK 官方 `security_provider_policy`/临时凭据能力，不自行请求元数据地址，不实现自制签名。
+4. 统一严格对象 key 规范化：拒绝空 key、绝对路径、反斜杠、`.`/`..` 段、控制字符、重复分隔和超长值；只能在配置 prefix 下访问由现有 `build_key` 生成的对象。错误和日志不得包含 endpoint、bucket、对象 key、文件名、本地路径、SDK 原始异常或凭据。
+5. `save` 只能上传已有普通文件，使用私有对象和配置的 SSE；检查 SDK HTTP 状态，仅 2xx 视为成功。失败时不得留下被误认为成功的数据库状态；补偿删除只能删除本次确定创建且尚未转移所有权的对象。禁止 public-read、桶创建/删除、列桶/全桶扫描和预签名 URL。
+6. 将只适用于本地路径的读取契约演进为安全的上下文管理式本地物化接口：LocalStorage 直接 yield 已校验路径；OBSStorage 下载到唯一临时文件，验证 SDK 状态，在 `finally` 中关闭并删除。修改实验分析、报告生成完整性检查和报告下载等所有调用者使用该接口，异常、客户端取消和解析失败也不能遗留临时文件。可保留 LocalStorage `read_path` 兼容层，但生产调用不得依赖 OBS 永久缓存路径。
+7. OBS 客户端/Storage 实例应为应用级、并发安全且有显式 `close()` 生命周期，由 FastAPI lifespan 关闭；local 模式为安全 no-op。工厂不得每个请求无限创建连接，也不得在模块导入时访问网络。
+8. 保持数据库 `storage_key` 语义和现有对象命名，不自动把本地已有文件迁移到 OBS，不改写开发环境默认 local Compose。缺失对象、403/404、非 2xx、下载中断和 close 竞态统一映射为现有安全业务错误，不向客户端透传 SDK 文本。
+
+## 五、生产配置与华为云部署资产
+
+1. 增加 `PAPERLENS_ENV=local|test|production` 和集中生产校验。production 必须拒绝 debug、非 Secure 认证 cookie、local storage、HTTP OBS/MaaS endpoint、弱/占位 JWT、缺失数据库/OBS/MaaS 必需配置；生产环境关闭 `/api/docs`、`/api/redoc` 和 OpenAPI JSON，local/test 保持兼容。
+2. 新增 `deploy/huawei/`，至少包含 `README.md`、`.env.production.example`、`docker-compose.prod.yml`、生产 Nginx 配置、部署/回滚说明、备份恢复手册和安全验收清单。示例只能引用外部镜像名和 secret 文件路径，不包含真实域名、IP、账号、项目 ID、桶名或凭据。
+3. 生产 Compose 不包含 PostgreSQL 服务，不暴露后端 8000，只让前端/Nginx 接受来自 ELB 安全组的端口；RDS 通过私网 SSL DSN 连接。增加一次性 migration 服务，再启动 backend，避免多副本同时迁移。不得自动 downgrade 或在失败后继续启动。
+4. 为生产增加独立 Dockerfile/entrypoint 或等价配置：应用进程使用非 root 用户；镜像内不包含 `.env`、测试、用户数据和构建缓存；合理使用 read-only filesystem、`tmpfs /tmp`、`no-new-privileges`、cap drop、资源/进程上限、restart policy 和 live/ready healthcheck。不要破坏现有本地开发 Compose。
+5. 生产 Nginx 只代理同源 `/api/`，保留 request id，正确覆盖而不是盲目信任客户端转发头，限制请求体并配置必要的 CSP、frame、content-type、referrer 等安全响应头；不得启用目录浏览、`v-html` 或客户端 token 存储。TLS 在 ELB/WAF 终止时必须记录可信代理 CIDR 由实际私网网段显式配置，默认仍不信任任意 X-Forwarded-For。
+6. Secret 通过 DEW/CSMS 或部署系统落到宿主机受限文件并以 Compose secrets/只读文件注入；entrypoint 只读取明确的 `*_FILE`，不得 `set -x` 或打印内容。至少覆盖 RDS DSN、JWT secret、MaaS/Embedding key；OBS 优先 ECS agency，ENV fallback 才使用 secret。
+7. 文档给出用户手工配置顺序：VPC/私有子网与安全组 → RDS PostgreSQL/SSL → 私有 OBS 桶 → ECS agency/IAM 最小权限 → DEW secrets → 镜像仓库/ECS → ELB HTTPS/WAF/入口限流 → DNS → health/readiness → 小额 MaaS/OBS 验证。这里只写步骤和占位符，不实现会创建或收费的 IaC。
+
+## 六、备份、恢复、回滚与综合安全
+
+1. `deploy/huawei/backup-restore.md` 明确 RDS 自动备份、保留期、PITR、发布前手工备份、RPO/RTO 假设和月度恢复演练。恢复默认先恢复到新 RDS 实例并只读核对 schema/关键计数，再由人工切换；禁止脚本自动覆盖生产实例或自动执行破坏性 downgrade。
+2. OBS 使用私有桶、SSE-OBS 或 SSE-KMS、版本控制和生命周期规则；文档说明恢复指定对象版本、非当前版本保留、未完成分段上传清理。应用删除不等同于备份删除，不提供全桶清理脚本。
+3. 发布回滚以镜像版本回滚为主；数据库 migration 失败立即停止。若 schema 已前进，只允许兼容旧镜像时回滚应用，否则从发布前备份恢复到新实例并人工切换。任何恢复步骤都必须先确认目标 Region、VPC、实例和备份时间点。
+4. 安全清单至少覆盖：RDS/后端无公网入口、最小安全组、IAM agency 桶级最小权限、MaaS/OBS 仅 HTTPS、DEW 密钥轮换、Secure/HttpOnly/SameSite cookie、生产文档关闭、CORS 同源、WAF/ELB 总限流、日志白名单、审计不可变、备份加密和恢复演练。
+5. 明确真实云最终验收尚需用户提供/配置的外部条件，但不要索取或记录具体 secret。给出只读/低风险的手工验收清单和预期结果，不提供会删除 volume、对象、数据库或用户数据的命令。
+
+## 七、只编写、不运行的最小测试资产
+
+1. 本轮新增后端测试函数最多 3 个，集中在一个文件，不新增前端/E2E/云端测试：
+   - OBS fake client 合并验证 save → context materialize → delete、非 2xx 安全失败、key/prefix 拒绝和临时文件必清理；
+   - production Settings 合并验证安全配置可通过、debug/local/HTTP/缺失 KMS key/占位 secret 会失败且错误文本不含 secret；
+   - storage 工厂与 lifespan 合并验证 local/obs 选择、单例/close，并验证 production OpenAPI 文档关闭。
+2. fake client 只模拟最少 SDK 返回对象，不安装 SDK、不联网、不读取环境；每个测试最多一个对象和一个小文件，不做 bucket/Region/状态参数排列组合。
+3. 不新增覆盖率、前端测试、浏览器 E2E、Docker E2E、RDS/OBS/MaaS 集成测试或大规模部署矩阵。集中验收阶段默认只运行这 3 个测试、一个生产配置静态渲染、一个镜像构建和一条隔离 HTTP 冒烟；码道本轮不得运行。
+
+## 八、文档状态与最终交付
+
+1. 完成后同步 systemDesign 01～08、SDD spec/tasks/design、P8.4 Sprint、README、`.env.example`、`docs/IMPLEMENTATION_STATUS.md`、`docs/PROGRESS.md`、architecture/api-contract/data-model/security-design。把 P8.1～P8.3 保持已验收，P8.4 标记“实现完成、待真实华为云最终验收”。
+2. 文档必须区分三种状态：代码/部署资产已实现、离线集中验收尚未执行、真实华为云资源尚未创建/验证。不得声称已经上线、已配置 WAF/备份或已完成灾备演练。
+3. 最终报告逐项列出：OBSStorage 契约与安全边界、生产配置校验、生产镜像/Compose/Nginx、secret 注入、RDS/OBS 备份恢复、回滚、安全清单、最多 3 个测试资产、修改文件和等待集中验收项。
+4. 不得生成新的后续开发提示词或 P8.5；P8.4 之后只剩码道交付后的独立验收、必要修正和用户真实云环境部署，不增加开发轮次。
+
+本轮完成定义是“P8.4 代码、部署资产、最多 3 个轻量测试资产和文档实现完毕，等待独立集中验收与用户真实华为云验收”。不要运行任何测试、构建、迁移、Docker、HTTP、浏览器、外网或云服务命令。
+
 ~~~~

@@ -24,6 +24,7 @@ from paperlens.models.models import (
     User,
 )
 from paperlens.services.auth_service import create_session_for_user
+from paperlens.services.llm_client import MockLLMClient
 from paperlens.services.password_service import hash_password
 from paperlens.services import learning_service
 from tests.db_helpers import (
@@ -200,6 +201,33 @@ async def test_create_section_learning():
 
 
 @requires_db
+async def test_delete_completed_learning_explanation():
+    ctx = _setup_section_context("learn-delete@test.com", "A section that can be summarized and deleted.")
+    headers = {"Authorization": f"Bearer {ctx.token}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            f"/api/v1/papers/{ctx.paper_id}/learning-explanations",
+            json={
+                "mode": "SUMMARY",
+                "scope_type": "SECTION",
+                "output_language": "zh",
+                "section_id": ctx.section_id,
+            },
+            headers=headers,
+        )
+        deleted = await client.delete(
+            f"/api/v1/learning-explanations/{created.json()['id']}",
+            headers=headers,
+        )
+        fetched = await client.get(
+            f"/api/v1/learning-explanations/{created.json()['id']}",
+            headers=headers,
+        )
+    assert deleted.status_code == 204
+    assert fetched.status_code == 404
+
+
+@requires_db
 async def test_create_page_learning():
     ctx = _TestContext()
     db = SessionLocal()
@@ -223,6 +251,9 @@ async def test_create_page_learning():
                 "scope_type": "PAGE",
                 "output_language": "en",
                 "page_number": 1,
+                "selection_text": "neural networks",
+                "selection_start": 23,
+                "selection_end": 38,
             },
             headers={"Authorization": f"Bearer {ctx.token}"},
         )
@@ -231,6 +262,9 @@ async def test_create_page_learning():
     assert body["mode"] == "EXPLAIN"
     assert body["scope_type"] == "PAGE"
     assert body["page_number"] == 1
+    assert body["selection_text"] == "neural networks"
+    assert body["selection_start"] == 23
+    assert body["selection_end"] == 38
 
 
 @requires_db
@@ -502,7 +536,15 @@ async def test_run_learning_task_succeeds():
     finally:
         db.close()
 
-    learning_service.run_learning_task(exp_id)
+    captured_timeout = None
+
+    class CapturingLearningLLM(MockLLMClient):
+        def chat(self, messages, **kwargs):
+            nonlocal captured_timeout
+            captured_timeout = kwargs.get("timeout_seconds")
+            return super().chat(messages, **kwargs)
+
+    learning_service.run_learning_task(exp_id, CapturingLearningLLM())
 
     db = SessionLocal()
     try:
@@ -513,6 +555,7 @@ async def test_run_learning_task_succeeds():
         assert result.key_points is not None
         assert result.terms is not None
         assert result.completed_at is not None
+        assert captured_timeout == learning_service.settings.learning_llm_timeout_seconds
 
         citations = db.query(LearningCitation).filter(LearningCitation.explanation_id == exp_id).all()
         assert len(citations) >= 1
@@ -828,7 +871,7 @@ async def test_success_detail_contains_grounded_safe_citation():
         created = await client.post(
             f"/api/v1/papers/{ctx.paper_id}/learning-explanations",
             json={
-                "mode": "EXPLAIN",
+                "mode": "SUMMARY",
                 "scope_type": "SECTION",
                 "section_id": ctx.section_id,
                 "output_language": "zh",
@@ -857,6 +900,37 @@ async def test_success_detail_contains_grounded_safe_citation():
         "char_end": None,
     }
     assert "request_hash" not in body
+
+
+@requires_db
+async def test_page_summary_source_includes_current_headings_and_next_page():
+    db = SessionLocal()
+    try:
+        user = _add_user(db, "page-summary@test.com")
+        paper = _add_parsed_paper(db, user.id)
+        _add_page(db, paper.id, 1, "Introduction starts on page one.")
+        _add_page(db, paper.id, 2, "Introduction continues on page two.")
+        _add_page(db, paper.id, 3, "Unrelated page three.")
+        _add_section(db, paper.id, "Full introduction", seq=1)
+        _add_evidence(db, paper.id, page_number=1, text="Page one evidence")
+        _add_evidence(db, paper.id, page_number=2, text="Page two evidence")
+        db.commit()
+
+        source = learning_service.resolve_source(
+            paper.id,
+            LearningScopeType.PAGE,
+            None,
+            1,
+            None,
+            db,
+            mode=LearningMode.SUMMARY,
+        )
+        assert "- Introduction" in source.source_text
+        assert "Introduction continues on page two." in source.source_text
+        assert "Unrelated page three." not in source.source_text
+    finally:
+        db.rollback()
+        db.close()
 
 
 @requires_db
@@ -934,3 +1008,23 @@ async def test_prompt_marks_paper_content_untrusted_and_does_not_truncate():
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in messages[1]["content"]
     assert "Unsafe &lt;title&gt;" in messages[1]["content"]
     assert "quoted &lt;b&gt;evidence&lt;/b&gt;" in messages[1]["content"]
+
+
+@requires_db
+async def test_translation_prompt_requires_complete_layout_preserving_translation():
+    messages = learning_service.build_learning_prompt(
+        "Paper title\n\nFirst paragraph.\nSecond paragraph.",
+        LearningMode.TRANSLATE,
+        "zh",
+        {"E1": "First paragraph."},
+        "Paper title",
+    )
+    instruction = messages[1]["content"]
+    assert "Translate every part" in instruction
+    assert "Do not summarize, omit, reorder, embellish, or infer" in instruction
+    assert "Preserve headings, paragraphs, lists, captions" in instruction
+    parsed = learning_service.parse_llm_learning_output(
+        '{"answer":"# 论文标题\\n\\n第一段。\\n\\n第二段。","key_points":[],"terms":[],"evidence_refs":["E1"]}'
+    )
+    assert parsed.key_points == []
+    assert parsed.terms == []

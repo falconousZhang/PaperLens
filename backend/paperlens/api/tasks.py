@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import UUID4
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from paperlens.core.database import get_db
 from paperlens.core.deps import get_current_user_id
@@ -15,7 +15,6 @@ from paperlens.core.errors import AppError
 from paperlens.models.models import (
     AnalysisTask,
     Evidence,
-    FindingEvidence,
     Paper,
     ReviewFinding,
     ReviewResult,
@@ -192,6 +191,7 @@ def list_tasks(paper_id: UUID4, db: Session = Depends(get_db), user_id: str = De
         db.query(AnalysisTask)
         .filter(AnalysisTask.paper_id == paper_id_str, AnalysisTask.user_id == user_id)
         .order_by(AnalysisTask.created_at.desc(), AnalysisTask.id.desc())
+        .limit(200)
         .all()
     )
 
@@ -203,6 +203,7 @@ def list_tasks(paper_id: UUID4, db: Session = Depends(get_db), user_id: str = De
                 task_type=t.task_type,
                 status=t.status,
                 progress=t.progress,
+                experiment_file_id=t.experiment_file_id,
                 error_message=t.error_message,
                 started_at=t.started_at,
                 completed_at=t.completed_at,
@@ -228,6 +229,7 @@ def get_task(task_id: UUID4, db: Session = Depends(get_db), user_id: str = Depen
         task_type=task.task_type,
         status=task.status,
         progress=task.progress,
+        experiment_file_id=task.experiment_file_id,
         error_message=task.error_message,
         started_at=task.started_at,
         completed_at=task.completed_at,
@@ -253,34 +255,24 @@ def list_reviews(paper_id: UUID4, db: Session = Depends(get_db), user_id: str = 
             ReviewResult.paper_id == paper_id_str,
             AnalysisTask.user_id == user_id,
         )
+        .options(
+            selectinload(ReviewResult.findings.and_(
+                ReviewFinding.verification_status == VerificationStatus.VERIFIED,
+            )).selectinload(
+                ReviewFinding.evidences.and_(Evidence.paper_id == paper_id_str),
+            ),
+        )
         .order_by(ReviewResult.created_at.asc(), ReviewResult.id.asc())
         .all()
     )
 
     result = []
     for r in reviews:
-        findings = (
-            db.query(ReviewFinding)
-            .filter(
-                ReviewFinding.review_id == r.id,
-                ReviewFinding.verification_status == VerificationStatus.VERIFIED,
-            )
-            .order_by(ReviewFinding.sequence.asc(), ReviewFinding.id.asc())
-            .all()
-        )
-
         finding_responses = []
-        for f in findings:
-            fe_rows = (
-                db.query(FindingEvidence.evidence_id)
-                .join(Evidence, FindingEvidence.evidence_id == Evidence.id)
-                .filter(FindingEvidence.finding_id == f.id)
-                .filter(Evidence.paper_id == paper_id_str)
-                .order_by(FindingEvidence.evidence_id.asc())
-                .all()
+        for f in sorted(r.findings, key=lambda f: (f.sequence, f.id)):
+            evidence_ids = sorted(
+                [str(e.id) for e in f.evidences if e.paper_id == paper_id_str]
             )
-            evidence_ids = [str(fe[0]) for fe in fe_rows]
-
             finding_responses.append(
                 FindingResponse(
                     id=f.id,

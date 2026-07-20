@@ -1,62 +1,184 @@
 <template>
   <div class="home">
-    <header class="hero">
+    <div class="glow glow-left" aria-hidden="true"></div>
+    <div class="glow glow-right" aria-hidden="true"></div>
+
+    <main class="hero">
+      <div class="brand-mark" aria-hidden="true">PL</div>
+      <p class="eyebrow">专注阅读 · 深入理解 · 持续积累</p>
       <h1>PaperLens</h1>
       <p class="subtitle">AI 驱动的个人论文阅读学习助手</p>
-    </header>
 
-    <section class="status-section">
-      <div v-if="appStore.backendStatus === 'unknown'" class="status-card loading">
-        <span>正在检测后端服务...</span>
+      <div class="actions" aria-label="账户入口">
+        <router-link to="/login" class="action-btn primary">登录</router-link>
+        <router-link to="/register" class="action-btn secondary">注册</router-link>
       </div>
-      <div v-else-if="appStore.backendStatus === 'healthy'" class="status-card healthy">
-        <span class="status-dot green"></span>
-        <span>后端服务正常 (v{{ appStore.backendVersion }})</span>
-      </div>
-      <div v-else class="status-card unhealthy">
-        <span class="status-dot red"></span>
-        <span>{{ appStore.errorMessage || '后端服务不可用' }}</span>
-      </div>
-    </section>
-
-    <section class="actions">
-      <router-link to="/upload" class="action-btn primary">上传论文</router-link>
-      <router-link to="/papers" class="action-btn">论文库</router-link>
-    </section>
+    </main>
   </div>
 </template>
 
-<script setup lang="ts">
-import { onMounted } from 'vue'
-import { useAppStore } from '../stores/app'
-
-const appStore = useAppStore()
-
-onMounted(() => {
-  appStore.fetchHealth()
-})
-</script>
-
 <style scoped>
 .home {
-  max-width: 960px;
-  margin: 0 auto;
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  overflow: hidden;
   padding: 2rem;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #17213b;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.72), rgba(247, 249, 253, 0.9)),
+    radial-gradient(circle at top left, #e7eeff 0, transparent 42%),
+    radial-gradient(circle at bottom right, #e9e4ff 0, transparent 40%),
+    #f7f9fd;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-.hero { text-align: center; padding: 3rem 0 2rem; }
-.hero h1 { font-size: 2.5rem; margin: 0; color: #1a1a2e; }
-.subtitle { font-size: 1.2rem; color: #666; margin-top: 0.5rem; }
-.status-section { margin: 2rem 0; }
-.status-card { display: flex; align-items: center; gap: 0.5rem; padding: 1rem 1.5rem; border-radius: 8px; font-size: 0.95rem; }
-.status-card.loading { background: #f5f5f5; color: #888; }
-.status-card.healthy { background: #e8f5e9; color: #2e7d32; }
-.status-card.unhealthy { background: #ffebee; color: #c62828; }
-.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.status-dot.green { background: #4caf50; }
-.status-dot.red { background: #f44336; }
-.actions { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; }
-.action-btn { padding: 0.75rem 2rem; border-radius: 8px; text-decoration: none; font-size: 1rem; border: 1px solid #e0e0e0; color: #333; background: #fafafa; }
-.action-btn.primary { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
-.action-btn:hover { opacity: 0.85; }
+
+.glow {
+  position: absolute;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 50%;
+  filter: blur(1px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.glow-left {
+  top: -12rem;
+  left: -10rem;
+  background: radial-gradient(circle, rgba(65, 91, 180, 0.22), transparent 68%);
+}
+
+.glow-right {
+  right: -11rem;
+  bottom: -13rem;
+  background: radial-gradient(circle, rgba(110, 78, 173, 0.2), transparent 68%);
+}
+
+.hero {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 650px);
+  padding: clamp(3.5rem, 8vw, 5.5rem) clamp(1.5rem, 7vw, 5rem);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 28px 80px rgba(36, 47, 82, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.brand-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 1.5rem;
+  place-items: center;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(145deg, #171d3a, #3b4679);
+  box-shadow: 0 12px 28px rgba(30, 40, 82, 0.24);
+  font-size: 0.9rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.eyebrow {
+  margin: 0 0 0.9rem;
+  color: #69728a;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+}
+
+h1 {
+  margin: 0;
+  color: #111936;
+  font-size: clamp(3rem, 8vw, 5rem);
+  font-weight: 760;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.subtitle {
+  margin: 1.25rem 0 0;
+  color: #69728a;
+  font-size: clamp(1rem, 2.5vw, 1.2rem);
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.9rem;
+  margin-top: 2rem;
+}
+
+.action-btn {
+  display: inline-flex;
+  min-width: 132px;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1.8rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-decoration: none;
+  font-size: 0.98rem;
+  font-weight: 650;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.action-btn:focus-visible {
+  outline: 3px solid rgba(67, 91, 174, 0.28);
+  outline-offset: 3px;
+}
+
+.action-btn.primary {
+  color: #fff;
+  background: #171d3a;
+  box-shadow: 0 10px 24px rgba(23, 29, 58, 0.22);
+}
+
+.action-btn.primary:hover {
+  box-shadow: 0 14px 28px rgba(23, 29, 58, 0.28);
+}
+
+.action-btn.secondary {
+  border-color: #d8ddea;
+  color: #293352;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.action-btn.secondary:hover {
+  border-color: #adb6cf;
+  box-shadow: 0 10px 24px rgba(45, 57, 94, 0.1);
+}
+
+@media (max-width: 560px) {
+  .home {
+    padding: 1rem;
+  }
+
+  .hero {
+    border-radius: 22px;
+  }
+
+  .eyebrow {
+    letter-spacing: 0.1em;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .action-btn {
+    width: 100%;
+  }
+}
 </style>

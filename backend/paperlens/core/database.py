@@ -14,10 +14,22 @@ _engine = None
 _SessionLocal = None
 
 
+def _build_engine_kwargs() -> dict:
+    return dict(
+        echo=False,
+        hide_parameters=True,
+        pool_pre_ping=True,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_pool_max_overflow,
+        pool_timeout=settings.db_pool_timeout_seconds,
+        pool_recycle=settings.db_pool_recycle_seconds,
+    )
+
+
 def _ensure_engine():
     global _engine, _SessionLocal
     if _engine is None:
-        _engine = create_engine(settings.database_url, echo=False, hide_parameters=True)
+        _engine = create_engine(settings.database_url, **_build_engine_kwargs())
         _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
 
@@ -25,7 +37,7 @@ def configure_engine(database_url: str) -> None:
     global _engine, _SessionLocal
     if _engine is not None:
         _engine.dispose()
-    _engine = create_engine(database_url, echo=False, hide_parameters=True)
+    _engine = create_engine(database_url, **_build_engine_kwargs())
     _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
 

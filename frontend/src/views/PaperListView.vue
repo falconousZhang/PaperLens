@@ -17,7 +17,7 @@
         <option value="false">未收藏</option>
       </select>
       <input v-model="filterCollection" class="collection-filter" maxlength="100" placeholder="精确集合名称" @change="applyFilters" />
-      <router-link to="/upload" class="upload-btn">上传新论文</router-link>
+      <router-link to="/upload" class="button-link button-link--primary upload-btn">上传新论文</router-link>
     </div>
 
     <p v-if="actionError" class="action-error">{{ actionError }}</p>
@@ -28,13 +28,13 @@
     </div>
     <div v-else-if="papers.length === 0" class="empty">
       <p>当前筛选下暂无论文</p>
-      <router-link to="/upload">上传第一篇</router-link>
+      <router-link to="/upload" class="button-link button-link--primary">上传第一篇</router-link>
     </div>
     <div v-else class="library-cards">
       <article v-for="item in papers" :key="item.paper_id" class="paper-card">
         <div class="card-heading">
           <div>
-            <router-link :to="{ name: 'paper-detail', params: { id: item.paper_id } }" class="title-link">{{ item.title }}</router-link>
+            <router-link :to="{ name: 'paper-read', params: { id: item.paper_id } }" class="button-link title-link">{{ item.title }}</router-link>
             <div class="filename-sub">{{ item.filename }}</div>
           </div>
           <button
@@ -59,16 +59,15 @@
 
         <div class="record-counts">
           <span>高亮 {{ item.highlight_count }}</span>
-          <span>书签 {{ item.bookmark_count }}</span>
           <span>笔记 {{ item.note_count }}</span>
-          <span>知识卡 {{ item.card_count }}</span>
         </div>
 
         <div class="card-actions">
-          <router-link :to="{ name: 'paper-read', params: { id: item.paper_id } }" class="read-link">继续阅读</router-link>
+          <router-link :to="{ name: 'paper-read', params: { id: item.paper_id } }" class="button-link button-link--primary read-link">继续阅读</router-link>
           <button :disabled="isActionBusy(item.paper_id)" @click="cycleStatus(item)">{{ nextStatusLabel(item.reading_status) }}</button>
           <input v-model="collectionDrafts[item.paper_id]" maxlength="100" placeholder="集合名称（留空清除）" />
           <button :disabled="isActionBusy(item.paper_id)" @click="saveCollection(item)">保存集合</button>
+          <button class="delete-paper-btn" :disabled="isActionBusy(item.paper_id)" @click="removePaper(item)">删除论文</button>
         </div>
       </article>
     </div>
@@ -83,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { listLibraryPapers, patchLibraryEntry, type LibraryPaperItem, type ReadingStatus } from '../api'
+import { deletePaper, listLibraryPapers, patchLibraryEntry, type LibraryPaperItem, type ReadingStatus } from '../api'
 
 const papers = ref<LibraryPaperItem[]>([])
 const loading = ref(true)
@@ -208,6 +207,25 @@ function saveCollection(item: LibraryPaperItem): void {
   void updateEntry(item, { collection_name: value || null })
 }
 
+async function removePaper(item: LibraryPaperItem): Promise<void> {
+  if (!window.confirm(`确认删除论文“${item.title}”吗？\n论文原文件、解释、问答和学习记录都会一并删除，且无法恢复。`)) return
+  const paperId = item.paper_id
+  const generation = (actionGenerations.get(paperId) || 0) + 1
+  actionGenerations.set(paperId, generation)
+  actionBusy.value = { ...actionBusy.value, [paperId]: true }
+  actionError.value = ''
+  try {
+    await deletePaper(paperId)
+    if (actionGenerations.get(paperId) !== generation) return
+    if (papers.value.length === 1 && page.value > 1) page.value--
+    await fetchLibrary()
+  } catch (reason) {
+    if (actionGenerations.get(paperId) === generation) actionError.value = safeError(reason, '删除论文失败，请重试')
+  } finally {
+    if (actionGenerations.get(paperId) === generation) actionBusy.value = { ...actionBusy.value, [paperId]: false }
+  }
+}
+
 onMounted(() => void fetchLibrary())
 onUnmounted(() => {
   listGeneration++
@@ -236,6 +254,7 @@ onUnmounted(() => {
 .fav-btn.active { color: #e3a008; }
 .rs-reading { color: #bd6400; }.rs-completed { color: #24743a; }.rs-archived { color: #777; }
 .card-actions button, .pagination button { padding: .45rem .7rem; border: 1px solid #d8d7e2; border-radius: .35rem; background: #fff; cursor: pointer; }
+.card-actions .delete-paper-btn { border-color: #d98282; color: #a51f1f; }
 .card-actions input { flex: 1; min-width: 12rem; }
 .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.2rem 0; }
 .action-error, .error-msg { color: #b42318; }.empty, .error-msg { padding: 2rem; text-align: center; }

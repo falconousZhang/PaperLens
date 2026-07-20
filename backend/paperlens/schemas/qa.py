@@ -19,6 +19,7 @@ class CreateQATurnRequest(BaseModel):
     question: str
     output_language: Literal["zh", "en"] = "zh"
     client_request_id: UUID4
+    current_page: int | None = Field(default=None, ge=1)
 
     @field_validator("question", mode="before")
     @classmethod

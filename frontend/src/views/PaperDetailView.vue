@@ -24,8 +24,6 @@
       <button :class="{ active: tab === 'pages' }" @click="openPages">页面</button>
       <button :class="{ active: tab === 'evidences' }" @click="tab = 'evidences'">证据</button>
       <router-link :to="{ name: 'paper-review', params: { id: paper.id } }" class="tab-link">批判性阅读</router-link>
-      <router-link :to="{ name: 'paper-metrics', params: { id: paper.id } }" class="tab-link">指标</router-link>
-        <router-link :to="{ name: 'paper-experiment', params: { id: paper.id } }" class="tab-link">实验数据</router-link>
         <router-link :to="{ name: 'paper-export', params: { id: paper.id } }" class="tab-link">导出报告</router-link>
         <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="tab-link tab-link-primary">开始阅读</router-link>
     </div>
@@ -91,8 +89,10 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPaper, getPage, listSections, listEvidences, type PaperDetail, type SectionItem, type EvidenceItem, type PageDetail } from '../api'
+import { SAFE_POLLING_ERROR, usePolling } from '../composables/usePolling'
 
 const route = useRoute()
+const { startPolling: startSharedPolling, stopPolling } = usePolling()
 const paper = ref<PaperDetail | null>(null)
 const sections = ref<SectionItem[]>([])
 const evidences = ref<EvidenceItem[]>([])
@@ -106,7 +106,6 @@ const pageJump = ref<number | null>(null)
 const selectedEvidence = ref<EvidenceItem | null>(null)
 const pageContentRef = ref<HTMLElement | null>(null)
 const evidenceNotFoundMsg = ref('')
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let pageRequestId = 0
 
 function statusLabel(s: string) {
@@ -114,31 +113,23 @@ function statusLabel(s: string) {
   return m[s] || s
 }
 
-function stopPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 function startPolling(id: string) {
-  stopPolling()
-  pollTimer = setInterval(async () => {
-    try {
-      const p = await getPaper(id)
+  startSharedPolling(
+    () => getPaper(id),
+    async p => {
       paper.value = p
       if (p.status !== 'PROCESSING') {
-        stopPolling()
         if (p.status === 'PARSED') {
           sections.value = await listSections(id)
           evidences.value = await listEvidences(id)
         }
       }
-    } catch (e: any) {
-      stopPolling()
-      pollError.value = e?.response?.data?.error?.message || e?.message || '轮询失败'
-    }
-  }, 3000)
+    },
+    p => p.status !== 'PROCESSING',
+    () => {
+      pollError.value = SAFE_POLLING_ERROR
+    },
+  )
 }
 
 const evidenceDegraded = computed(() => {

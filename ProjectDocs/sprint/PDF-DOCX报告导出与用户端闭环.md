@@ -91,3 +91,11 @@
 - FAILED API 始终映射固定公开文案，避免历史内部错误触发 Schema 失败或泄漏。
 
 最终定向验证：转换器 34、P6.2 API 25、迁移 1、ReportExportView 19 全部通过；Docker 后端全量 830，前端全量 173，生产构建 132 modules。完整静态/数据库验收记录在 `docs/PROGRESS.md`。
+
+## 2026-07-17 论文学习报告改版
+
+码道将导出目标从强制审阅报告调整为论文学习报告：`PARSED` 论文无需审阅即可导出，固定聚合当前用户的学习解释、高亮和笔记；成功审阅有则自动加入，指标与实验分析保持显式开关。source snapshot 已覆盖全部实际学习来源，Markdown/PDF/DOCX 使用同一份确定性内容。
+
+`ReportExportView` 已重做为学习报告配置、内容清单和历史记录三部分，明确展示固定学习内容与可选扩展，并修正 409 误报“请先审阅”。PDF/DOCX 更新为深蓝标题层级、Letter 页面、1 英寸页边距和页脚页码。
+
+轻量验收：后端 108 passed，前端组件 20 passed，生产构建 128 modules；三页 PDF 逐页检查正常，DOCX 通过包结构与可打开性校验。前后端开发容器已重建，localhost 前端与 health API 均为 200/healthy。

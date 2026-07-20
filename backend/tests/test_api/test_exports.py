@@ -407,7 +407,7 @@ class TestCreateExport:
         )
         assert resp.status_code == 409
 
-    async def test_review_not_ready_409(self, db_client):
+    async def test_parsed_paper_without_review_can_export(self, db_client):
         db = SessionLocal()
         try:
             paper_id = _create_parsed_paper(db, _user_id(db_client))
@@ -419,7 +419,8 @@ class TestCreateExport:
             f"/api/v1/papers/{paper_id}/exports",
             json={"report_type": "MARKDOWN", "language": "zh"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 201
+        assert resp.json()["status"] in ("PENDING", "GENERATING", "READY")
 
     async def test_unauthenticated_401(self, db_client):
         async with AsyncClient(

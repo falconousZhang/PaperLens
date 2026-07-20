@@ -1,37 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import PaperReadingView from '../views/PaperReadingView.vue'
 import * as api from '../api'
 
 vi.mock('../api', () => ({
-  getPaper: vi.fn(),
-  listSections: vi.fn(),
-  listEvidences: vi.fn(),
-  getPage: vi.fn(),
-  createLearningExplanation: vi.fn(),
-  getLearningExplanation: vi.fn(),
-  listLearningExplanations: vi.fn(),
-  createQAConversation: vi.fn(),
-  listQAConversations: vi.fn(),
-  getQAConversation: vi.fn(),
-  createQATurn: vi.fn(),
-  getQATurn: vi.fn(),
-  patchReadingProgress: vi.fn(),
   createHighlight: vi.fn(),
-  listHighlights: vi.fn(),
-  deleteHighlight: vi.fn(),
-  createBookmark: vi.fn(),
-  listBookmarks: vi.fn(),
-  deleteBookmark: vi.fn(),
+  createLearningExplanation: vi.fn(),
   createNote: vi.fn(),
-  listNotes: vi.fn(),
-  patchNote: vi.fn(),
+  createQAConversation: vi.fn(),
+  createQATurn: vi.fn(),
+  deleteHighlight: vi.fn(),
+  deleteLearningExplanation: vi.fn(),
   deleteNote: vi.fn(),
-  createKnowledgeCard: vi.fn(),
-  listKnowledgeCards: vi.fn(),
-  patchKnowledgeCard: vi.fn(),
-  deleteKnowledgeCard: vi.fn(),
+  deleteQAConversation: vi.fn(),
+  getLearningExplanation: vi.fn(),
+  getPage: vi.fn(),
+  getPaper: vi.fn(),
+  getPaperOutline: vi.fn(),
+  getPaperPageImage: vi.fn(),
+  getPaperPageTextLayer: vi.fn(),
+  getQAConversation: vi.fn(),
+  getQATurn: vi.fn(),
+  listHighlights: vi.fn(),
+  listLearningExplanations: vi.fn(),
+  listNotes: vi.fn(),
+  listQAConversations: vi.fn(),
+  patchNote: vi.fn(),
+  patchReadingProgress: vi.fn(),
 }))
 
 const paper = {
@@ -46,527 +42,381 @@ const paper = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
-const section = {
-  id: 'section-1',
-  section_type: 'INTRODUCTION',
-  title: 'Introduction',
-  level: 1,
-  sequence: 1,
-  start_page: 1,
-  end_page: 1,
-  text_content: 'Section learning text',
-}
-
-const evidence = {
-  id: 'evidence-1',
-  quoted_text: 'Citation evidence',
-  page_number: 1,
-  bbox_x0: null,
-  bbox_y0: null,
-  bbox_x1: null,
-  bbox_y1: null,
-  char_start: 7,
-  char_end: 24,
-  evidence_type: 'TEXT',
-  section_id: 'section-1',
-  chunk_id: null,
-}
-
 const page = {
   id: 'page-1',
   page_number: 1,
-  text_content: 'Before Citation evidence After',
-  normalized_text_content: 'Before Citation evidence After',
-  width: null,
-  height: null,
+  text_content: 'Hello world',
+  normalized_text_content: 'Hello world',
+  width: 100,
+  height: 140,
 }
 
-const succeeded = {
+const explanation = {
   id: 'explanation-1',
   paper_id: 'paper-1',
   mode: 'SUMMARY' as const,
-  scope_type: 'SECTION' as const,
+  scope_type: 'PAGE' as const,
   output_language: 'zh' as const,
-  section_id: 'section-1',
-  page_number: null,
+  section_id: null,
+  page_number: 1,
   evidence_id: null,
+  selection_text: null,
+  selection_start: null,
+  selection_end: null,
   status: 'SUCCEEDED' as const,
   duplicate: false,
-  answer: '<script>plain text only</script>',
-  key_points: ['Grounded point'],
-  terms: [{ term: 'Term', explanation: 'Plain explanation' }],
+  answer: '本页讨论一个核心方法。',
+  key_points: ['核心方法'],
+  terms: [],
   error_message: null,
-  citations: [{
-    evidence_id: 'evidence-1',
-    sequence: 1,
-    page_number: 1,
-    evidence_type: 'TEXT',
-    quoted_text: 'Citation evidence',
-    char_start: 7,
-    char_end: 24,
-  }],
+  citations: [],
   created_at: '2026-01-01T00:00:00Z',
   completed_at: '2026-01-01T00:01:00Z',
 }
 
-const pending = {
-  ...succeeded,
-  status: 'PENDING' as const,
-  answer: null,
-  key_points: null,
-  terms: null,
-  citations: null,
-  completed_at: null,
-}
-
-const failed = {
-  ...pending,
-  status: 'FAILED' as const,
-  error_message: '学习解释生成失败，请稍后重试',
-  completed_at: '2026-01-01T00:01:00Z',
-}
-
-const qaConversation = {
+const conversation = {
   id: 'conversation-1',
   paper_id: 'paper-1',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   turn_count: 1,
-  last_question_preview: 'What accuracy is reported?',
+  last_question_preview: '这个方法解决什么问题？',
   last_status: 'SUCCEEDED' as const,
 }
 
-const qaSucceeded = {
-  id: 'qa-turn-1',
+const turn = {
+  id: 'turn-1',
   conversation_id: 'conversation-1',
   sequence: 1,
-  question: 'What accuracy is reported?',
-  output_language: 'en' as const,
+  question: '这个方法解决什么问题？',
+  output_language: 'zh' as const,
   status: 'SUCCEEDED' as const,
   duplicate: false,
-  answer: '<script>95% as plain text</script>',
+  answer: '它解决了论文中描述的核心问题。',
   grounded: true,
   error_message: null,
-  citations: [{
-    evidence_id: 'evidence-1',
-    sequence: 1,
-    page_number: 1,
-    evidence_type: 'TEXT',
-    quoted_text: 'Citation evidence',
-    char_start: 7,
-    char_end: 24,
-  }],
+  citations: [],
   created_at: '2026-01-01T00:00:00Z',
   completed_at: '2026-01-01T00:01:00Z',
 }
 
-const qaPending = {
-  ...qaSucceeded,
-  status: 'PENDING' as const,
-  answer: null,
-  grounded: null,
-  citations: null,
-  completed_at: null,
-}
-
-const qaFailed = {
-  ...qaPending,
-  status: 'FAILED' as const,
-  error_message: '论文问答生成失败，请稍后重试',
-  completed_at: '2026-01-01T00:01:00Z',
-}
-
-const qaConversationDetail = {
-  id: 'conversation-1',
-  paper_id: 'paper-1',
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:01:00Z',
-  turns: [qaSucceeded],
-  total: 1,
-  page: 1,
-  page_size: 20,
-}
-
-function testRouter() {
-  return createRouter({
+async function mountView(): Promise<VueWrapper> {
+  const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/papers/:id/read', name: 'paper-read', component: PaperReadingView },
-      { path: '/papers/:id', name: 'paper-detail', component: { template: '<div />' } },
+      { path: '/papers', name: 'papers', component: { template: '<div />' } },
+      { path: '/papers/:id/read', component: PaperReadingView },
+      { path: '/papers/:id/review', name: 'paper-review', component: { template: '<div />' } },
+      { path: '/papers/:id/export', name: 'paper-export', component: { template: '<div />' } },
     ],
   })
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>(innerResolve => { resolve = innerResolve })
-  return { promise, resolve }
+  await router.push('/papers/paper-1/read')
+  await router.isReady()
+  const wrapper = mount(PaperReadingView, { global: { plugins: [router] } })
+  await flushPromises()
+  return wrapper
 }
 
 describe('PaperReadingView', () => {
-  let router: ReturnType<typeof testRouter>
-  const wrappers: Array<ReturnType<typeof mount>> = []
+  const wrappers: VueWrapper[] = []
 
-  async function mountView() {
-    const wrapper = mount(PaperReadingView, { global: { plugins: [router] } })
-    wrappers.push(wrapper)
-    await flushPromises()
-    return wrapper
-  }
-
-  async function openQA(wrapper: Awaited<ReturnType<typeof mountView>>) {
-    await wrapper.findAll('.panel-tabs button')[1]!.trigger('click')
-    await flushPromises()
-  }
-
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks()
-    router = testRouter()
-    await router.push('/papers/paper-1/read')
-    await router.isReady()
-    vi.mocked(api.getPaper).mockResolvedValue(paper as any)
-    vi.mocked(api.listSections).mockResolvedValue([section] as any)
-    vi.mocked(api.listEvidences).mockResolvedValue([evidence] as any)
-    vi.mocked(api.getPage).mockResolvedValue(page as any)
-    vi.mocked(api.createLearningExplanation).mockResolvedValue(succeeded as any)
-    vi.mocked(api.getLearningExplanation).mockResolvedValue(succeeded as any)
-    vi.mocked(api.listLearningExplanations).mockResolvedValue({
-      items: [], total: 0, page: 1, page_size: 20,
+    vi.mocked(api.getPaper).mockResolvedValue(paper)
+    vi.mocked(api.getPaperOutline).mockResolvedValue([{ title: 'Introduction', level: 1, page_number: 1 }])
+    vi.mocked(api.getPage).mockResolvedValue(page)
+    vi.mocked(api.getPaperPageImage).mockResolvedValue(new Blob(['png'], { type: 'image/png' }))
+    vi.mocked(api.getPaperPageTextLayer).mockResolvedValue({
+      page_number: 1,
+      width: 100,
+      height: 140,
+      words: [
+        { text: 'Hello', x0: 10, y0: 10, x1: 30, y1: 20, char_start: 0, char_end: 5 },
+        { text: 'world', x0: 32, y0: 10, x1: 54, y1: 20, char_start: 6, char_end: 11 },
+      ],
     })
+    vi.mocked(api.listLearningExplanations).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    vi.mocked(api.createLearningExplanation).mockResolvedValue(explanation)
     vi.mocked(api.patchReadingProgress).mockResolvedValue({
-      paper_id: paper.id, reading_status: 'READING', last_page: 1, furthest_page: 1,
-      progress_percent: 50, last_read_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      paper_id: 'paper-1', reading_status: 'READING', last_page: 1, furthest_page: 1,
+      progress_percent: 50, last_read_at: null, updated_at: '2026-01-01T00:00:00Z',
     })
-    vi.mocked(api.listHighlights).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-    vi.mocked(api.listBookmarks).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    vi.mocked(api.listHighlights).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 })
     vi.mocked(api.listNotes).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-    vi.mocked(api.listKnowledgeCards).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-    vi.mocked(api.listQAConversations).mockResolvedValue({
-      items: [qaConversation], total: 1, page: 1, page_size: 20,
-    } as any)
-    vi.mocked(api.createQAConversation).mockResolvedValue({
-      ...qaConversationDetail, turns: null, total: 0,
-    } as any)
-    vi.mocked(api.getQAConversation).mockResolvedValue(qaConversationDetail as any)
-    vi.mocked(api.createQATurn).mockResolvedValue(qaPending as any)
-    vi.mocked(api.getQATurn).mockResolvedValue(qaSucceeded as any)
+    vi.mocked(api.listQAConversations).mockResolvedValue({ items: [conversation], total: 1, page: 1, page_size: 20 })
+    vi.mocked(api.createQAConversation).mockResolvedValue({ ...conversation, turns: null, total: 0, page: 1, page_size: 20 })
+    vi.mocked(api.createQATurn).mockResolvedValue(turn)
+    vi.mocked(api.getQAConversation).mockResolvedValue({ ...conversation, turns: [turn], total: 1, page: 1, page_size: 20 })
+    vi.mocked(api.createHighlight).mockResolvedValue({
+      id: 'highlight-1', paper_id: 'paper-1', page_number: 1, char_start: 0, char_end: 11,
+      quoted_text: 'Hello world', color: 'YELLOW', created_at: '', updated_at: '', duplicate: false,
+    })
+    vi.mocked(api.createNote).mockResolvedValue({
+      id: 'note-1', paper_id: 'paper-1', anchor_type: 'HIGHLIGHT', page_number: null,
+      highlight_id: 'highlight-1', content: '我的理解', created_at: '', updated_at: '',
+    })
     vi.stubGlobal('crypto', { randomUUID: vi.fn(() => '11111111-1111-4111-8111-111111111111') })
-    vi.stubGlobal('scrollTo', vi.fn())
-    Element.prototype.scrollIntoView = vi.fn()
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:page')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
   })
 
   afterEach(() => {
     wrappers.splice(0).forEach(wrapper => wrapper.unmount())
-    vi.useRealTimers()
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
-  it('loads the protected three-column reading workspace without fetching a page initially', async () => {
+  it('removes evidence controls and generates learning content for the current page', async () => {
     const wrapper = await mountView()
-    expect(wrapper.find('.sidebar').exists()).toBe(true)
-    expect(wrapper.find('.content-panel').text()).toContain('Section learning text')
-    expect(wrapper.find('.learning-panel').exists()).toBe(true)
-    expect(api.getPage).not.toHaveBeenCalled()
-    expect(api.listLearningExplanations).toHaveBeenCalledWith('paper-1', 1, 20)
-  })
+    wrappers.push(wrapper)
+    expect(wrapper.find('.workspace-actions').text()).not.toContain('证据')
+    expect(wrapper.find('.scope-selector').exists()).toBe(false)
+    expect(wrapper.find('.lang-selector').exists()).toBe(false)
+    expect(wrapper.findAll('.mode-selector button')).toHaveLength(2)
+    expect(wrapper.text()).toContain('当前处理第 1 页')
+    expect(api.listLearningExplanations).toHaveBeenCalledWith('paper-1', 1, 100)
+    expect(wrapper.find('.panel-exit').exists()).toBe(false)
+    expect(wrapper.find('.learning-exit').exists()).toBe(false)
 
-  it('submits only identifiers and renders model output as text', async () => {
-    const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
+    await wrapper.find('.learning-panel .submit-btn').trigger('click')
     await flushPromises()
     expect(api.createLearningExplanation).toHaveBeenCalledWith('paper-1', {
-      mode: 'SUMMARY',
-      scope_type: 'SECTION',
-      output_language: 'zh',
-      section_id: 'section-1',
+      mode: 'SUMMARY', scope_type: 'PAGE', output_language: 'zh', page_number: 1,
     })
-    const serialized = JSON.stringify(vi.mocked(api.createLearningExplanation).mock.calls[0]?.[1])
-    expect(serialized).not.toContain('Section learning text')
-    expect(wrapper.find('.answer-text').text()).toBe('<script>plain text only</script>')
-    expect(wrapper.find('script').exists()).toBe(false)
-    expect(wrapper.find('.term-card').text()).toContain('Plain explanation')
+    expect(wrapper.text()).toContain('本页概括')
+    expect(wrapper.text()).not.toContain('原文引用')
+    expect(wrapper.find('.learning-exit').element.tagName).toBe('BUTTON')
+    expect(wrapper.find('.learning-exit').text()).toBe('退出')
+
+    await wrapper.find('.learning-exit').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.result-area').exists()).toBe(false)
+    expect(wrapper.find('.history-section').exists()).toBe(true)
+    expect(wrapper.find('.learning-exit').exists()).toBe(false)
+    expect((wrapper.find('.page-input').element as HTMLInputElement).value).toBe('1')
+    expect(wrapper.find('.reading-view').exists()).toBe(true)
   })
 
-  it('polls every three seconds until a terminal result', async () => {
-    vi.useFakeTimers()
-    vi.mocked(api.createLearningExplanation).mockResolvedValue(pending as any)
-    vi.mocked(api.getLearningExplanation).mockResolvedValue(succeeded as any)
-    const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
-    await flushPromises()
-    expect(api.getLearningExplanation).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(3000)
-    await flushPromises()
-    expect(api.getLearningExplanation).toHaveBeenCalledWith('explanation-1')
-    expect(wrapper.find('.answer-text').exists()).toBe(true)
-  })
-
-  it('offers a retry after a fixed failure', async () => {
+  it('explains selected PDF text and keeps translation as a page action', async () => {
+    vi.mocked(api.listLearningExplanations).mockResolvedValue({
+      items: [{
+        id: 'selection-explanation', paper_id: 'paper-1', mode: 'EXPLAIN', scope_type: 'PAGE',
+        output_language: 'zh', section_id: null, page_number: 1, evidence_id: null,
+        selection_start: 0, selection_end: 11, status: 'SUCCEEDED', error_message: null,
+        created_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T00:01:00Z',
+      }],
+      total: 1, page: 1, page_size: 20,
+    })
     vi.mocked(api.createLearningExplanation)
-      .mockResolvedValueOnce(failed as any)
-      .mockResolvedValueOnce(succeeded as any)
+      .mockResolvedValueOnce({
+        ...explanation,
+        mode: 'EXPLAIN',
+        selection_text: 'Hello world',
+        selection_start: 0,
+        selection_end: 11,
+        answer: '原理说明，并给出生活中的例子。',
+        terms: [{ term: '核心概念', explanation: '通俗定义' }],
+      })
+      .mockResolvedValueOnce({ ...explanation, mode: 'TRANSLATE', answer: '# 论文标题\n\n完整正文翻译。', key_points: [], terms: [] })
     const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).toContain('学习解释生成失败，请稍后重试')
-    await wrapper.find('.result-area .retry-btn').trigger('click')
-    await flushPromises()
-    expect(api.createLearningExplanation).toHaveBeenCalledTimes(2)
-  })
-
-  it('uses real previous and next history pagination parameters', async () => {
-    vi.mocked(api.listLearningExplanations)
-      .mockResolvedValueOnce({ items: [succeeded as any], total: 25, page: 1, page_size: 20 })
-      .mockResolvedValueOnce({ items: [], total: 25, page: 2, page_size: 20 })
-    const wrapper = await mountView()
-    const buttons = wrapper.findAll('.history-pagination button')
-    await buttons[1]!.trigger('click')
-    await flushPromises()
-    expect(api.listLearningExplanations).toHaveBeenLastCalledWith('paper-1', 2, 20)
-    expect(wrapper.find('.history-pagination').text()).toContain('2 / 2')
-  })
-
-  it('switches to a citation page, highlights exact text, and keeps the explanation visible', async () => {
-    const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
-    await flushPromises()
-    await wrapper.find('.citation-link').trigger('click')
-    await flushPromises()
-    expect(api.getPage).toHaveBeenCalledWith('paper-1', 1)
-    expect(wrapper.find('mark').text()).toBe('Citation evidence')
-    expect(wrapper.find('.answer-text').exists()).toBe(true)
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
-  })
-
-  it('shows a deterministic fallback when citation offsets no longer match', async () => {
-    vi.mocked(api.createLearningExplanation).mockResolvedValue({
-      ...succeeded,
-      citations: [{ ...succeeded.citations[0], char_start: 0, char_end: 4 }],
-    } as any)
-    const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
-    await flushPromises()
-    await wrapper.find('.citation-link').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('mark').exists()).toBe(false)
-    expect(wrapper.find('.highlight-notice').text()).toContain('无法可靠高亮')
-  })
-
-  it('does not let an old paper request overwrite a new route', async () => {
-    const oldSections = deferred<any[]>()
-    vi.mocked(api.getPaper).mockImplementation(async id => ({ ...paper, id, title: id } as any))
-    vi.mocked(api.listSections).mockImplementation(async id => {
-      if (id === 'paper-1') return oldSections.promise
-      return [{ ...section, id: 'section-2', text_content: 'New paper text' }] as any
-    })
-    const wrapper = mount(PaperReadingView, { global: { plugins: [router] } })
     wrappers.push(wrapper)
+
+    await wrapper.find('.history-list li').trigger('mouseenter')
+    expect(wrapper.findAll('.pdf-highlight-blue')).toHaveLength(2)
+    await wrapper.find('.history-list li').trigger('mouseleave')
+    expect(wrapper.find('.pdf-highlight-blue').exists()).toBe(false)
+
+    const words = wrapper.findAll('.pdf-text-word')
+    const range = document.createRange()
+    range.setStart(words[0]!.element.firstChild!, 0)
+    range.setEnd(words[1]!.element.firstChild!, 5)
+    Object.defineProperty(range, 'getBoundingClientRect', {
+      value: () => ({ left: 10, top: 10, right: 60, bottom: 20, width: 50, height: 10 }),
+    })
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    await wrapper.find('.pdf-text-layer').trigger('mouseup')
+    await wrapper.findAll('.selection-toolbar button')[1]!.trigger('click')
     await flushPromises()
-    await router.push('/papers/paper-2/read')
+    expect(api.createLearningExplanation).toHaveBeenCalledWith('paper-1', {
+      mode: 'EXPLAIN', scope_type: 'PAGE', output_language: 'zh', page_number: 1,
+      selection_text: 'Hello world',
+      selection_start: 0,
+      selection_end: 11,
+    })
+    expect(wrapper.text()).toContain('选中文字解释')
+    expect(wrapper.text()).toContain('原理讲解与示例')
+    expect(wrapper.text()).toContain('概念拆解')
+    expect(wrapper.findAll('.pdf-highlight-blue')).toHaveLength(2)
+
+    await wrapper.findAll('.mode-selector button')[1]!.trigger('click')
+    await wrapper.find('.learning-panel .submit-btn').trigger('click')
     await flushPromises()
-    oldSections.resolve([{ ...section, text_content: 'Old paper text' }])
-    await flushPromises()
-    expect(wrapper.text()).toContain('New paper text')
-    expect(wrapper.text()).not.toContain('Old paper text')
+    expect(wrapper.find('.translation-content h2').text()).toBe('论文标题')
+    expect(wrapper.find('.translation-content').text()).toContain('完整正文翻译。')
+    expect(wrapper.find('.pdf-highlight-blue').exists()).toBe(false)
   })
 
-  it('clears polling timers on unmount', async () => {
-    vi.useFakeTimers()
-    vi.mocked(api.createLearningExplanation).mockResolvedValue(pending as any)
-    const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
-    await flushPromises()
-    wrapper.unmount()
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(api.getLearningExplanation).not.toHaveBeenCalled()
-  })
-
-  it('maps server errors to safe user-facing text', async () => {
-    vi.mocked(api.createLearningExplanation).mockRejectedValue({
-      response: { status: 500, data: { error: { message: 'secret raw exception' } } },
+  it('sorts all explanations by page and opens the selected record on its page', async () => {
+    vi.mocked(api.listLearningExplanations).mockResolvedValue({
+      items: [
+        {
+          id: 'page-2-explanation', paper_id: 'paper-1', mode: 'SUMMARY', scope_type: 'PAGE',
+          output_language: 'zh', section_id: null, page_number: 2, evidence_id: null,
+          selection_start: null, selection_end: null, status: 'SUCCEEDED', error_message: null,
+          created_at: '2026-01-02T00:00:00Z', completed_at: '2026-01-02T00:01:00Z',
+        },
+        {
+          id: 'page-1-explanation', paper_id: 'paper-1', mode: 'SUMMARY', scope_type: 'PAGE',
+          output_language: 'zh', section_id: null, page_number: 1, evidence_id: null,
+          selection_start: null, selection_end: null, status: 'SUCCEEDED', error_message: null,
+          created_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T00:01:00Z',
+        },
+      ],
+      total: 2, page: 1, page_size: 100,
+    })
+    vi.mocked(api.getPage).mockImplementation(async (_paperId, pageNumber) => ({
+      ...page,
+      id: `page-${pageNumber}`,
+      page_number: pageNumber,
+    }))
+    vi.mocked(api.getLearningExplanation).mockResolvedValue({
+      ...explanation,
+      id: 'page-2-explanation',
+      page_number: 2,
     })
     const wrapper = await mountView()
-    await wrapper.find('.submit-btn').trigger('click')
+    wrappers.push(wrapper)
+
+    const items = wrapper.findAll('.history-list li')
+    expect(items).toHaveLength(2)
+    expect(items[0]!.text()).toContain('第 1 页')
+    expect(items[1]!.text()).toContain('第 2 页')
+    expect(wrapper.find('.history-pagination').exists()).toBe(false)
+
+    await items[1]!.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('创建学习解释失败，请稍后重试。')
-    expect(wrapper.text()).not.toContain('secret raw exception')
+    expect(api.getPage).toHaveBeenCalledWith('paper-1', 2)
+    expect((wrapper.find('.page-input').element as HTMLInputElement).value).toBe('2')
+    expect(wrapper.find('.result-area').text()).toContain('本页概括')
   })
 
-  it('loads QA only after the tab is opened and never creates a session automatically', async () => {
+  it('uses message bubbles and submits the first turn without secure-context randomUUID', async () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: vi.fn((bytes: Uint8Array) => {
+        bytes.set(Array.from({ length: 16 }, (_, index) => index))
+        return bytes
+      }),
+    })
     const wrapper = await mountView()
-    expect(api.listQAConversations).not.toHaveBeenCalled()
+    wrappers.push(wrapper)
+    await wrapper.findAll('.panel-tabs button')[1]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.qa-chat-shell').exists()).toBe(true)
     expect(api.createQAConversation).not.toHaveBeenCalled()
-    await openQA(wrapper)
-    expect(api.listQAConversations).toHaveBeenCalledWith('paper-1', 1, 20)
-    expect(wrapper.find('.conv-list').text()).toContain('What accuracy is reported?')
-    expect(api.createQAConversation).not.toHaveBeenCalled()
-    expect(api.createQATurn).not.toHaveBeenCalled()
-  })
 
-  it('creates an empty conversation and submits only the question contract', async () => {
-    const wrapper = await mountView()
-    await openQA(wrapper)
-    await wrapper.find('.qa-conversations > .submit-btn').trigger('click')
+    await wrapper.find('.qa-composer textarea').setValue('这个方法解决什么问题？')
+    await wrapper.find('.qa-send-button').trigger('click')
     await flushPromises()
     expect(api.createQAConversation).toHaveBeenCalledWith('paper-1', {})
-
-    await wrapper.find('.qa-input-area textarea').setValue('What accuracy is reported?')
-    await wrapper.find('.qa-input-actions .submit-btn').trigger('click')
-    await flushPromises()
-    expect(api.createQATurn).toHaveBeenCalledWith('conversation-1', {
-      question: 'What accuracy is reported?',
-      output_language: 'zh',
-      client_request_id: '11111111-1111-4111-8111-111111111111',
-    })
-    const serialized = JSON.stringify(vi.mocked(api.createQATurn).mock.calls[0]?.[1])
-    expect(serialized).not.toContain('Citation evidence')
-    expect(serialized).not.toContain('Section learning text')
+    expect(api.createQATurn).toHaveBeenCalledWith(
+      'conversation-1',
+      expect.objectContaining({
+        current_page: 1,
+        client_request_id: '00010203-0405-4607-8809-0a0b0c0d0e0f',
+      }),
+    )
+    expect(wrapper.find('.user-bubble').text()).toContain('这个方法解决什么问题？')
+    expect(wrapper.find('.assistant-bubble').text()).toContain('它解决了论文中描述的核心问题。')
   })
 
-  it('uses real conversation and turn pagination parameters', async () => {
-    vi.mocked(api.listQAConversations)
-      .mockResolvedValueOnce({ items: [qaConversation], total: 25, page: 1, page_size: 20 } as any)
-      .mockResolvedValueOnce({ items: [], total: 25, page: 2, page_size: 20 } as any)
+  it('loads every conversation page into one scrollable message history', async () => {
+    const secondTurn = {
+      ...turn,
+      id: 'turn-2',
+      sequence: 2,
+      question: 'Second question',
+      answer: 'Second answer',
+    }
     vi.mocked(api.getQAConversation)
-      .mockResolvedValueOnce({ ...qaConversationDetail, total: 21 } as any)
-      .mockResolvedValueOnce({ ...qaConversationDetail, turns: [], total: 21, page: 2 } as any)
-    const wrapper = await mountView()
-    await openQA(wrapper)
-    await wrapper.findAll('.qa-conversations .history-pagination button')[1]!.trigger('click')
-    await flushPromises()
-    expect(api.listQAConversations).toHaveBeenLastCalledWith('paper-1', 2, 20)
+      .mockResolvedValueOnce({ ...conversation, turns: [turn], total: 2, page: 1, page_size: 100 })
+      .mockResolvedValueOnce({ ...conversation, turns: [secondTurn], total: 2, page: 2, page_size: 100 })
 
-    vi.mocked(api.listQAConversations).mockResolvedValue({
-      items: [qaConversation], total: 1, page: 1, page_size: 20,
-    } as any)
-    await wrapper.findAll('.panel-tabs button')[0]!.trigger('click')
-    await openQA(wrapper)
-    await wrapper.find('.conv-list li').trigger('click')
+    const wrapper = await mountView()
+    wrappers.push(wrapper)
+    await wrapper.findAll('.panel-tabs button')[1]!.trigger('click')
+    await wrapper.find('.qa-session-actions select').setValue('conversation-1')
     await flushPromises()
-    await wrapper.findAll('.qa-turn-pagination button')[1]!.trigger('click')
-    await flushPromises()
-    expect(api.getQAConversation).toHaveBeenLastCalledWith('conversation-1', 2, 20)
+
+    expect(api.getQAConversation).toHaveBeenNthCalledWith(1, 'conversation-1', 1, 100)
+    expect(api.getQAConversation).toHaveBeenNthCalledWith(2, 'conversation-1', 2, 100)
+    expect(wrapper.find('.qa-messages').text()).toContain('Second answer')
+    expect(wrapper.find('.qa-turn-pagination').exists()).toBe(false)
   })
 
-  it('polls QA serially and renders an evidence-insufficient result as plain text', async () => {
-    vi.useFakeTimers()
-    vi.mocked(api.getQAConversation).mockResolvedValue({
-      ...qaConversationDetail,
-      turns: [qaPending],
-    } as any)
-    vi.mocked(api.getQATurn).mockResolvedValue({
-      ...qaSucceeded,
-      answer: '<script>仅根据当前论文无法确认，论文证据不足。</script>',
-      grounded: false,
-      citations: [],
-    } as any)
+  it('maps a PDF text selection to the page text and saves a highlight', async () => {
     const wrapper = await mountView()
-    await openQA(wrapper)
-    await wrapper.find('.conv-list li').trigger('click')
-    await flushPromises()
-    expect(api.getQATurn).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(3000)
-    await flushPromises()
-    expect(api.getQATurn).toHaveBeenCalledWith('qa-turn-1')
-    expect(wrapper.text()).toContain('当前论文证据不足')
-    expect(wrapper.text()).toContain('<script>仅根据当前论文无法确认')
-    expect(wrapper.find('script').exists()).toBe(false)
-    expect(wrapper.find('.qa-answer .citation-link').exists()).toBe(false)
-  })
+    wrappers.push(wrapper)
+    const words = wrapper.findAll('.pdf-text-word')
+    const range = document.createRange()
+    range.setStart(words[0]!.element.firstChild!, 0)
+    range.setEnd(words[1]!.element.firstChild!, 5)
+    Object.defineProperty(range, 'getBoundingClientRect', {
+      value: () => ({ left: 10, top: 10, right: 60, bottom: 20, width: 50, height: 10 }),
+    })
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
 
-  it('retries a failed question with a newly generated request id', async () => {
-    const randomUUID = vi.fn()
-      .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
-      .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
-    vi.stubGlobal('crypto', { randomUUID })
-    vi.mocked(api.getQAConversation).mockResolvedValue({
-      ...qaConversationDetail,
-      turns: [qaFailed],
-    } as any)
-    const wrapper = await mountView()
-    await openQA(wrapper)
-    await wrapper.find('.conv-list li').trigger('click')
+    await wrapper.find('.pdf-text-layer').trigger('mouseup')
+    await wrapper.find('.selection-toolbar button').trigger('click')
     await flushPromises()
-    await wrapper.find('.qa-message .retry-btn').trigger('click')
-    await flushPromises()
-    expect(api.createQATurn).toHaveBeenCalledWith('conversation-1', {
-      question: qaFailed.question,
-      output_language: qaFailed.output_language,
-      client_request_id: '11111111-1111-4111-8111-111111111111',
+    expect(api.createHighlight).toHaveBeenCalledWith('paper-1', {
+      page_number: 1, char_start: 0, char_end: 11, color: 'YELLOW',
     })
   })
 
-  it('ignores a stale conversation response after switching sessions', async () => {
-    const oldConversation = deferred<any>()
-    const secondConversation = { ...qaConversation, id: 'conversation-2', last_question_preview: 'Second question' }
-    vi.mocked(api.listQAConversations).mockResolvedValue({
-      items: [qaConversation, secondConversation], total: 2, page: 1, page_size: 20,
-    } as any)
-    vi.mocked(api.getQAConversation).mockImplementation(async id => {
-      if (id === 'conversation-1') return oldConversation.promise
-      return {
-        ...qaConversationDetail,
-        id: 'conversation-2',
-        turns: [{ ...qaSucceeded, id: 'turn-2', conversation_id: 'conversation-2', question: 'Second question' }],
-      } as any
+  it('shows note anchors in green only while hovering the note record', async () => {
+    vi.mocked(api.listHighlights).mockResolvedValue({
+      items: [{
+        id: 'note-highlight', paper_id: 'paper-1', page_number: 1, char_start: 0, char_end: 11,
+        quoted_text: 'Hello world', color: 'GREEN', created_at: '', updated_at: '', duplicate: false,
+      }],
+      total: 1, page: 1, page_size: 100,
+    })
+    vi.mocked(api.listNotes).mockResolvedValue({
+      items: [{
+        id: 'note-1', paper_id: 'paper-1', anchor_type: 'HIGHLIGHT', page_number: null,
+        highlight_id: 'note-highlight', content: '我的理解', created_at: '', updated_at: '',
+      }],
+      total: 1, page: 1, page_size: 20,
     })
     const wrapper = await mountView()
-    await openQA(wrapper)
-    const conversations = wrapper.findAll('.conv-list li')
-    await conversations[0]!.trigger('click')
-    await conversations[1]!.trigger('click')
-    await flushPromises()
-    oldConversation.resolve(qaConversationDetail)
-    await flushPromises()
-    expect(wrapper.find('.qa-messages').text()).toContain('Second question')
-    expect(wrapper.find('.qa-messages').text()).not.toContain('What accuracy is reported?')
-  })
+    wrappers.push(wrapper)
+    expect(wrapper.find('.pdf-highlight-green').exists()).toBe(false)
 
-  it('loads only the active learning-record list lazily and paginates it', async () => {
-    vi.mocked(api.listHighlights)
-      .mockResolvedValueOnce({ items: [], total: 21, page: 1, page_size: 20 })
-      .mockResolvedValueOnce({ items: [], total: 21, page: 2, page_size: 20 })
-    const wrapper = await mountView()
-    expect(api.listHighlights).not.toHaveBeenCalled()
-    await wrapper.findAll('.panel-tabs button')[2]!.trigger('click')
-    await flushPromises()
-    expect(api.listHighlights).toHaveBeenCalledWith('paper-1', { page: 1, page_size: 20 })
-    expect(api.listBookmarks).not.toHaveBeenCalled()
-    await wrapper.findAll('.record-pagination button')[1]!.trigger('click')
-    await flushPromises()
-    expect(api.listHighlights).toHaveBeenLastCalledWith('paper-1', { page: 2, page_size: 20 })
-  })
-
-  it('records progress only after a real page load and exposes only server-supported enums', async () => {
-    const wrapper = await mountView()
-    expect(api.patchReadingProgress).not.toHaveBeenCalled()
-    await wrapper.findAll('.scope-selector button')[1]!.trigger('click')
-    await flushPromises()
-    expect(api.getPage).toHaveBeenCalledWith('paper-1', 1)
-    expect(api.patchReadingProgress).toHaveBeenCalledWith('paper-1', 1)
-    await wrapper.findAll('.panel-tabs button')[2]!.trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).not.toContain('紫色')
-    await wrapper.findAll('.records-sub-tabs button')[3]!.trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).not.toContain('复习中')
-  })
-
-  it('uses the bookmark duplicate contract without optimistic state changes', async () => {
-    vi.mocked(api.createBookmark).mockResolvedValue({
-      id: '11111111-1111-4111-8111-111111111112',
-      paper_id: 'paper-1', page_number: 1, label: null,
-      created_at: '2026-01-01T00:00:00Z', duplicate: true,
-    })
-    const wrapper = await mountView()
-    await wrapper.findAll('.scope-selector button')[1]!.trigger('click')
-    await flushPromises()
     await wrapper.findAll('.panel-tabs button')[2]!.trigger('click')
     await wrapper.findAll('.records-sub-tabs button')[1]!.trigger('click')
     await flushPromises()
-    await wrapper.find('.record-actions .submit-btn').trigger('click')
+    expect(wrapper.text()).not.toContain('书签')
+    expect(wrapper.text()).not.toContain('新建高亮')
+    expect(wrapper.text()).not.toContain('新建笔记')
+    expect(api.listNotes).toHaveBeenCalledWith('paper-1', { page: 1, page_size: 100 })
+    expect(api.listHighlights).toHaveBeenCalledWith('paper-1', {
+      page_number: 1, page: 1, page_size: 100,
+    })
+
+    await wrapper.find('.record-item').trigger('mouseenter')
+    expect(wrapper.findAll('.pdf-highlight-green')).toHaveLength(2)
+    await wrapper.find('.record-item').trigger('mouseleave')
+    expect(wrapper.find('.pdf-highlight-green').exists()).toBe(false)
+
+    await wrapper.find('.document-toolbar button[aria-label="下一页"]').trigger('click')
     await flushPromises()
-    expect(api.createBookmark).toHaveBeenCalledWith('paper-1', { page_number: 1, label: null })
-    expect(api.listBookmarks).toHaveBeenLastCalledWith('paper-1', { page: 1, page_size: 20 })
+    expect(api.listHighlights).toHaveBeenCalledWith('paper-1', {
+      page_number: 2, page: 1, page_size: 100,
+    })
+    expect(wrapper.find('.record-item').exists()).toBe(false)
   })
 })

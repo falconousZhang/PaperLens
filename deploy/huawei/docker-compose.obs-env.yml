@@ -1,0 +1,22 @@
+services:
+  migrate:
+    environment:
+      PAPERLENS_OBS_ACCESS_KEY_ID_FILE: /run/secrets/obs_access_key_id
+      PAPERLENS_OBS_SECRET_ACCESS_KEY_FILE: /run/secrets/obs_secret_access_key
+    secrets:
+      - obs_access_key_id
+      - obs_secret_access_key
+
+  backend:
+    environment:
+      PAPERLENS_OBS_ACCESS_KEY_ID_FILE: /run/secrets/obs_access_key_id
+      PAPERLENS_OBS_SECRET_ACCESS_KEY_FILE: /run/secrets/obs_secret_access_key
+    secrets:
+      - obs_access_key_id
+      - obs_secret_access_key
+
+secrets:
+  obs_access_key_id:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/obs_access_key_id
+  obs_secret_access_key:
+    file: ${PAPERLENS_SECRETS_DIR:-/opt/paperlens/secrets}/obs_secret_access_key

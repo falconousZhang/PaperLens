@@ -266,7 +266,7 @@ PENDING → RUNNING → SUCCEEDED
 | 10 | ECS | RDS | MetricRecord | 指标提取结果 |
 | 11 | 用户 | ECS | CSV/XLSX/XLS | P5.1 固定块临时落盘和认证校验 |
 | 12 | ECS worker | ECS | 临时路径 | magic/ZIP/OLE 安全、SHA-256、确定性结构解析 |
-| 13 | ECS | LocalStorage/OBS 抽象 + RDS | source.ext + ExperimentFile | 幂等保存和失败补偿；OBS 实现仍规划 |
+| 13 | ECS | LocalStorage/OBS + RDS | source.ext + ExperimentFile | 幂等保存和失败补偿；P8.4 OBSStorage 已实现 |
 | 14 | ECS | RDS | ExperimentResult | P5.2 确定性流式统计与原子结果已实现 |
 | 15 | ECS | 用户 | 导出报告 | P6.2 三格式历史分页与安全下载已实现 |
 
@@ -274,23 +274,25 @@ PENDING → RUNNING → SUCCEEDED
 
 | 维度 | 本地开发 | 云端部署 |
 |------|---------|---------|
-| 文件存储 | 本地文件系统 `./data/uploads/` | 华为云 OBS（OBSStorage 未实现，后续版本） |
+| 文件存储 | 本地文件系统 `./data/` | 已实现的华为云 OBSStorage（ECS Agency/ENV、私有 SSE） |
 | 数据库 | 本地 PostgreSQL（Docker Compose） | 华为云 RDS PostgreSQL |
 | Evidence 检索 | MockEmbeddingClient + 任务内精确余弦 Top-K | 可配置华为云 MaaS Embedding；持久化 FAISS/pgvector 仍为规划 |
 | LLM 推理 | MockLLMClient 结构化审阅闭环；HuaweiMaaSLLMClient 已实现需配置 API Key 启用 | 华为云 MaaS 标准 API V2 |
 | PDF 解析 | 本地 PyMuPDF / pdfplumber | 同左（ECS 上运行） |
-| 任务队列 | FastAPI BackgroundTasks（MVP，非生产级） | Celery + Redis（后续版本） |
+| 任务队列 | FastAPI BackgroundTasks + P8.2 安全恢复 | 同左；多实例队列仍为可选增强 |
 | 前端 | Vite dev server | Nginx 静态托管 |
 | HTTPS | 无（HTTP localhost） | 华为云 ELB + SSL 证书 |
-| 认证 | 无 / 简单 Token | IAM 集成 / JWT |
-| 日志 | 控制台输出 | 云日志服务 LTS |
+| 认证 | JWT access + HttpOnly refresh cookie | 同左；DEW/文件 Secret 注入 |
+| 日志 | 安全结构化控制台日志 | 可由容器平台采集到 LTS |
 
 ### 环境配置策略
 
-- 通过环境变量 `PAPERLENS_ENV=local|cloud` 切换
-- 存储层抽象：`StorageBackend` 接口，`LocalStorage` 为当前实现，`OBSStorage` 为后续云端部署实现（未实现）
-- 数据库：SQLAlchemy 统一 ORM，通过 `DATABASE_URL` 切换，统一使用 PostgreSQL
-- LLM：统一 `LLMClient` 接口，通过 `LLM_BACKEND` 切换（mock / huawei_maas）
+- 通过环境变量 `PAPERLENS_ENV=local|test|production` 切换
+- 存储层抽象：`StorageBackend` 支持 LocalStorage 与 OBSStorage，下载统一使用 `materialize`
+- 数据库：SQLAlchemy 统一 ORM，通过 `PAPERLENS_DATABASE_URL` 切换；生产强制 RDS verify-full + CA
+- LLM：统一 `LLMClient`，通过 `PAPERLENS_LLM_BACKEND` 切换；生产强制 Huawei MaaS
+
+P8.4 生产资产见 `deploy/huawei/`：仅发布非 root Nginx 8080，backend 位于固定 Compose 私网；migrate/serve 共用 Secret 文件入口，两类镜像均使用只读根文件系统和最小能力集。
 
 ## 6. 关键设计决策
 
@@ -383,3 +385,23 @@ P7.1 已实现：013 建表后由 014 无损收紧契约；创建前和模型返
 016 新增论文库条目、高亮、书签、笔记和知识卡五表。library router 使用全部 owner Paper LEFT JOIN 可选 entry，并在同一查询中计算四类记录数；默认 TO_READ/favorite=false 不排除尚无 entry 的论文。personal_learning router 统一复核 owner、PARSED、PaperPage 和来源全图，所有写入为确定性数据库逻辑，不构造 LLM/Embedding client。
 
 PaperListView 提供搜索、状态/收藏/集合过滤、进度与四类计数；PaperReadingView 的学习记录区分别维护高亮、书签、笔记和知识卡分页与请求代数。高亮只从服务端 Page 文本派生，浏览器选区通过跨文本节点偏移解析与原文切片复核，来源变化时降级而不是错误标注。
+
+## P8.1 管理员系统架构（COMPLETED）
+
+017 新增 append-only `admin_audit_logs`。首次引导与管理员集合变更先取得 PostgreSQL 事务级 advisory lock，再按 id 锁定 ACTIVE ADMIN、操作者和目标并重新校验权限；用户状态、角色、AuthSession/PasswordResetToken 失效和逐字段审计在同一事务提交。提交结果未知时以预生成 audit id 回查最终状态，避免重复写入。
+
+8 条 `/admin` API 与普通 owner-only API 完全分离。用户资源计数使用相关子查询，论文与审计使用 JOIN 和有限列投影，任务/报告不加载模型输出、原始错误、source_snapshot 或 storage 字段。Vue 管理页以一级区域和内容子页签的请求代数隔离快速切换，服务端错误只映射固定安全文案。
+
+## P8.2 后台任务恢复架构（已完成）
+
+新增 `RecoveryService`，在 FastAPI lifespan startup 执行一次有限扫描。扫描事务使用 `pg_try_advisory_xact_lock` 非阻塞互斥，按固定实体顺序、created_at/id 和默认 50 行批次加 `FOR UPDATE SKIP LOCKED`；提交后才派发 worker，因此 PDF、模型、文件和报告处理不持有扫描事务或全局锁。
+
+指标、实验分析、学习解释和问答复用现有原子 claim 重放；审阅缺少原始 options、论文解析缺少可靠执行代次、导出缺少生成 bytes 时固定 FAILED，由用户从原入口重试。前端七类轮询实际复用共享 usePolling。TaskDetail 增加可空 `experiment_file_id`，用于刷新后恢复实验文件上下文；无新路由或迁移。
+
+## P8.3 运行可靠性架构（已完成）
+
+`RequestTracingMiddleware` 位于限流外层，严格复用规范 UUID4，并为成功、错误和 429 响应添加 `X-Request-ID`。请求日志只使用路由模板；未匹配或路由前返回统一记 `<unmatched>`，不记录原始路径、查询、IP、头或正文。
+
+`RateLimitMiddleware` 使用单调时钟、有限 key 容量和真实固定窗口，按 auth/upload/read/write 分组，health 豁免。默认以 TCP peer 为 key；仅显式可信 CIDR 的直接代理可解析 X-Forwarded-For。该实现只提供单进程防护，多实例总限流留给 P8.4 华为云入口层。
+
+数据库 engine 共用有界 pool 构造参数。恢复扫描提交后通过 lifespan 管理的 ThreadPoolExecutor 派发，shutdown 取消排队任务并等待已运行任务结束；任务记录仍由原有 claim/恢复状态机保证一致性。

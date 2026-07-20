@@ -19,6 +19,10 @@ frontend/dist/
 # 环境变量
 .env
 .env.local
+.env.*
+!.env.example
+!.env.*.example
+secrets/
 
 # 数据
 data/

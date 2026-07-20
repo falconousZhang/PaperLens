@@ -386,37 +386,39 @@ def run_experiment_analysis_task(task_id: str) -> None:
             return
         analysis_input = _load_input(task_id)
         try:
-            source_path = get_storage().read_path(analysis_input.storage_key)
-            actual_hash = _compute_file_hash(source_path)
-        except Exception as exc:
-            raise StatisticsError("storage read failed", "storage") from exc
-        if actual_hash != analysis_input.file_hash:
-            raise StatisticsError("file hash mismatch", "integrity")
-        try:
-            parse_result = parse_experiment_file(source_path, analysis_input.file_type)
-        except ParseError as exc:
-            raise StatisticsError("file re-parse failed", "integrity") from exc
-        if (
-            parse_result.file_type != analysis_input.file_type
-            or parse_result.row_count != analysis_input.row_count
-            or parse_result.column_count != analysis_input.column_count
-            or parse_result.columns_info != analysis_input.columns_info
-        ):
-            raise StatisticsError("file structure mismatch", "integrity")
-        summary_stats = compute_summary_stats(
-            source_path=source_path,
-            file_type=analysis_input.file_type,
-            row_count=analysis_input.row_count,
-            column_count=analysis_input.column_count,
-            columns_info=analysis_input.columns_info,
-        )
-        try:
-            if _compute_file_hash(source_path) != analysis_input.file_hash:
-                raise StatisticsError("file changed during analysis", "integrity")
+            with get_storage().materialize(analysis_input.storage_key) as source_path:
+                actual_hash = _compute_file_hash(source_path)
+                if actual_hash != analysis_input.file_hash:
+                    raise StatisticsError("file hash mismatch", "integrity")
+                try:
+                    parse_result = parse_experiment_file(source_path, analysis_input.file_type)
+                except ParseError as exc:
+                    raise StatisticsError("file re-parse failed", "integrity") from exc
+                if (
+                    parse_result.file_type != analysis_input.file_type
+                    or parse_result.row_count != analysis_input.row_count
+                    or parse_result.column_count != analysis_input.column_count
+                    or parse_result.columns_info != analysis_input.columns_info
+                ):
+                    raise StatisticsError("file structure mismatch", "integrity")
+                summary_stats = compute_summary_stats(
+                    source_path=source_path,
+                    file_type=analysis_input.file_type,
+                    row_count=analysis_input.row_count,
+                    column_count=analysis_input.column_count,
+                    columns_info=analysis_input.columns_info,
+                )
+                try:
+                    if _compute_file_hash(source_path) != analysis_input.file_hash:
+                        raise StatisticsError("file changed during analysis", "integrity")
+                except StatisticsError:
+                    raise
+                except Exception as exc:
+                    raise StatisticsError("storage re-read failed", "storage") from exc
         except StatisticsError:
             raise
         except Exception as exc:
-            raise StatisticsError("storage re-read failed", "storage") from exc
+            raise StatisticsError("storage read failed", "storage") from exc
         _persist_success(analysis_input, summary_stats)
     except Exception as exc:
         logger.error("Experiment analysis task failed (%s)", type(exc).__name__)

@@ -20,6 +20,55 @@ from paperlens.services.export_service import (
 )
 
 
+def test_learning_report_without_review_contains_learning_materials():
+    paper = _make_paper()
+    explanation = SimpleNamespace(
+        id="learning-1",
+        mode="EXPLAIN",
+        page_number=3,
+        selection_text="federated learning",
+        answer="这是联邦学习的通俗解释。",
+        key_points=["数据不离开本地"],
+        terms=[{"term": "FL", "definition": "联邦学习"}],
+        _export_page_number=3,
+    )
+    highlight = SimpleNamespace(
+        id="highlight-1",
+        page_number=2,
+        quoted_text="important finding",
+    )
+    note = SimpleNamespace(
+        id="note-1",
+        page_number=None,
+        content="这里需要结合实验结果复习。",
+        _export_page_number=2,
+        _export_highlight=highlight,
+    )
+
+    text = generate_markdown(
+        paper,
+        None,
+        [],
+        "zh",
+        False,
+        False,
+        learning_explanations=[explanation],
+        highlights=[highlight],
+        notes=[note],
+    ).decode("utf-8")
+
+    assert "# 论文学习报告" in text
+    assert "**批判性阅读**: 尚未生成（不影响本报告）" in text
+    assert "### 第 3 页 · 选中文字解释" in text
+    assert "federated learning" in text
+    assert "这是联邦学习的通俗解释。" in text
+    assert "## 高亮摘录" in text
+    assert "important finding" in text
+    assert "## 学习笔记" in text
+    assert "这里需要结合实验结果复习。" in text
+    assert "## 审阅详情" not in text
+
+
 def _make_paper(**overrides):
     defaults = dict(
         id="paper-1",
@@ -208,9 +257,10 @@ class TestZhTemplate:
         rr = _make_review_result(dimension="SOUNDNESS", rating=4, summary="Good")
         content = generate_markdown(paper, task, [rr], "zh", False, False)
         text = content.decode("utf-8")
-        assert "# 论文审阅报告" in text
+        assert "# 论文学习报告" in text
         assert "## 论文信息" in text
-        assert "## 审阅详情" in text
+        assert "## 学习概览" in text
+        assert "## 审阅详情（批判性阅读）" in text
         assert "**论文标题**: Test Paper Title" in text
         assert "**文件名**: test_paper.pdf" in text
         assert "**页数**: 10" in text
@@ -250,9 +300,10 @@ class TestEnTemplate:
         rr = _make_review_result(dimension="SOUNDNESS", rating=3, summary="Some issues")
         content = generate_markdown(paper, task, [rr], "en", False, False)
         text = content.decode("utf-8")
-        assert "# Paper Review Report" in text
+        assert "# Paper Learning Report" in text
         assert "## Paper Information" in text
-        assert "## Review Details" in text
+        assert "## Learning Overview" in text
+        assert "## Review Details (Critical Reading)" in text
         assert "**Title**: Test Paper Title" in text
         assert "**Filename**: test_paper.pdf" in text
         assert "**Pages**: 10" in text

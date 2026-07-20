@@ -2,10 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import UploadView from '../views/UploadView.vue'
 import PaperListView from '../views/PaperListView.vue'
-import PaperDetailView from '../views/PaperDetailView.vue'
 import ReviewResultView from '../views/ReviewResultView.vue'
-import MetricAnalysisView from '../views/MetricAnalysisView.vue'
-import ExperimentDataView from '../views/ExperimentDataView.vue'
 import ReportExportView from '../views/ReportExportView.vue'
 import PaperReadingView from '../views/PaperReadingView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -27,10 +24,15 @@ const router = createRouter({
     { path: '/admin', name: 'admin', component: AdminDashboardView, meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/upload', name: 'upload', component: UploadView, meta: { requiresAuth: true } },
     { path: '/papers', name: 'papers', component: PaperListView, meta: { requiresAuth: true } },
-    { path: '/papers/:id', name: 'paper-detail', component: PaperDetailView, meta: { requiresAuth: true } },
+    {
+      path: '/papers/:id',
+      name: 'paper-detail',
+      redirect: to => ({ name: 'paper-read', params: to.params, query: to.query }),
+      meta: { requiresAuth: true },
+    },
     { path: '/papers/:id/review', name: 'paper-review', component: ReviewResultView, meta: { requiresAuth: true } },
-    { path: '/papers/:id/metrics', name: 'paper-metrics', component: MetricAnalysisView, meta: { requiresAuth: true } },
-    { path: '/papers/:id/experiment', name: 'paper-experiment', component: ExperimentDataView, meta: { requiresAuth: true } },
+    { path: '/papers/:id/metrics', redirect: to => ({ name: 'paper-read', params: to.params }) },
+    { path: '/papers/:id/experiment', redirect: to => ({ name: 'paper-read', params: to.params }) },
     { path: '/papers/:id/export', name: 'paper-export', component: ReportExportView, meta: { requiresAuth: true } },
     { path: '/papers/:id/read', name: 'paper-read', component: PaperReadingView, meta: { requiresAuth: true } },
   ],

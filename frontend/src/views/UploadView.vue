@@ -13,7 +13,7 @@
       <span>{{ progress }}%</span>
     </div>
     <button v-if="file && !uploading" class="upload-btn" @click="doUpload">上传</button>
-    <router-link to="/papers" class="back-link">返回列表</router-link>
+    <router-link to="/papers" class="button-link back-link">返回列表</router-link>
   </div>
 </template>
 
@@ -60,7 +60,7 @@ async function doUpload() {
   error.value = ''
   try {
     const result = await uploadPaper(file.value, (pct) => { progress.value = pct })
-    router.push(`/papers/${result.id}`)
+    router.push(`/papers/${result.id}/read`)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '上传失败'
     error.value = msg

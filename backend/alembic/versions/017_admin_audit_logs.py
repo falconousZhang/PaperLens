@@ -37,11 +37,11 @@ def upgrade() -> None:
             name="ck_audit_resource_type_user",
         ),
         sa.CheckConstraint(
-            "char_length(reason) BETWEEN 8 AND 500",
+            "reason = btrim(reason) AND char_length(reason) BETWEEN 8 AND 500",
             name="ck_audit_reason_length",
         ),
         sa.CheckConstraint(
-            "reason ~ '^[^\\x00-\\x1f]+$'",
+            "reason !~ '[[:cntrl:]]'",
             name="ck_audit_reason_no_control_chars",
         ),
         sa.CheckConstraint(
@@ -51,6 +51,24 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "jsonb_typeof(after_state) = 'object'",
             name="ck_audit_after_state_is_object",
+        ),
+        sa.CheckConstraint(
+            "CASE "
+            "WHEN action = 'ADMIN_BOOTSTRAPPED' THEN "
+            "before_state = '{\"role\": \"USER\", \"status\": \"ACTIVE\"}'::jsonb AND "
+            "after_state = '{\"role\": \"ADMIN\", \"status\": \"ACTIVE\"}'::jsonb "
+            "WHEN action = 'USER_ROLE_CHANGED' THEN "
+            "before_state ? 'role' AND before_state - 'role' = '{}'::jsonb AND "
+            "after_state ? 'role' AND after_state - 'role' = '{}'::jsonb AND "
+            "before_state->>'role' IN ('USER', 'ADMIN') AND "
+            "after_state->>'role' IN ('USER', 'ADMIN') AND before_state <> after_state "
+            "WHEN action = 'USER_STATUS_CHANGED' THEN "
+            "before_state ? 'status' AND before_state - 'status' = '{}'::jsonb AND "
+            "after_state ? 'status' AND after_state - 'status' = '{}'::jsonb AND "
+            "before_state->>'status' IN ('ACTIVE', 'DISABLED') AND "
+            "after_state->>'status' IN ('ACTIVE', 'DISABLED') AND before_state <> after_state "
+            "ELSE FALSE END",
+            name="ck_audit_state_matches_action",
         ),
     )
     op.create_index("idx_audit_actor", "admin_audit_logs", ["actor_user_id"])

@@ -2,7 +2,6 @@
   <div class="app-layout">
     <nav v-if="auth.isAuthenticated" class="app-nav">
       <div class="nav-links">
-        <router-link to="/">首页</router-link>
         <router-link to="/papers">论文库</router-link>
         <router-link to="/upload">上传</router-link>
         <router-link v-if="auth.isAdmin" to="/admin">管理后台</router-link>
@@ -32,6 +31,46 @@ async function handleLogout() {
 </script>
 
 <style scoped>
+:global(*) {
+  box-sizing: border-box;
+}
+:global(html),
+:global(body),
+:global(#app) {
+  min-height: 100%;
+  margin: 0;
+}
+:global(.button-link) {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d7dbe7;
+  border-radius: 8px;
+  color: #293352;
+  background: #fff;
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+:global(.button-link:hover) {
+  border-color: #9fa9c4;
+  background: #f6f7fb;
+  transform: translateY(-1px);
+}
+:global(.button-link--primary) {
+  border-color: #1a1a2e;
+  color: #fff;
+  background: #1a1a2e;
+}
+:global(.button-link--primary:hover) {
+  border-color: #2c3158;
+  background: #2c3158;
+}
 .app-layout {
   min-height: 100vh;
 }

@@ -21,6 +21,7 @@ from paperlens.schemas.qa import (
 from paperlens.services.qa_service import (
     create_qa_conversation,
     create_qa_turn,
+    delete_qa_conversation,
     get_qa_conversation,
     get_qa_turn,
     list_qa_conversations,
@@ -168,6 +169,15 @@ def get_conversation_api(
     )
 
 
+@router.delete("/qa-conversations/{conversation_id}", status_code=204)
+def delete_conversation_api(
+    conversation_id: UUID4 = Path(...),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    delete_qa_conversation(str(conversation_id), user_id, db)
+
+
 @router.post(
     "/qa-conversations/{conversation_id}/turns",
     response_model=QATurnResponse,
@@ -187,6 +197,7 @@ def create_turn_api(
         output_language=body.output_language,
         client_request_id=str(body.client_request_id),
         db=db,
+        current_page=body.current_page,
     )
     response = _turn_response(turn, duplicate)
     if duplicate:

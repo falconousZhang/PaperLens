@@ -8,14 +8,14 @@
         <span :class="'status-' + paper.status.toLowerCase()">{{ paper.status }}</span>
       </div>
       <div class="nav-links">
-        <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
-        <router-link to="/papers">返回论文列表</router-link>
+        <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link button-link--primary">返回阅读</router-link>
+        <router-link to="/papers" class="button-link">返回论文列表</router-link>
       </div>
     </div>
 
     <div v-if="paper.status !== 'PARSED'" class="not-ready-notice">
       <p>{{ notReadyMessage }}</p>
-      <router-link :to="{ name: 'paper-detail', params: { id: paper.id } }">返回论文详情</router-link>
+      <router-link :to="{ name: 'paper-read', params: { id: paper.id } }" class="button-link">返回阅读</router-link>
     </div>
 
     <template v-else>
@@ -197,7 +197,7 @@
 
             <div v-if="succeededMetricTasks.length === 0 && !comparisonResult" class="no-metrics-notice">
               <p>当前论文没有成功的指标提取任务，无法进行交叉验证</p>
-              <router-link :to="{ name: 'paper-metrics', params: { id: paper.id } }">前往指标分析</router-link>
+              <router-link :to="{ name: 'paper-metrics', params: { id: paper.id } }" class="button-link button-link--primary">前往指标分析</router-link>
             </div>
 
             <template v-else>
@@ -299,9 +299,10 @@ import {
   type ExperimentResultResponse,
   type PostComparisonsResponse,
 } from '../api'
+import { SAFE_POLLING_ERROR, usePolling } from '../composables/usePolling'
 
 const route = useRoute()
-
+const { startPolling: startSharedPolling, stopPolling } = usePolling()
 const CHECKPOINT_LABELS: Record<string, string> = {
   BEST: '最佳',
   FINAL: '最终',
@@ -431,7 +432,6 @@ const comparisonError = ref('')
 let requestGeneration = 0
 let selectionGeneration = 0
 let filesRequestId = 0
-let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const notReadyMessage = computed(() => {
   if (!paper.value) return ''
@@ -455,13 +455,6 @@ const filesTotalPages = computed(() => Math.max(1, Math.ceil(filesTotal.value / 
 const comparisonSourceMissing = computed(() => comparisonResult.value !== null
   && !succeededMetricTasks.value.some(task => task.id === comparisonResult.value?.metric_task_id))
 
-function stopPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 function selectedContextIsCurrent(pageGen: number, selectionGen: number, fileId: string): boolean {
   return pageGen === requestGeneration
     && selectionGen === selectionGeneration
@@ -469,21 +462,18 @@ function selectedContextIsCurrent(pageGen: number, selectionGen: number, fileId:
 }
 
 function startPolling(taskId: string, fileId: string) {
-  stopPolling()
   const pageGen = requestGeneration
   const selectionGen = selectionGeneration
   analysisTaskId.value = taskId
-  let requestInFlight = false
-  pollTimer = setInterval(async () => {
-    if (requestInFlight) return
-    requestInFlight = true
-    try {
-      const t = await getTask(taskId)
+  startSharedPolling(
+    () => getTask(taskId),
+    async t => {
       if (!selectedContextIsCurrent(pageGen, selectionGen, fileId)) return
       if (
         t.id !== taskId
         || t.paper_id !== paper.value?.id
         || t.task_type !== 'EXPERIMENT_ANALYSIS'
+        || t.experiment_file_id !== fileId
       ) {
         stopPolling()
         analysisActive.value = false
@@ -494,7 +484,6 @@ function startPolling(taskId: string, fileId: string) {
       const progress = Number(t.progress ?? 0)
       analysisProgress.value = Number.isFinite(progress) ? Math.min(100, Math.max(0, Math.round(progress))) : 0
       if (t.status === 'PENDING' || t.status === 'RUNNING') return
-      stopPolling()
       analysisActive.value = false
       analysisTaskId.value = null
       if (t.status === 'SUCCEEDED') {
@@ -503,14 +492,13 @@ function startPolling(taskId: string, fileId: string) {
         analysisFailed.value = true
         analysisTaskError.value = safeAnalysisError(t.error_message)
       }
-    } catch (error: unknown) {
+    },
+    t => t.status !== 'PENDING' && t.status !== 'RUNNING',
+    () => {
       if (!selectedContextIsCurrent(pageGen, selectionGen, fileId)) return
-      stopPolling()
-      pollError.value = safeRequestError(error, '暂时无法获取分析进度，请重试。')
-    } finally {
-      requestInFlight = false
-    }
-  }, 3000)
+      pollError.value = SAFE_POLLING_ERROR
+    },
+  )
 }
 
 function retryPoll() {
@@ -683,6 +671,21 @@ async function loadAll() {
     const latestSucceeded = succeededMetricTasks.value[0]
     if (latestSucceeded) {
       selectedMetricTaskId.value = latestSucceeded.id
+    }
+
+    const activeExperimentTask = t.items.find(
+      t => t.task_type === 'EXPERIMENT_ANALYSIS' && (t.status === 'PENDING' || t.status === 'RUNNING'),
+    )
+    if (activeExperimentTask && activeExperimentTask.experiment_file_id) {
+      analysisActive.value = true
+      analysisTaskId.value = activeExperimentTask.id
+      selectedFileId.value = activeExperimentTask.experiment_file_id
+      const selectionGen = selectionGeneration
+      void Promise.all([
+        loadFileDetail(gen, selectionGen, activeExperimentTask.experiment_file_id),
+        loadExperimentResult(gen, selectionGen, activeExperimentTask.experiment_file_id),
+      ])
+      startPolling(activeExperimentTask.id, activeExperimentTask.experiment_file_id)
     }
   } catch (error: unknown) {
     if (gen !== requestGeneration) return

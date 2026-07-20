@@ -13,8 +13,8 @@
       </label>
       <button type="submit" :disabled="loading">{{ loading ? '登录中...' : '登录' }}</button>
       <div class="auth-links">
-        <router-link to="/forgot-password">忘记密码？</router-link>
-        <router-link to="/register">注册账号</router-link>
+        <router-link to="/forgot-password" class="button-link">忘记密码？</router-link>
+        <router-link to="/register" class="button-link">注册账号</router-link>
       </div>
     </form>
   </div>

@@ -182,13 +182,17 @@ def test_admin_bootstrap_concurrent_only_one_succeeds():
     truncate_test_tables(test_url)
     db = SessionLocal()
     try:
-        user = _make_user(db)
+        users = [_make_user(db), _make_user(db)]
         results = [None, None]
 
         def bootstrap_thread(idx):
             tdb = SessionLocal()
             try:
-                admin_service.admin_bootstrap(tdb, user_id=user.id, reason=f"concurrent bootstrap attempt {idx}")
+                admin_service.admin_bootstrap(
+                    tdb,
+                    user_id=users[idx].id,
+                    reason=f"concurrent bootstrap attempt {idx}",
+                )
                 results[idx] = "success"
             except Exception:
                 results[idx] = "conflict"
@@ -203,7 +207,12 @@ def test_admin_bootstrap_concurrent_only_one_succeeds():
         t2.join(timeout=10)
 
         success_count = sum(1 for r in results if r == "success")
-        assert success_count <= 1, f"Expected at most 1 success, got {success_count}"
+        assert success_count == 1, f"Expected exactly 1 success, got {success_count}"
+        db.expire_all()
+        assert db.query(User).filter(
+            User.role == UserRole.ADMIN,
+            User.status == UserStatus.ACTIVE,
+        ).count() == 1
     finally:
         db.close()
         truncate_test_tables(test_url)

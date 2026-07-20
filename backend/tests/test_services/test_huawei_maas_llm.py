@@ -762,6 +762,28 @@ class TestHuaweiMaaSFinishReason:
 
 
 class TestHuaweiMaaSNetworkErrors:
+    def test_per_request_timeout_override(self):
+        captured_timeout = None
+
+        class _CapturingTransport(httpx.BaseTransport):
+            def handle_request(self, request):
+                nonlocal captured_timeout
+                captured_timeout = request.extensions["timeout"]
+                return _ok_response("ok")
+
+        client = HuaweiMaaSLLMClient(
+            base_url="https://mock.test",
+            model="glm-5.2",
+            api_key="key",
+            timeout_seconds=60,
+            transport=_CapturingTransport(),
+        )
+        client.chat(
+            [{"role": "user", "content": "hi"}],
+            timeout_seconds=180,
+        )
+        assert captured_timeout["read"] == 180
+
     def test_timeout_error(self):
         class _TimeoutTransport(httpx.BaseTransport):
             def handle_request(self, request):
