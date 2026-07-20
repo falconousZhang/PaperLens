@@ -34,3 +34,17 @@ Thumbs.db
 
 # 日志
 *.log
+
+# Internal documentation and local development-agent metadata
+*.md
+ProjectDocs/
+docs/
+.agents/
+.arts/
+.codeartsdoer/
+.skills/
+.tmp*/
+
+# Generated build and deployment artifacts
+*.tar.gz
+*.tsbuildinfo
